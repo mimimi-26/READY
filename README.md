@@ -49,6 +49,7 @@ vercel dev
    | Key | Value |
    |---|---|
    | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com)에서 발급받은 키 |
+   | `OPENAI_API_KEY` (선택) | [platform.openai.com](https://platform.openai.com)에서 발급받은 키 — Anthropic 호출이 실패하면(토큰 소진·오류 등) 자동으로 GPT(gpt-4o-mini)로 전환됩니다. 두 키 중 최소 하나는 있어야 합니다. |
 4. Deploy. 완료되면 `https://프로젝트명.vercel.app` 주소가 발급됩니다.
 
 `api/extract.js`는 Vercel의 서버리스 함수 규칙(`api/` 폴더 = 자동으로 `/api/*` 엔드포인트)을 그대로 사용하므로 별도 설정이 필요 없습니다.
@@ -60,6 +61,17 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 2. 함수 시그니처를 Netlify 방식(`exports.handler = async (event) => {...}`)으로 수정
 3. `src/App.jsx`의 `fetch("/api/extract")`를 `fetch("/.netlify/functions/extract")`로 수정
 4. Netlify 대시보드 **Site settings → Environment variables**에 `ANTHROPIC_API_KEY` 등록
+
+## GPT 폴백 (선택 기능)
+
+`OPENAI_API_KEY`를 등록하면 `api/extract.js`와 `api/chat.js`가 다음 순서로 동작합니다.
+
+1. `ANTHROPIC_API_KEY`가 있으면 먼저 Claude로 시도
+2. 실패하면(토큰 소진, 요청량 초과, 일시적 오류 등) 자동으로 GPT(`gpt-4o-mini`)로 재시도
+3. 둘 다 실패하면 마지막 오류 메시지를 그대로 화면에 보여줌
+
+`ANTHROPIC_API_KEY` 없이 `OPENAI_API_KEY`만 등록해도 동작합니다(항상 GPT만 사용).
+두 기능 모두 어떤 제공사가 응답했는지는 화면에 별도 표시하지 않습니다 — 조용히 전환됩니다.
 
 ## 중요 — 배포 전 반드시 확인할 것
 
