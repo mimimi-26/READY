@@ -48,8 +48,11 @@ vercel dev
 3. **Settings → Environment Variables** 에서 다음을 추가합니다.
    | Key | Value |
    |---|---|
-   | `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com)에서 발급받은 키 |
-   | `OPENAI_API_KEY` (선택) | [platform.openai.com](https://platform.openai.com)에서 발급받은 키 — Anthropic 호출이 실패하면(토큰 소진·오류 등) 자동으로 GPT(gpt-4o-mini)로 전환됩니다. 두 키 중 최소 하나는 있어야 합니다. |
+   | `ANTHROPIC_API_KEY` (선택) | [console.anthropic.com](https://console.anthropic.com)에서 발급받은 키 |
+   | `OPENAI_API_KEY` (선택) | [platform.openai.com](https://platform.openai.com)에서 발급받은 키 |
+   | `GEMINI_API_KEY` (선택, 무료) | [aistudio.google.com/apikey](https://aistudio.google.com/apikey)에서 카드 등록 없이 발급받은 키 |
+
+   세 개 중 **최소 하나는** 등록해야 합니다. 자세한 우선순위·폴백 방식은 아래 "AI 제공사 폴백" 섹션 참고.
 4. Deploy. 완료되면 `https://프로젝트명.vercel.app` 주소가 발급됩니다.
 
 `api/extract.js`는 Vercel의 서버리스 함수 규칙(`api/` 폴더 = 자동으로 `/api/*` 엔드포인트)을 그대로 사용하므로 별도 설정이 필요 없습니다.
@@ -62,16 +65,21 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 3. `src/App.jsx`의 `fetch("/api/extract")`를 `fetch("/.netlify/functions/extract")`로 수정
 4. Netlify 대시보드 **Site settings → Environment variables**에 `ANTHROPIC_API_KEY` 등록
 
-## GPT 폴백 (선택 기능)
+## AI 제공사 폴백 (선택 기능)
 
-`OPENAI_API_KEY`를 등록하면 `api/extract.js`와 `api/chat.js`가 다음 순서로 동작합니다.
+`api/extract.js`, `api/chat.js`는 아래 순서로 시도하고, 실패하면(토큰 소진, 요청량 초과, 일시적 오류 등) 자동으로 다음 제공사로 넘어갑니다.
 
-1. `ANTHROPIC_API_KEY`가 있으면 먼저 Claude로 시도
-2. 실패하면(토큰 소진, 요청량 초과, 일시적 오류 등) 자동으로 GPT(`gpt-4o-mini`)로 재시도
-3. 둘 다 실패하면 마지막 오류 메시지를 그대로 화면에 보여줌
+1. **Anthropic (Claude)** — `ANTHROPIC_API_KEY` 있을 때, 품질 최우선
+2. **OpenAI (GPT, `gpt-4o-mini`)** — `OPENAI_API_KEY` 있을 때
+3. **Google Gemini (`gemini-2.5-flash`)** — `GEMINI_API_KEY` 있을 때, **무료**
 
-`ANTHROPIC_API_KEY` 없이 `OPENAI_API_KEY`만 등록해도 동작합니다(항상 GPT만 사용).
-두 기능 모두 어떤 제공사가 응답했는지는 화면에 별도 표시하지 않습니다 — 조용히 전환됩니다.
+세 개 다 실패하면 마지막 오류 메시지를 그대로 화면에 보여줍니다. 어떤 제공사가 응답했는지는 화면에 표시하지 않고 조용히 전환됩니다.
+
+**무료로만 쓰고 싶다면**: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`는 아예 등록하지 말고 `GEMINI_API_KEY`만 등록하세요. 그러면 Gemini만 사용됩니다.
+
+- 발급: [aistudio.google.com/apikey](https://aistudio.google.com/apikey) — 카드 등록 없이 구글 계정만으로 즉시 발급
+- 무료 등급 기준 하루 1,500회 정도로 넉넉함
+- 단, 무료 등급은 **입력·출력 데이터가 구글의 모델 학습에 활용될 수 있다는 약관**이 있습니다. 이력서에 이름·이메일 등 개인정보가 들어가는 것이 신경 쓰인다면, 유료 등급(Vertex AI 경유)으로 전환하거나 민감 정보는 빼고 테스트하는 것을 권장합니다.
 
 ## 중요 — 배포 전 반드시 확인할 것
 
