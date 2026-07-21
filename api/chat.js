@@ -56,14 +56,54 @@ const ESSAY_COACH_SYSTEM_PROMPT = `지금부터 당신은 국내 대기업·외�
 작성이 끝나면 다음 안내만 덧붙이십시오.
 "초안을 검토해 보시고 수정하고 싶은 부분(분량, 강조점, 표현 등)을 말씀해 주세요. 마음에 드신다면 '다음 문항'이라고 입력해 주세요."`;
 
+async function callAnthropic(apiKey, systemPrompt, messages) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages,
+    }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.error?.message || `Anthropic 오류 (HTTP ${r.status})`);
+  return { content: data.content, _provider: "anthropic" };
+}
+
+async function callOpenAI(apiKey, systemPrompt, messages) {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      max_tokens: 2000,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+    }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.error?.message || `OpenAI 오류 (HTTP ${r.status})`);
+  const text = data.choices?.[0]?.message?.content || "";
+  return { content: [{ type: "text", text }], _provider: "openai" };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POST 요청만 허용됩니다." });
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "서버에 ANTHROPIC_API_KEY 환경변수가 설정되어 있지 않습니다." });
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  if (!anthropicKey && !openaiKey) {
+    return res.status(500).json({ error: "서버에 ANTHROPIC_API_KEY 또는 OPENAI_API_KEY 환경변수가 하나도 설정되어 있지 않습니다." });
   }
 
   const { context, messages } = req.body || {};
@@ -71,30 +111,29 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "messages 배열이 필요합니다." });
   }
 
-  try {
-    const anthropicRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2000,
-        system: ESSAY_COACH_SYSTEM_PROMPT + "\n\n---\n다음은 지원자의 실제 데이터다. 이 정보 밖의 사실은 만들어내지 마라.\n\n" + (context || ""),
-        messages,
-      }),
-    });
+  const systemPrompt = ESSAY_COACH_SYSTEM_PROMPT + "\n\n---\n다음은 지원자의 실제 데이터다. 이 정보 밖의 사실은 만들어내지 마라.\n\n" + (context || "");
+  let result = null;
+  let lastError = null;
 
-    const data = await anthropicRes.json();
-
-    if (!anthropicRes.ok) {
-      return res.status(anthropicRes.status).json({ error: data?.error?.message || "Anthropic API 오류" });
+  if (anthropicKey) {
+    try {
+      result = await callAnthropic(anthropicKey, systemPrompt, messages);
+    } catch (err) {
+      lastError = err;
     }
-
-    return res.status(200).json(data);
-  } catch (err) {
-    return res.status(500).json({ error: err.message || "서버에서 알 수 없는 오류가 발생했습니다." });
   }
+
+  if (!result && openaiKey) {
+    try {
+      result = await callOpenAI(openaiKey, systemPrompt, messages);
+    } catch (err) {
+      lastError = err;
+    }
+  }
+
+  if (!result) {
+    return res.status(500).json({ error: lastError?.message || "AI 호출에 실패했습니다." });
+  }
+
+  return res.status(200).json(result);
 }
