@@ -193,6 +193,15 @@ const seedMasterInterviews = [
   { id: "miq_3", question: "실패하거나 좌절했던 경험은 무엇인가요?", category: "실패", selectedExperienceId: null, practiceCount: 0, confidence: null, followUps: [], draft: "", chatHistory: [] },
 ];
 
+const seedQuestionBlocks = [
+  { id: "qb_1", label: "가장 큰 성과", expIds: ["e_1"] },
+  { id: "qb_2", label: "주도적으로 개선한 경험", expIds: ["e_1", "e_2"] },
+  { id: "qb_3", label: "협업 경험", expIds: ["e_1"] },
+  { id: "qb_4", label: "리더십 경험", expIds: ["e_4"] },
+  { id: "qb_5", label: "어려움을 극복한 경험", expIds: ["e_1"] },
+  { id: "qb_6", label: "문제 해결 경험", expIds: ["e_2"] },
+];
+
 const seedApplications = [
   { id: "ap_1", company: "A 리테일 기업", position: "MD (상품기획)", deadline: "2026-08-03", status: "writing", priority: "high",
     essayProgress: 60, interviewProgress: 30,
@@ -384,6 +393,7 @@ export default function App() {
   const [applications, setApplications] = usePersisted("applications", seedApplications);
   const [skills, setSkills] = usePersisted("skills", seedSkills);
   const [certs, setCerts] = usePersisted("certs", seedCerts);
+  const [awards, setAwards] = usePersisted("awards", []);
   const [resumeProfile, setResumeProfile] = usePersisted("resumeProfile", { name: "", targetRole: "", headline: "", phone: "", email: "" });
   const [detailId, setDetailId] = useState(null);     // 경험 상세
   const [appDetailId, setAppDetailId] = useState(null); // 지원 상세
@@ -393,6 +403,8 @@ export default function App() {
   const [masterInterviews, setMasterInterviews] = usePersisted("masterInterviews", seedMasterInterviews);
   const [interviewCategories, setInterviewCategories] = usePersisted("interviewCategories", ["성과", "실패", "협업", "갈등", "인성"]);
   const [expCategories, setExpCategories] = usePersisted("expCategories", ["온라인 쇼핑몰 인턴", "동아리 활동"]);
+  const [questionBlocks, setQuestionBlocks] = usePersisted("questionBlocks", seedQuestionBlocks);
+  const [reviewChatHistory, setReviewChatHistory] = usePersisted("reviewChatHistory", []);
   const addInterviewCategory = (c) => setInterviewCategories(prev => prev.includes(c) ? prev : [...prev, c]);
   const addExpCategory = (c) => setExpCategories(prev => prev.includes(c) ? prev : [...prev, c]);
 
@@ -407,6 +419,7 @@ export default function App() {
     if (type === "experience") setExperiences(prev => [...prev, payload]);
     else if (type === "skill") setSkills(prev => [...prev, payload]);
     else if (type === "cert") setCerts(prev => [...prev, payload]);
+    else if (type === "award") setAwards(prev => [...prev, payload]);
     else if (type === "application") setApplications(prev => [...prev, payload]);
     else if (type === "requirement") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, requirements: [...a.requirements, payload.item] } : a));
     else if (type === "essay") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, essays: [...a.essays, payload.item] } : a));
@@ -439,8 +452,8 @@ export default function App() {
         {menuGroups.map(g => (
           <div key={g.label} style={{ marginBottom: 6 }}>
             <div onClick={() => toggleGroup(g.label)} style={{
-              display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 12px",
-              fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: ".03em", cursor: "pointer" }}>
+              display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px",
+              background: C.greenBg, borderRadius: 10, fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: ".03em", cursor: "pointer" }}>
               <span>{g.label}</span>
               <span style={{ fontSize: 10, color: C.green, transform: openGroups[g.label] ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .1s" }}>▾</span>
             </div>
@@ -467,14 +480,14 @@ export default function App() {
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} />}
         {nav === "guide" && <Guide onGo={go} />}
         {nav === "analyze" && <Analyze experiences={experiences} setExperiences={setExperiences} analyzeId={analyzeId} setAnalyzeId={setAnalyzeId} metrics={metrics} onDone={openDetail} />}
-        {nav === "archive" && !detailId && <Archive experiences={experiences} setExperiences={setExperiences} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} onOpen={openDetail} onAnalyze={openAnalyze} onGoImport={() => go("import")} addTrash={addTrash} expCategories={expCategories} addExpCategory={addExpCategory} />}
+        {nav === "archive" && !detailId && <Archive experiences={experiences} setExperiences={setExperiences} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} onOpen={openDetail} onAnalyze={openAnalyze} onGoImport={() => go("import")} addTrash={addTrash} expCategories={expCategories} addExpCategory={addExpCategory} questionBlocks={questionBlocks} setQuestionBlocks={setQuestionBlocks} reviewChatHistory={reviewChatHistory} setReviewChatHistory={setReviewChatHistory} />}
         {nav === "archive" && detailId && <ExperienceDetail exp={experiences.find(e => e.id === detailId)} metrics={metrics} outputs={outputs} setOutputs={setOutputs} setExperiences={setExperiences} onBack={() => setDetailId(null)} onAnalyze={openAnalyze} onDeleted={() => setDetailId(null)} addTrash={addTrash} />}
         {nav === "import" && <ImportFlow setExperiences={setExperiences} setSkills={setSkills} setCerts={setCerts} setResumeProfile={setResumeProfile} onDone={openDetail} experiences={experiences} />}
-        {nav === "skills" && <Skills skills={skills} setSkills={setSkills} certs={certs} setCerts={setCerts} experiences={experiences} onOpenExp={openDetail} addTrash={addTrash} />}
+        {nav === "skills" && <Skills skills={skills} setSkills={setSkills} experiences={experiences} onOpenExp={openDetail} addTrash={addTrash} />}
         {nav === "apply" && !appDetailId && <Applications applications={applications} setApplications={setApplications} onOpen={setAppDetailId} addTrash={addTrash} />}
         {nav === "apply" && appDetailId && <ApplicationDetail app={applications.find(a => a.id === appDetailId)} setApplications={setApplications} experiences={experiences} outputs={outputs} metrics={metrics} onBack={() => setAppDetailId(null)} onOpenExp={openDetail} addTrash={addTrash} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
         {nav === "master" && <MasterPrep essays={masterEssays} setEssays={setMasterEssays} interviews={masterInterviews} setInterviews={setMasterInterviews} experiences={experiences} resumeProfile={resumeProfile} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
-        {nav === "resume" && <Resume experiences={experiences} outputs={outputs} metrics={metrics} resumeProfile={resumeProfile} setResumeProfile={setResumeProfile} skills={skills} certs={certs} />}
+        {nav === "resume" && <Resume experiences={experiences} outputs={outputs} metrics={metrics} resumeProfile={resumeProfile} setResumeProfile={setResumeProfile} skills={skills} certs={certs} setCerts={setCerts} awards={awards} setAwards={setAwards} addTrash={addTrash} />}
         {nav === "trash" && <Trash trash={trash} onRestore={restoreTrash} onPurge={purgeTrash} onClear={clearTrash} />}
       </main>
     </div>
@@ -517,7 +530,7 @@ function Guide({ onGo }) {
     { icon: "archive", nav: "archive", title: "경험 보관함", desc: "등록한 모든 경험을 경험별·역량별·질문별로 찾아봅니다." },
     { icon: "star", nav: "skills", title: "역량·스킬", desc: "도구·역량마다 실제로 할 수 있는 일을 적고, 근거가 되는 경험을 연결합니다." },
     { icon: "briefcase", nav: "apply", title: "지원 관리", desc: "지원할 회사마다 요구 역량 매칭, 자소서 문항, 면접 질문을 따로 관리합니다." },
-    { icon: "doc", nav: "resume", title: "기본 이력서", desc: "경험 보관함에서 승인된 문장과, 근거가 연결된 역량·자격증만 자동으로 모입니다." },
+    { icon: "doc", nav: "resume", title: "기본 이력서", desc: "경험 보관함에서 승인된 문장과 근거가 연결된 역량이 자동으로 모이고, 자격증·어학·수상기록은 여기서 직접 관리합니다." },
   ];
 
   const approvalFlow = [
@@ -602,14 +615,28 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
   const typeCoverage = [
     ["데이터 분석 경험", experiences.filter(e => e.competencies.includes("데이터 분석") || e.competencies.includes("데이터 관리")).length],
     ["리더십 경험", experiences.filter(e => e.competencies.includes("리더십")).length],
-    ["실패 경험", 0], ["갈등 경험", 0],
+    ["어려움 극복 경험", experiences.filter(e => !!e.difficulty).length],
+    ["협업 경험", experiences.filter(e => e.actions?.some(a => a.actionType === "collaboration")).length],
   ];
 
-  const nextActions = [
-    { text: "「온라인 채널 콘텐츠 개편」 배경·기여도 보완하기", act: () => onOpenDetail("e_3") },
-    { text: "「재고 관리 업무 자동화」 심화 단계(어려움·배운 점) 입력하기", act: () => onOpenDetail("e_2") },
-    { text: "A 리테일 기업 면접 질문 「실패 경험」에 사용할 경험 선택하기", act: () => onOpenApp("ap_1") },
-  ];
+  const nextActions = (() => {
+    const acts = [];
+    experiences.filter(e => e.status === "needs_revision").forEach(e =>
+      acts.push({ text: `「${e.title}」 부족한 부분 보완하기`, act: () => onOpenDetail(e.id) }));
+    experiences.filter(e => e.status === "draft").forEach(e =>
+      acts.push({ text: `「${e.title}」 경험 분석 시작하기`, act: () => onOpenDetail(e.id) }));
+    experiences.filter(e => e.status === "complete" && !e.depthDone).forEach(e =>
+      acts.push({ text: `「${e.title}」 심화 단계(어려움·배운 점) 입력하기`, act: () => onOpenDetail(e.id) }));
+    applications.forEach(a => {
+      if ((a.interviews || []).some(iq => !iq.selectedExperienceId)) {
+        acts.push({ text: `${a.company} 면접 질문에 사용할 경험 선택하기`, act: () => onOpenApp(a.id) });
+      }
+      if ((a.essays || []).some(q => q.status === "not_started")) {
+        acts.push({ text: `${a.company} 자소서 문항 작성 시작하기`, act: () => onOpenApp(a.id) });
+      }
+    });
+    return acts.slice(0, 5);
+  })();
 
   return (
     <div>
@@ -620,6 +647,7 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
         {/* 다음 행동 */}
         <Card style={{ gridColumn: "1 / -1", background: C.lineSoft, border: "none" }}>
           <Label>다음 행동</Label>
+          {nextActions.length === 0 && <div style={{ fontSize: 13.5, color: C.sub, padding: "8px 0" }}>지금 당장 처리할 일이 없습니다. 새 경험을 등록하거나 지원을 추가해보세요.</div>}
           {nextActions.map((a, i) => (
             <div key={i} onClick={a.act} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < nextActions.length - 1 ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
               <span style={{ fontSize: 14 }}>{a.text}</span>
@@ -980,7 +1008,8 @@ function MetricEditor({ expId, metrics, local, patch }) {
 }
 
 /* ============================================================ 보관함 */
-function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, setOutputs, onOpen, onAnalyze, onGoImport, addTrash, expCategories, addExpCategory }) {
+function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, setOutputs, onOpen, onAnalyze, onGoImport, addTrash, expCategories, addExpCategory, questionBlocks, setQuestionBlocks, reviewChatHistory, setReviewChatHistory }) {
+  const [showReview, setShowReview] = useState(false);
   const [view, setView] = useState("exp"); // exp | comp | question
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
@@ -1005,21 +1034,43 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
 
   const allComps = [...new Set(experiences.flatMap(e => e.competencies))]
     .sort((a, b) => experiences.filter(e => e.competencies.includes(b)).length - experiences.filter(e => e.competencies.includes(a)).length);
-  const questions = [
-    ["가장 큰 성과", e => e.tags.includes("정량 성과")],
-    ["주도적으로 개선한 경험", e => ["led", "proposed_and_executed", "full_ownership"].includes(e.contributionLevel)],
-    ["협업 경험", e => e.actions.some(a => a.actionType === "collaboration")],
-    ["리더십 경험", e => e.competencies.includes("리더십")],
-    ["어려움을 극복한 경험", e => !!e.difficulty],
-    ["문제 해결 경험", e => e.competencies.includes("문제 해결") || !!e.discoveredProblem],
-  ];
   const [compQ, setCompQ] = useState("");
   const [expandedComp, setExpandedComp] = useState({});
   const shownComps = allComps.filter(c => c.includes(compQ));
 
+  const [editingBlockId, setEditingBlockId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState({});
+  const patchBlock = (id, k, v) => setQuestionBlocks(prev => prev.map(b => b.id === id ? { ...b, [k]: v } : b));
+  const addBlockExp = (id, expId) => setQuestionBlocks(prev => prev.map(b => b.id === id && expId && !b.expIds.includes(expId) ? { ...b, expIds: [...b.expIds, expId] } : b));
+  const removeBlockExp = (id, expId) => setQuestionBlocks(prev => prev.map(b => b.id === id ? { ...b, expIds: b.expIds.filter(x => x !== expId) } : b));
+  const addBlockNote = (id, text) => setQuestionBlocks(prev => prev.map(b => b.id === id
+    ? { ...b, notes: [...(b.notes || []), { id: "n_" + Date.now() + Math.random().toString(36).slice(2, 4), text }] } : b));
+  const patchBlockNote = (id, noteId, text) => setQuestionBlocks(prev => prev.map(b => b.id === id
+    ? { ...b, notes: (b.notes || []).map(n => n.id === noteId ? { ...n, text } : n) } : b));
+  const removeBlockNote = (id, noteId) => setQuestionBlocks(prev => prev.map(b => b.id === id
+    ? { ...b, notes: (b.notes || []).filter(n => n.id !== noteId) } : b));
+  const removeBlock = (id) => setQuestionBlocks(prev => prev.filter(b => b.id !== id));
+  const addBlock = () => {
+    const id = "qb_" + Date.now();
+    setQuestionBlocks(prev => [...prev, { id, label: "", expIds: [] }]);
+    setEditingBlockId(id);
+  };
+
   return (
     <div>
-      {mergeStep ? (
+      {showReview ? (
+        <EssayChat
+          title="AI 경험 진단"
+          subtitle="현직 채용담당자 시점으로 전체 경험을 검토합니다"
+          systemPrompt={EXPERIENCE_REVIEW_SYSTEM_PROMPT}
+          contextText={buildReviewContext(experiences)}
+          autoStartMessage="제 경험 데이터를 전체적으로 검토하고, 우선순위 높은 보완점부터 짚어주세요."
+          inputPlaceholder="특정 경험에 대해 더 물어보거나, 다른 관점으로 다시 봐달라고 요청해보세요"
+          onClose={() => setShowReview(false)}
+          history={reviewChatHistory}
+          onHistoryChange={setReviewChatHistory}
+        />
+      ) : mergeStep ? (
         <MergeReview ids={selected} experiences={experiences} setExperiences={setExperiences}
           metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs}
           addTrash={addTrash} onDone={(id) => { cancelMerge(); onOpen(id); }} onCancel={() => setMergeStep(false)} />
@@ -1033,6 +1084,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
           ) : (
             <>
               <Btn small onClick={onGoImport}>파일 가져오기</Btn>
+              <Btn small onClick={() => setShowReview(true)}>AI 진단 받기</Btn>
               <Btn small onClick={() => setMergeMode(true)}>경험 합치기</Btn>
               {[["exp", "경험별"], ["comp", "역량별"], ["question", "질문별"]].map(([v, l]) => (
                 <Btn key={v} small primary={view === v} onClick={() => setView(v)}>{l}</Btn>
@@ -1157,23 +1209,74 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
       )}
 
       {view === "question" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {questions.map(([label, fn]) => {
-            const hits = experiences.filter(fn);
-            return (
-              <Card key={label}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{label}</div>
-                  {hits.length === 0 ? <Badge label="준비 부족" color={C.red} bg={C.redBg} /> : <span style={{ fontSize: 11.5, color: C.faint }}>{hits.length}개</span>}
-                </div>
-                {hits.length > 0 ? hits.map(e => (
-                  <div key={e.id} onClick={() => onOpen(e.id)} style={{ padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}`, cursor: "pointer" }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</span>
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {questionBlocks.map(b => {
+              const hits = b.expIds.map(id => experiences.find(e => e.id === id)).filter(Boolean);
+              const notes = b.notes || [];
+              const isEditing = editingBlockId === b.id;
+              const candidates = experiences.filter(e => !b.expIds.includes(e.id));
+              const total = hits.length + notes.length;
+              return (
+                <Card key={b.id}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+                    {isEditing ? (
+                      <Input value={b.label} placeholder="질문 내용" onChange={e => patchBlock(b.id, "label", e.target.value)}
+                        style={{ fontWeight: 700, fontSize: 13.5, border: "none", padding: "2px 0", flex: 1 }} />
+                    ) : (
+                      <div onClick={() => setEditingBlockId(b.id)} style={{ fontWeight: 700, fontSize: 13.5, cursor: "pointer", flex: 1 }}>{b.label || "(제목 없음 — 클릭해서 입력)"}</div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+                      {total === 0 ? <Badge label="준비 부족" color={C.red} bg={C.redBg} /> : <span style={{ fontSize: 11.5, color: C.faint }}>{total}개</span>}
+                      {isEditing ? (
+                        <Btn small onClick={() => setEditingBlockId(null)}>완료</Btn>
+                      ) : (
+                        <span onClick={() => removeBlock(b.id)} title="질문 삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                      )}
+                    </div>
                   </div>
-                )) : <div style={{ fontSize: 12.5, color: C.faint }}>이 질문에 쓸 경험이 아직 없습니다.</div>}
-              </Card>
-            );
-          })}
+
+                  {hits.map(e => (
+                    <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+                      <Badge label="경험" color={C.sub} bg={C.lineSoft} />
+                      <span onClick={() => !isEditing && onOpen(e.id)} style={{ fontSize: 13, fontWeight: 600, flex: 1, cursor: isEditing ? "default" : "pointer" }}>{e.title}</span>
+                      {isEditing && <span onClick={() => removeBlockExp(b.id, e.id)} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>}
+                    </div>
+                  ))}
+
+                  {notes.map(n => (
+                    <div key={n.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+                      <Badge label="메모" color={C.sub} bg={C.lineSoft} />
+                      {isEditing ? (
+                        <Textarea value={n.text} onChange={e => patchBlockNote(b.id, n.id, e.target.value)} style={{ flex: 1, minHeight: 44, fontSize: 13 }} />
+                      ) : (
+                        <span style={{ fontSize: 13, lineHeight: 1.5, flex: 1, whiteSpace: "pre-wrap" }}>{n.text}</span>
+                      )}
+                      {isEditing && <span onClick={() => removeBlockNote(b.id, n.id)} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>}
+                    </div>
+                  ))}
+
+                  {total === 0 && !isEditing && <div style={{ fontSize: 12.5, color: C.faint }}>이 질문에 쓸 경험이나 메모가 아직 없습니다.</div>}
+
+                  {isEditing && (
+                    <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+                      <select value="" onChange={e => addBlockExp(b.id, e.target.value)}
+                        style={{ fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.panel, width: "100%" }}>
+                        <option value="">+ 경험 불러오기</option>
+                        {candidates.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
+                      </select>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <Textarea placeholder="경험 없이 바로 메모나 답변 초안을 적어도 됩니다" value={noteDraft[b.id] || ""}
+                          onChange={e => setNoteDraft(p => ({ ...p, [b.id]: e.target.value }))} style={{ flex: 1, minHeight: 44, fontSize: 13 }} />
+                        <Btn small onClick={() => { if ((noteDraft[b.id] || "").trim()) { addBlockNote(b.id, noteDraft[b.id].trim()); setNoteDraft(p => ({ ...p, [b.id]: "" })); } }}>메모 추가</Btn>
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 12 }}><Btn small onClick={addBlock}>+ 질문 추가</Btn></div>
         </div>
       )}
       </>
@@ -1729,12 +1832,11 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
 }
 
 /* ============================================================ 역량·스킬 */
-function Skills({ skills, setSkills, certs, setCerts, experiences, onOpenExp, addTrash }) {
+function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
   const [tab, setTab] = useState("도구");
   const [newSkill, setNewSkill] = useState("");
   const [addingScope, setAddingScope] = useState(null); // skillId
   const [scopeDraft, setScopeDraft] = useState({ text: "", evidenceExpId: "" });
-  const [certDraft, setCertDraft] = useState({ name: "", issuer: "", date: "", note: "" });
 
   const byCat = (cat) => skills.filter(s => s.category === cat);
   const catOf = { "도구": "tool", "직무 역량": "skill" };
@@ -1756,17 +1858,6 @@ function Skills({ skills, setSkills, certs, setCerts, experiences, onOpenExp, ad
     const skill = skills.find(s => s.id === skillId);
     setSkills(p => p.filter(s => s.id !== skillId));
     addTrash("skill", skill.name, skill);
-  };
-  const addCert = () => {
-    if (!certDraft.name.trim()) return;
-    setCerts(p => [...p, { id: "c_" + Date.now(), ...certDraft }]);
-    setCertDraft({ name: "", issuer: "", date: "", note: "" });
-  };
-  const patchCert = (certId, k, v) => setCerts(p => p.map(c => c.id === certId ? { ...c, [k]: v } : c));
-  const removeCert = (certId) => {
-    const cert = certs.find(c => c.id === certId);
-    setCerts(p => p.filter(c => c.id !== certId));
-    addTrash("cert", cert.name, cert);
   };
 
   const SkillCard = ({ s }) => {
@@ -1832,7 +1923,7 @@ function Skills({ skills, setSkills, certs, setCerts, experiences, onOpenExp, ad
       </div>
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
-        {["도구", "직무 역량", "자격증·어학"].map(t => (
+        {["도구", "직무 역량"].map(t => (
           <div key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
             color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{t}</div>
         ))}
@@ -1847,27 +1938,6 @@ function Skills({ skills, setSkills, certs, setCerts, experiences, onOpenExp, ad
             <Btn onClick={() => addSkill(catOf[tab])}>+ 추가</Btn>
           </div>
         </>
-      )}
-
-      {tab === "자격증·어학" && (
-        <Card>
-          <Label>자격증 · 어학</Label>
-          {certs.map(c => (
-            <div key={c.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 110px 1fr 20px", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
-              <Input value={c.name} onChange={e => patchCert(c.id, "name", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0" }} />
-              <Input value={c.issuer || ""} placeholder="발급 기관" onChange={e => patchCert(c.id, "issuer", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
-              <Input value={c.date || ""} placeholder="취득일" onChange={e => patchCert(c.id, "date", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
-              <Input value={c.note || ""} placeholder="비고" onChange={e => patchCert(c.id, "note", e.target.value)} style={{ color: C.faint, fontSize: 12, border: "none", padding: "2px 0" }} />
-              <span onClick={() => removeCert(c.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
-            </div>
-          ))}
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <Input placeholder="자격증명" value={certDraft.name} onChange={e => setCertDraft(d => ({ ...d, name: e.target.value }))} style={{ flex: 1.3 }} />
-            <Input placeholder="발급 기관" value={certDraft.issuer} onChange={e => setCertDraft(d => ({ ...d, issuer: e.target.value }))} style={{ flex: 1 }} />
-            <Input placeholder="취득일 (YYYY-MM)" value={certDraft.date} onChange={e => setCertDraft(d => ({ ...d, date: e.target.value }))} style={{ width: 130 }} />
-            <Btn small onClick={addCert}>추가</Btn>
-          </div>
-        </Card>
       )}
     </div>
   );
@@ -1965,6 +2035,42 @@ const ESSAY_COACH_SYSTEM_PROMPT = `지금부터 당신은 국내 대기업·외�
 작성이 끝나면 다음 안내만 덧붙이십시오.
 "초안을 검토해 보시고 수정하고 싶은 부분(분량, 강조점, 표현 등)을 말씀해 주세요. 마음에 드신다면 '다음 문항'이라고 입력해 주세요."`;
 
+const EXPERIENCE_REVIEW_SYSTEM_PROMPT = `당신은 국내 대기업·외국계·스타트업 채용을 두루 경험한 시니어 채용담당자입니다. 지금부터 지원자가 정리한 "경험 데이터베이스" 전체를 검토합니다.
+
+역할
+지원자가 이 데이터를 이력서·자소서·면접에 그대로 활용할 것이므로, 실무자 시선에서 부족한 부분을 냉정하게 짚어주는 것이 당신의 역할입니다. 무조건적인 칭찬은 도움이 되지 않습니다.
+
+검토 시 반드시 확인할 것
+   * 수치·성과가 빠져 있거나 모호한 경험 (예: "매출이 늘었다" 수준에서 멈춘 경우)
+   * 배경·문제·행동·기여도·성과 중 비어 있는 항목이 있는 경험
+   * 본인이 한 일과 팀이 한 일이 구분되지 않는 경험 (기여도 근거 부실)
+   * 서로 내용이 겹치거나 같은 일화가 여러 경험으로 쪼개져 있는 것으로 보이는 경우 (합치기를 제안할 것)
+   * 어려움·배운 점이 비어 있어 면접 압박 질문(실패, 갈등, 어려움 극복)에 쓸 수 없는 경험
+   * 전체적으로 부족한 역량 유형 (예: 리더십, 협업, 문제 해결 중 특정 유형의 경험이 없는 경우)
+
+답변 방식
+   * 한 번에 모든 걸 나열하지 말고, 가장 시급하고 임팩트가 큰 문제 3~5가지를 우선순위대로 짚으십시오.
+   * 각 지적에는 어떤 경험(제목)의 어떤 부분이 문제인지 구체적으로 명시하십시오.
+   * 추상적인 조언("더 구체적으로 쓰세요") 대신, 무엇을 확인하거나 채워 넣으면 되는지 실행 가능한 다음 행동을 제시하십시오.
+   * 절대 지어내지 마십시오 — 데이터에 없는 내용을 추측해서 "이랬을 것이다"라고 단정하지 말고, 없으면 "확인이 필요합니다"라고 하십시오.
+   * 사용자가 특정 경험에 대해 더 파고들어 질문하면 그 경험에 집중해서 답하십시오.`;
+
+function buildReviewContext(experiences) {
+  const lines = experiences.map(e => {
+    const parts = [`- [${e.title}] (${e.organization || "소속 미상"} · ${e.status}${e.depthDone ? "" : " · 심화 미입력"})`];
+    parts.push(`  배경: ${e.context || "(없음)"}`);
+    parts.push(`  문제: ${e.discoveredProblem || "(없음)"}`);
+    parts.push(`  본인 기여: ${e.personalContribution || "(없음)"} / 기여 근거: ${e.contributionEvidence || "(없음)"}`);
+    parts.push(`  성과 요약: ${e.oneLineSummary || "(없음)"}`);
+    parts.push(`  어려움: ${e.difficulty || "(없음)"} / 배운 점: ${e.learning || "(없음)"}`);
+    parts.push(`  역량 태그: ${(e.competencies || []).join(", ") || "(없음)"}`);
+    return parts.join("\n");
+  }).join("\n\n");
+
+  return `[지원자의 경험 데이터베이스 전체 — ${experiences.length}건]
+${lines || "등록된 경험이 없습니다."}`;
+}
+
 function buildEssayContext(app, essay, experiences) {
   const factLines = experiences.filter(e => e.status !== "draft").map(e => {
     const parts = [`- [${e.title}] ${e.organization || ""} · ${e.role || ""} (${e.startDate}~${e.endDate})`];
@@ -1993,7 +2099,7 @@ ${reqLines || "등록된 요구 역량 없음"}
 ${factLines || "아직 분석 완료된 경험이 없습니다. 먼저 경험 분석을 진행하도록 안내하십시오."}`;
 }
 
-function EssayChat({ essay, app, experiences, onClose, onSaveDraft, history, onHistoryChange }) {
+function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessage, inputPlaceholder, onClose, onSaveDraft, saveDraftLabel, history, onHistoryChange }) {
   const [messages, setMessages] = useState(history || []); // {role, content}
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -2013,7 +2119,7 @@ function EssayChat({ essay, app, experiences, onClose, onSaveDraft, history, onH
     if (!started.current) {
       started.current = true;
       if ((history || []).length === 0) {
-        send("안녕하세요, 이 문항에 사용할 경험을 추천해 주시고 초안을 작성해 주세요.", true);
+        send(autoStartMessage || "안녕하세요, 도와주세요.", true);
       }
     }
     // eslint-disable-next-line
@@ -2030,7 +2136,8 @@ function EssayChat({ essay, app, experiences, onClose, onSaveDraft, history, onH
       const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          context: buildEssayContext(app, essay, experiences),
+          systemPrompt,
+          context: contextText,
           messages: nextMessages,
         }),
       });
@@ -2057,12 +2164,12 @@ function EssayChat({ essay, app, experiences, onClose, onSaveDraft, history, onH
     <Card style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${C.line}` }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>자소서 작성 도우미</div>
-          <div style={{ fontSize: 11.5, color: C.faint }}>{essay.question || "문항 미입력"}</div>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>{title}</div>
+          {subtitle && <div style={{ fontSize: 11.5, color: C.faint }}>{subtitle}</div>}
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {messages.length > 0 && <Btn small onClick={() => { updateMessages([]); started.current = false; }}>대화 초기화</Btn>}
-          {lastAssistant && <Btn small onClick={() => onSaveDraft(lastAssistant.content)}>이 답변을 초안으로 저장</Btn>}
+          {onSaveDraft && lastAssistant && <Btn small onClick={() => onSaveDraft(lastAssistant.content)}>{saveDraftLabel || "이 답변을 초안으로 저장"}</Btn>}
           <Btn small onClick={onClose}>← 목록으로</Btn>
         </div>
       </div>
@@ -2089,7 +2196,7 @@ function EssayChat({ essay, app, experiences, onClose, onSaveDraft, history, onH
       </div>
 
       <div style={{ display: "flex", gap: 8, padding: 12, borderTop: `1px solid ${C.line}` }}>
-        <Textarea rows={2} placeholder="피드백을 입력하거나 '다음 문항'이라고 입력하세요" value={input}
+        <Textarea rows={2} placeholder={inputPlaceholder || "피드백을 입력하거나 '다음 문항'이라고 입력하세요"} value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
           style={{ flex: 1, minHeight: 44 }} />
@@ -2175,19 +2282,24 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
         </Card>
       )}
 
-      {tab === "자소서" && chatEssayId && (
-        <EssayChat
-          essay={app.essays.find(x => x.id === chatEssayId)}
-          app={app}
-          experiences={experiences}
-          onClose={() => setChatEssayId(null)}
-          history={app.essays.find(x => x.id === chatEssayId)?.chatHistory || []}
-          onHistoryChange={(h) => setApplications(prev => prev.map(a => a.id === app.id
-            ? { ...a, essays: a.essays.map(x => x.id === chatEssayId ? { ...x, chatHistory: h } : x) } : a))}
-          onSaveDraft={(text) => setApplications(prev => prev.map(a => a.id === app.id
-            ? { ...a, essays: a.essays.map(x => x.id === chatEssayId ? { ...x, draft: text, status: "drafting" } : x) } : a))}
-        />
-      )}
+      {tab === "자소서" && chatEssayId && (() => {
+        const q = app.essays.find(x => x.id === chatEssayId);
+        return (
+          <EssayChat
+            title="자소서 작성 도우미"
+            subtitle={q.question || "문항 미입력"}
+            systemPrompt={ESSAY_COACH_SYSTEM_PROMPT}
+            contextText={buildEssayContext(app, q, experiences)}
+            autoStartMessage="안녕하세요, 이 문항에 사용할 경험을 추천해 주시고 초안을 작성해 주세요."
+            onClose={() => setChatEssayId(null)}
+            history={q.chatHistory || []}
+            onHistoryChange={(h) => setApplications(prev => prev.map(a => a.id === app.id
+              ? { ...a, essays: a.essays.map(x => x.id === chatEssayId ? { ...x, chatHistory: h } : x) } : a))}
+            onSaveDraft={(text) => setApplications(prev => prev.map(a => a.id === app.id
+              ? { ...a, essays: a.essays.map(x => x.id === chatEssayId ? { ...x, draft: text, status: "drafting" } : x) } : a))}
+          />
+        );
+      })()}
 
       {tab === "자소서" && !chatEssayId && (
         <div style={{ display: "grid", gap: 12 }}>
@@ -2313,7 +2425,7 @@ function formatDeletedAt(iso) {
 }
 
 function Trash({ trash, onRestore, onPurge, onClear }) {
-  const typeLabel = { experience: "경험", skill: "스킬", cert: "자격증", application: "지원", requirement: "요구 역량", essay: "자소서 문항", interview: "면접 질문" };
+  const typeLabel = { experience: "경험", skill: "스킬", cert: "자격증", award: "수상기록", application: "지원", requirement: "요구 역량", essay: "자소서 문항", interview: "면접 질문" };
   return (
     <div style={{ maxWidth: 700 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -2372,17 +2484,22 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
         ))}
       </div>
 
-      {tab === "자소서" && chatId && (
-        <EssayChat
-          essay={essays.find(x => x.id === chatId)}
-          app={masterApp}
-          experiences={experiences}
-          onClose={() => setChatId(null)}
-          history={essays.find(x => x.id === chatId)?.chatHistory || []}
-          onHistoryChange={(h) => setEssays(prev => prev.map(x => x.id === chatId ? { ...x, chatHistory: h } : x))}
-          onSaveDraft={(text) => setEssays(prev => prev.map(x => x.id === chatId ? { ...x, draft: text, status: "drafting" } : x))}
-        />
-      )}
+      {tab === "자소서" && chatId && (() => {
+        const q = essays.find(x => x.id === chatId);
+        return (
+          <EssayChat
+            title="자소서 작성 도우미"
+            subtitle={q.question || "문항 미입력"}
+            systemPrompt={ESSAY_COACH_SYSTEM_PROMPT}
+            contextText={buildEssayContext(masterApp, q, experiences)}
+            autoStartMessage="안녕하세요, 이 문항에 사용할 경험을 추천해 주시고 초안을 작성해 주세요."
+            onClose={() => setChatId(null)}
+            history={q.chatHistory || []}
+            onHistoryChange={(h) => setEssays(prev => prev.map(x => x.id === chatId ? { ...x, chatHistory: h } : x))}
+            onSaveDraft={(text) => setEssays(prev => prev.map(x => x.id === chatId ? { ...x, draft: text, status: "drafting" } : x))}
+          />
+        );
+      })()}
 
       {tab === "자소서" && !chatId && (
         <div style={{ display: "grid", gap: 12 }}>
@@ -2408,17 +2525,24 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
         </div>
       )}
 
-      {tab === "면접" && iqChatId && (
-        <EssayChat
-          essay={{ question: interviews.find(x => x.id === iqChatId)?.question, characterLimit: 400 }}
-          app={masterApp}
-          experiences={experiences}
-          onClose={() => setIqChatId(null)}
-          history={interviews.find(x => x.id === iqChatId)?.chatHistory || []}
-          onHistoryChange={(h) => setInterviews(prev => prev.map(x => x.id === iqChatId ? { ...x, chatHistory: h } : x))}
-          onSaveDraft={(text) => setInterviews(prev => prev.map(x => x.id === iqChatId ? { ...x, draft: text } : x))}
-        />
-      )}
+      {tab === "면접" && iqChatId && (() => {
+        const iq = interviews.find(x => x.id === iqChatId);
+        const pseudoEssay = { question: iq.question, characterLimit: 400 };
+        return (
+          <EssayChat
+            title="면접 답변 작성 도우미"
+            subtitle={iq.question || "질문 미입력"}
+            systemPrompt={ESSAY_COACH_SYSTEM_PROMPT}
+            contextText={buildEssayContext(masterApp, pseudoEssay, experiences)}
+            autoStartMessage="안녕하세요, 이 면접 질문에 쓸 경험을 추천해 주시고 답변 초안을 작성해 주세요."
+            saveDraftLabel="이 답변을 초안으로 저장"
+            onClose={() => setIqChatId(null)}
+            history={iq.chatHistory || []}
+            onHistoryChange={(h) => setInterviews(prev => prev.map(x => x.id === iqChatId ? { ...x, chatHistory: h } : x))}
+            onSaveDraft={(text) => setInterviews(prev => prev.map(x => x.id === iqChatId ? { ...x, draft: text } : x))}
+          />
+        );
+      })()}
 
       {tab === "면접" && !iqChatId && (
         <div style={{ display: "grid", gap: 12 }}>
@@ -2459,10 +2583,36 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
   );
 }
 
-function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile, skills, certs }) {
+function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile, skills, certs, setCerts, awards, setAwards, addTrash }) {
   const approved = outputs.filter(o => o.outputType === "resume" && o.approvalStatus === "approved");
   const patch = (k, v) => setResumeProfile(p => ({ ...p, [k]: v }));
   const autosave = useAutosave(JSON.stringify(resumeProfile));
+
+  const [certDraft, setCertDraft] = useState({ name: "", issuer: "", date: "", note: "" });
+  const patchCert = (id, k, v) => setCerts(prev => prev.map(c => c.id === id ? { ...c, [k]: v } : c));
+  const addCert = () => {
+    if (!certDraft.name.trim()) return;
+    setCerts(prev => [...prev, { id: "c_" + Date.now(), ...certDraft }]);
+    setCertDraft({ name: "", issuer: "", date: "", note: "" });
+  };
+  const removeCert = (id) => {
+    const cert = certs.find(c => c.id === id);
+    setCerts(prev => prev.filter(c => c.id !== id));
+    addTrash("cert", cert.name, cert);
+  };
+
+  const [awardDraft, setAwardDraft] = useState({ name: "", issuer: "", date: "", note: "" });
+  const patchAward = (id, k, v) => setAwards(prev => prev.map(a => a.id === id ? { ...a, [k]: v } : a));
+  const addAward = () => {
+    if (!awardDraft.name.trim()) return;
+    setAwards(prev => [...prev, { id: "aw_" + Date.now(), ...awardDraft }]);
+    setAwardDraft({ name: "", issuer: "", date: "", note: "" });
+  };
+  const removeAward = (id) => {
+    const award = awards.find(a => a.id === id);
+    setAwards(prev => prev.filter(a => a.id !== id));
+    addTrash("award", award.name, award);
+  };
 
   // 승인된 문장을 경험(소속·역할) 단위로 그룹핑
   const groups = approved.reduce((acc, o) => {
@@ -2476,7 +2626,6 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
   const linkedSkillBadges = (skills || []).flatMap(s =>
     (s.scopeItems || []).filter(it => it.evidenceExpId).slice(0, 1).map(it => `${s.name} · ${it.text}`)
   );
-  const certBadges = (certs || []).filter(c => !c.planned).map(c => c.name);
 
   return (
     <div style={{ maxWidth: 700 }}>
@@ -2517,14 +2666,54 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
         <div style={{ fontSize: 12, color: C.faint, marginTop: 10 }}>미승인(AI 초안) 문장은 여기에 표시되지 않습니다.</div>
       </Card>
       <Card style={{ marginTop: 12 }}>
-        <Label>역량 · 자격증</Label>
+        <Label>역량</Label>
         <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>
-          역량·스킬 탭에서 <b>경험 근거가 연결된 항목</b>과 자격증을 자동으로 불러옵니다. (근거 없는 항목은 제외)
+          역량·스킬 탭에서 <b>경험 근거가 연결된 항목</b>만 자동으로 불러옵니다. (근거 없는 항목은 제외)
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-          {[...linkedSkillBadges, ...certBadges].length === 0
-            ? <div style={{ fontSize: 12.5, color: C.faint }}>근거가 연결된 역량·자격증이 아직 없습니다.</div>
-            : [...linkedSkillBadges, ...certBadges].map(t => <Badge key={t} label={t} color={C.sub} bg={C.lineSoft} />)}
+          {linkedSkillBadges.length === 0
+            ? <div style={{ fontSize: 12.5, color: C.faint }}>근거가 연결된 역량이 아직 없습니다.</div>
+            : linkedSkillBadges.map(t => <Badge key={t} label={t} color={C.sub} bg={C.lineSoft} />)}
+        </div>
+      </Card>
+
+      <Card style={{ marginTop: 12 }}>
+        <Label>자격증 · 어학</Label>
+        {certs.map(c => (
+          <div key={c.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 110px 1fr 20px", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
+            <Input value={c.name} onChange={e => patchCert(c.id, "name", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0" }} />
+            <Input value={c.issuer || ""} placeholder="발급 기관" onChange={e => patchCert(c.id, "issuer", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
+            <Input value={c.date || ""} placeholder="취득일" onChange={e => patchCert(c.id, "date", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
+            <Input value={c.note || ""} placeholder="비고" onChange={e => patchCert(c.id, "note", e.target.value)} style={{ color: C.faint, fontSize: 12, border: "none", padding: "2px 0" }} />
+            <span onClick={() => removeCert(c.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+          </div>
+        ))}
+        {certs.length === 0 && <div style={{ fontSize: 12.5, color: C.faint, padding: "6px 0" }}>등록된 자격증·어학이 없습니다.</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <Input placeholder="자격증명" value={certDraft.name} onChange={e => setCertDraft(d => ({ ...d, name: e.target.value }))} style={{ flex: 1.3 }} />
+          <Input placeholder="발급 기관" value={certDraft.issuer} onChange={e => setCertDraft(d => ({ ...d, issuer: e.target.value }))} style={{ flex: 1 }} />
+          <Input placeholder="취득일 (YYYY-MM)" value={certDraft.date} onChange={e => setCertDraft(d => ({ ...d, date: e.target.value }))} style={{ width: 130 }} />
+          <Btn small onClick={addCert}>추가</Btn>
+        </div>
+      </Card>
+
+      <Card style={{ marginTop: 12 }}>
+        <Label>수상기록</Label>
+        {awards.map(a => (
+          <div key={a.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 110px 1fr 20px", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
+            <Input value={a.name} onChange={e => patchAward(a.id, "name", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0" }} />
+            <Input value={a.issuer || ""} placeholder="수여 기관" onChange={e => patchAward(a.id, "issuer", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
+            <Input value={a.date || ""} placeholder="수상일" onChange={e => patchAward(a.id, "date", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
+            <Input value={a.note || ""} placeholder="비고 (예: 대상, 참가팀 30개 중 1위)" onChange={e => patchAward(a.id, "note", e.target.value)} style={{ color: C.faint, fontSize: 12, border: "none", padding: "2px 0" }} />
+            <span onClick={() => removeAward(a.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+          </div>
+        ))}
+        {awards.length === 0 && <div style={{ fontSize: 12.5, color: C.faint, padding: "6px 0" }}>등록된 수상기록이 없습니다.</div>}
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+          <Input placeholder="수상명 (예: 전국 대학생 공모전 대상)" value={awardDraft.name} onChange={e => setAwardDraft(d => ({ ...d, name: e.target.value }))} style={{ flex: 1.3 }} />
+          <Input placeholder="수여 기관" value={awardDraft.issuer} onChange={e => setAwardDraft(d => ({ ...d, issuer: e.target.value }))} style={{ flex: 1 }} />
+          <Input placeholder="수상일 (YYYY-MM)" value={awardDraft.date} onChange={e => setAwardDraft(d => ({ ...d, date: e.target.value }))} style={{ width: 130 }} />
+          <Btn small onClick={addAward}>추가</Btn>
         </div>
       </Card>
     </div>
