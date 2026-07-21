@@ -359,33 +359,59 @@ const AutosaveIndicator = ({ state }) => (
 );
 
 /* ============================================================ APP */
+/* ---------- 로컬 저장(localStorage) 지속성 훅 ---------- */
+const STORAGE_PREFIX = "careeros:";
+function usePersisted(key, initialValue) {
+  const [state, setState] = useState(() => {
+    try {
+      const raw = window.localStorage.getItem(STORAGE_PREFIX + key);
+      if (raw != null) return JSON.parse(raw);
+    } catch (e) { /* 저장소 접근 불가 시 기본값으로 진행 */ }
+    return initialValue;
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(state)); }
+    catch (e) { /* 저장 실패해도 앱은 계속 동작 */ }
+  }, [key, state]);
+  return [state, setState];
+}
+
 export default function App() {
   const [nav, setNav] = useState("home"); // home | analyze | archive | apply | resume
-  const [experiences, setExperiences] = useState(seedExperiences);
-  const [metrics, setMetrics] = useState(seedMetrics);
-  const [outputs, setOutputs] = useState(seedOutputs);
-  const [applications, setApplications] = useState(seedApplications);
-  const [skills, setSkills] = useState(seedSkills);
-  const [certs, setCerts] = useState(seedCerts);
-  const [resumeProfile, setResumeProfile] = useState({ name: "", targetRole: "", headline: "", phone: "", email: "" });
+  const [experiences, setExperiences] = usePersisted("experiences", seedExperiences);
+  const [metrics, setMetrics] = usePersisted("metrics", seedMetrics);
+  const [outputs, setOutputs] = usePersisted("outputs", seedOutputs);
+  const [applications, setApplications] = usePersisted("applications", seedApplications);
+  const [skills, setSkills] = usePersisted("skills", seedSkills);
+  const [certs, setCerts] = usePersisted("certs", seedCerts);
+  const [resumeProfile, setResumeProfile] = usePersisted("resumeProfile", { name: "", targetRole: "", headline: "", phone: "", email: "" });
   const [detailId, setDetailId] = useState(null);     // 경험 상세
   const [appDetailId, setAppDetailId] = useState(null); // 지원 상세
   const [analyzeId, setAnalyzeId] = useState(null);   // 분석 중 경험
-  const [trash, setTrash] = useState([]); // { id, type, label, deletedAt, restore }
-  const [masterEssays, setMasterEssays] = useState(seedMasterEssays);
-  const [masterInterviews, setMasterInterviews] = useState(seedMasterInterviews);
-  const [interviewCategories, setInterviewCategories] = useState(["성과", "실패", "협업", "갈등", "인성"]);
-  const [expCategories, setExpCategories] = useState(["온라인 쇼핑몰 인턴", "동아리 활동"]);
+  const [trash, setTrash] = usePersisted("trash", []); // { id, type, label, deletedAt, payload }
+  const [masterEssays, setMasterEssays] = usePersisted("masterEssays", seedMasterEssays);
+  const [masterInterviews, setMasterInterviews] = usePersisted("masterInterviews", seedMasterInterviews);
+  const [interviewCategories, setInterviewCategories] = usePersisted("interviewCategories", ["성과", "실패", "협업", "갈등", "인성"]);
+  const [expCategories, setExpCategories] = usePersisted("expCategories", ["온라인 쇼핑몰 인턴", "동아리 활동"]);
   const addInterviewCategory = (c) => setInterviewCategories(prev => prev.includes(c) ? prev : [...prev, c]);
   const addExpCategory = (c) => setExpCategories(prev => prev.includes(c) ? prev : [...prev, c]);
 
-  const addTrash = (type, label, restore) => setTrash(prev => [
-    { id: "t_" + Date.now() + Math.random().toString(36).slice(2, 6), type, label, deletedAt: "방금", restore },
+  const addTrash = (type, label, payload) => setTrash(prev => [
+    { id: "t_" + Date.now() + Math.random().toString(36).slice(2, 6), type, label, deletedAt: new Date().toISOString(), payload },
     ...prev,
   ]);
   const restoreTrash = (id) => {
     const entry = trash.find(t => t.id === id);
-    if (entry) { entry.restore(); setTrash(prev => prev.filter(t => t.id !== id)); }
+    if (!entry) return;
+    const { type, payload } = entry;
+    if (type === "experience") setExperiences(prev => [...prev, payload]);
+    else if (type === "skill") setSkills(prev => [...prev, payload]);
+    else if (type === "cert") setCerts(prev => [...prev, payload]);
+    else if (type === "application") setApplications(prev => [...prev, payload]);
+    else if (type === "requirement") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, requirements: [...a.requirements, payload.item] } : a));
+    else if (type === "essay") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, essays: [...a.essays, payload.item] } : a));
+    else if (type === "interview") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, interviews: [...a.interviews, payload.item] } : a));
+    setTrash(prev => prev.filter(t => t.id !== id));
   };
   const purgeTrash = (id) => setTrash(prev => prev.filter(t => t.id !== id));
   const clearTrash = () => setTrash([]);
@@ -427,6 +453,13 @@ export default function App() {
             ))}
           </div>
         ))}
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.lineSoft}` }}>
+          <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>이 브라우저에 자동 저장됨</div>
+          <div onClick={() => { if (window.confirm("이 브라우저에 저장된 모든 데이터를 지우고 초기 상태로 되돌릴까요? 되돌릴 수 없습니다.")) { Object.keys(window.localStorage).filter(k => k.startsWith(STORAGE_PREFIX)).forEach(k => window.localStorage.removeItem(k)); window.location.reload(); } }}
+            style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
+            전체 데이터 초기화
+          </div>
+        </div>
       </aside>
 
       {/* Main */}
@@ -959,7 +992,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
   const deleteExp = (id) => {
     const exp = experiences.find(e => e.id === id);
     setExperiences(prev => prev.filter(e => e.id !== id));
-    addTrash("experience", exp.title, () => setExperiences(prev => [...prev, exp]));
+    addTrash("experience", exp.title, exp);
   };
 
   const toggleSelect = (id) => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -970,14 +1003,19 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
     (q === "" || e.title.includes(q) || e.competencies.some(c => c.includes(q)) || (e.organization || "").includes(q))
   );
 
-  const allComps = [...new Set(experiences.flatMap(e => e.competencies))];
+  const allComps = [...new Set(experiences.flatMap(e => e.competencies))]
+    .sort((a, b) => experiences.filter(e => e.competencies.includes(b)).length - experiences.filter(e => e.competencies.includes(a)).length);
   const questions = [
     ["가장 큰 성과", e => e.tags.includes("정량 성과")],
     ["주도적으로 개선한 경험", e => ["led", "proposed_and_executed", "full_ownership"].includes(e.contributionLevel)],
     ["협업 경험", e => e.actions.some(a => a.actionType === "collaboration")],
-    ["실패 경험", () => false],
-    ["갈등 경험", () => false],
+    ["리더십 경험", e => e.competencies.includes("리더십")],
+    ["어려움을 극복한 경험", e => !!e.difficulty],
+    ["문제 해결 경험", e => e.competencies.includes("문제 해결") || !!e.discoveredProblem],
   ];
+  const [compQ, setCompQ] = useState("");
+  const [expandedComp, setExpandedComp] = useState({});
+  const shownComps = allComps.filter(c => c.includes(compQ));
 
   return (
     <div>
@@ -1082,29 +1120,62 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
         ));
       })()}
 
-      {view === "comp" && allComps.map(c => (
-        <Card key={c} style={{ marginBottom: 10 }}>
-          <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 8 }}>#{c}</div>
-          {experiences.filter(e => e.competencies.includes(c)).map(e => (
-            <div key={e.id} onClick={() => onOpen(e.id)} style={{ fontSize: 13, color: C.sub, padding: "4px 0", cursor: "pointer" }}>· {e.title}</div>
-          ))}
-        </Card>
-      ))}
+      {view === "comp" && (
+        <div>
+          <Input placeholder="역량 검색" value={compQ} onChange={e => setCompQ(e.target.value)} style={{ maxWidth: 260, marginBottom: 14 }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            {shownComps.map(c => {
+              const hits = experiences.filter(e => e.competencies.includes(c));
+              const isOpen = expandedComp[c];
+              const shown = isOpen ? hits : hits.slice(0, 4);
+              return (
+                <Card key={c}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>#{c}</div>
+                    <span style={{ fontSize: 11.5, color: C.faint }}>{hits.length}개</span>
+                  </div>
+                  {shown.map(e => (
+                    <div key={e.id} onClick={() => onOpen(e.id)} style={{ padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}`, cursor: "pointer" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</span>
+                        <Badge label={STATUS_LABEL[e.status]} color={STATUS_COLOR[e.status][0]} bg={STATUS_COLOR[e.status][1]} />
+                      </div>
+                      {e.oneLineSummary && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.oneLineSummary}</div>}
+                    </div>
+                  ))}
+                  {hits.length > 4 && (
+                    <div onClick={() => setExpandedComp(p => ({ ...p, [c]: !p[c] }))} style={{ fontSize: 12, color: C.sub, cursor: "pointer", marginTop: 6 }}>
+                      {isOpen ? "접기" : `+ ${hits.length - 4}개 더보기`}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+          </div>
+          {shownComps.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>일치하는 역량이 없습니다.</div>}
+        </div>
+      )}
 
-      {view === "question" && questions.map(([label, fn]) => {
-        const hits = experiences.filter(fn);
-        return (
-          <Card key={label} style={{ marginBottom: 10 }}>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 8 }}>{label}</div>
-              {hits.length === 0 && <Badge label="준비 부족" color={C.red} bg={C.redBg} />}
-            </div>
-            {hits.length > 0 ? hits.map(e => (
-              <div key={e.id} onClick={() => onOpen(e.id)} style={{ fontSize: 13, color: C.sub, padding: "4px 0", cursor: "pointer" }}>· {e.title}</div>
-            )) : <div style={{ fontSize: 12.5, color: C.faint }}>이 질문에 쓸 경험이 아직 없습니다.</div>}
-          </Card>
-        );
-      })}
+      {view === "question" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {questions.map(([label, fn]) => {
+            const hits = experiences.filter(fn);
+            return (
+              <Card key={label}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5 }}>{label}</div>
+                  {hits.length === 0 ? <Badge label="준비 부족" color={C.red} bg={C.redBg} /> : <span style={{ fontSize: 11.5, color: C.faint }}>{hits.length}개</span>}
+                </div>
+                {hits.length > 0 ? hits.map(e => (
+                  <div key={e.id} onClick={() => onOpen(e.id)} style={{ padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}`, cursor: "pointer" }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</span>
+                  </div>
+                )) : <div style={{ fontSize: 12.5, color: C.faint }}>이 질문에 쓸 경험이 아직 없습니다.</div>}
+              </Card>
+            );
+          })}
+        </div>
+      )}
       </>
       )}
     </div>
@@ -1135,7 +1206,7 @@ function MergeReview({ ids, experiences, setExperiences, metrics, setMetrics, ou
     setMetrics(prev => prev.map(m => otherIds.includes(m.experienceId) ? { ...m, experienceId: primaryId } : m));
     setOutputs(prev => prev.map(o => otherIds.includes(o.experienceId) ? { ...o, experienceId: primaryId } : o));
     setExperiences(prev => prev.filter(e => !otherIds.includes(e.id)).map(e => e.id === primaryId ? merged : e));
-    others.forEach(o => addTrash("experience", o.title, () => setExperiences(prev => [...prev, o])));
+    others.forEach(o => addTrash("experience", o.title, o));
 
     onDone(primaryId);
   };
@@ -1182,7 +1253,7 @@ function ExperienceDetail({ exp, metrics, outputs, setOutputs, setExperiences, o
   const reject = (id) => setOutputs(prev => prev.map(o => o.id === id ? { ...o, approvalStatus: "rejected" } : o));
   const deleteExp = () => {
     setExperiences(prev => prev.filter(e => e.id !== exp.id));
-    addTrash("experience", exp.title, () => setExperiences(prev => [...prev, exp]));
+    addTrash("experience", exp.title, exp);
     onDeleted();
   };
 
@@ -1684,7 +1755,7 @@ function Skills({ skills, setSkills, certs, setCerts, experiences, onOpenExp, ad
   const removeSkill = (skillId) => {
     const skill = skills.find(s => s.id === skillId);
     setSkills(p => p.filter(s => s.id !== skillId));
-    addTrash("skill", skill.name, () => setSkills(p => [...p, skill]));
+    addTrash("skill", skill.name, skill);
   };
   const addCert = () => {
     if (!certDraft.name.trim()) return;
@@ -1695,7 +1766,7 @@ function Skills({ skills, setSkills, certs, setCerts, experiences, onOpenExp, ad
   const removeCert = (certId) => {
     const cert = certs.find(c => c.id === certId);
     setCerts(p => p.filter(c => c.id !== certId));
-    addTrash("cert", cert.name, () => setCerts(p => [...p, cert]));
+    addTrash("cert", cert.name, cert);
   };
 
   const SkillCard = ({ s }) => {
@@ -1813,7 +1884,7 @@ function Applications({ applications, setApplications, onOpen, addTrash }) {
   const deleteApp = (id) => {
     const app = applications.find(a => a.id === id);
     setApplications(prev => prev.filter(a => a.id !== id));
-    addTrash("application", `${app.company} ${app.position}`.trim(), () => setApplications(prev => [...prev, app]));
+    addTrash("application", `${app.company} ${app.position}`.trim(), app);
   };
 
   return (
@@ -2034,7 +2105,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
   const patch = (k, v) => setApplications(prev => prev.map(a => a.id === app.id ? { ...a, [k]: v } : a));
   const deleteApp = () => {
     setApplications(prev => prev.filter(a => a.id !== app.id));
-    addTrash("application", `${app.company} ${app.position}`.trim(), () => setApplications(prev => [...prev, app]));
+    addTrash("application", `${app.company} ${app.position}`.trim(), app);
     onBack();
   };
 
@@ -2077,8 +2148,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
             const removeReq = () => {
               setApplications(prev => prev.map(a => a.id === app.id
                 ? { ...a, requirements: a.requirements.filter(x => x.id !== r.id) } : a));
-              addTrash("requirement", r.requirement || "요구 역량 항목", () => setApplications(prev => prev.map(a => a.id === app.id
-                ? { ...a, requirements: [...a.requirements, r] } : a)));
+              addTrash("requirement", r.requirement || "요구 역량 항목", { appId: app.id, item: r });
             };
             return (
               <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1.3fr 1.2fr 1.5fr 20px", gap: 12, padding: "11px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5, alignItems: "center" }}>
@@ -2127,8 +2197,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
             const removeQ = () => {
               setApplications(prev => prev.map(a => a.id === app.id
                 ? { ...a, essays: a.essays.filter(x => x.id !== q.id) } : a));
-              addTrash("essay", q.question || "자소서 문항", () => setApplications(prev => prev.map(a => a.id === app.id
-                ? { ...a, essays: [...a.essays, q] } : a)));
+              addTrash("essay", q.question || "자소서 문항", { appId: app.id, item: q });
             };
             return (
               <Card key={q.id}>
@@ -2178,8 +2247,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
             const removeIq = () => {
               setApplications(prev => prev.map(a => a.id === app.id
                 ? { ...a, interviews: a.interviews.filter(x => x.id !== iq.id) } : a));
-              addTrash("interview", iq.question || "면접 질문", () => setApplications(prev => prev.map(a => a.id === app.id
-                ? { ...a, interviews: [...a.interviews, iq] } : a)));
+              addTrash("interview", iq.question || "면접 질문", { appId: app.id, item: iq });
             };
             return (
               <Card key={iq.id}>
@@ -2232,6 +2300,18 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
 
 /* ============================================================ 기본 이력서 */
 /* ============================================================ 휴지통 */
+function formatDeletedAt(iso) {
+  try {
+    const d = new Date(iso);
+    const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+    if (diffMin < 1) return "방금";
+    if (diffMin < 60) return `${diffMin}분 전`;
+    const diffHr = Math.round(diffMin / 60);
+    if (diffHr < 24) return `${diffHr}시간 전`;
+    return d.toISOString().slice(0, 16).replace("T", " ");
+  } catch { return ""; }
+}
+
 function Trash({ trash, onRestore, onPurge, onClear }) {
   const typeLabel = { experience: "경험", skill: "스킬", cert: "자격증", application: "지원", requirement: "요구 역량", essay: "자소서 문항", interview: "면접 질문" };
   return (
@@ -2251,7 +2331,7 @@ function Trash({ trash, onRestore, onPurge, onClear }) {
           <div>
             <Badge label={typeLabel[t.type] || t.type} color={C.sub} bg={C.lineSoft} />
             <span style={{ marginLeft: 8, fontSize: 13.5, fontWeight: 600 }}>{t.label || "(제목 없음)"}</span>
-            <div style={{ fontSize: 11.5, color: C.faint, marginTop: 3 }}>{t.deletedAt} 삭제됨</div>
+            <div style={{ fontSize: 11.5, color: C.faint, marginTop: 3 }}>{formatDeletedAt(t.deletedAt)} 삭제됨</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             <Btn small primary onClick={() => onRestore(t.id)}>복구</Btn>
