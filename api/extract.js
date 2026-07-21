@@ -1,8 +1,11 @@
 // Vercel Serverless Function
 // 역할: 브라우저가 아닌 서버에서 AI API를 호출해 키가 클라이언트에 노출되지 않도록 한다.
-// 우선 Anthropic(Claude)을 시도하고, 실패하면(토큰 소진·오류 등) OpenAI(GPT)로 자동 전환한다.
+// 순서: Anthropic(Claude) → OpenAI(GPT) → Google Gemini 순으로 시도하고,
+// 앞 단계가 실패하면(토큰 소진·오류 등) 자동으로 다음으로 전환한다.
 // 배포 시 Vercel 프로젝트 설정 > Environment Variables 에 아래 중 최소 하나를 등록해야 한다.
-//   ANTHROPIC_API_KEY, OPENAI_API_KEY (둘 다 등록하면 자동 폴백이 활성화된다)
+//   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY
+// GEMINI_API_KEY는 https://aistudio.google.com/apikey 에서 카드 등록 없이 무료로 발급 가능하다.
+// 단, Gemini 무료 등급은 입력·출력 데이터를 모델 학습에 활용할 수 있다는 약관이 있으니 참고할 것.
 
 function buildPrompt(raw) {
   return `아래는 정형화되지 않은 이력서/경험 정리 문서다. 원문은 자유 텍스트일 수도, 표/CSV 형식(엑셀에서 변환됨)일 수도 있다. 내용을 추출해 JSON으로만 응답하라. 마크다운 백틱 없이 순수 JSON만.
@@ -58,6 +61,25 @@ async function callOpenAI(apiKey, prompt) {
   return { content: [{ type: "text", text }], _provider: "openai" };
 }
 
+async function callGemini(apiKey, prompt) {
+  const r = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" },
+      }),
+    }
+  );
+  const data = await r.json();
+  if (!r.ok) throw new Error(data?.error?.message || `Gemini 오류 (HTTP ${r.status})`);
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+  if (!text) throw new Error("Gemini 응답에 내용이 없습니다 (안전 필터에 걸렸을 수 있습니다).");
+  return { content: [{ type: "text", text }], _provider: "gemini" };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "POST 요청만 허용됩니다." });
@@ -65,8 +87,9 @@ export default async function handler(req, res) {
 
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
-  if (!anthropicKey && !openaiKey) {
-    return res.status(500).json({ error: "서버에 ANTHROPIC_API_KEY 또는 OPENAI_API_KEY 환경변수가 하나도 설정되어 있지 않습니다." });
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!anthropicKey && !openaiKey && !geminiKey) {
+    return res.status(500).json({ error: "서버에 ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY 중 하나도 설정되어 있지 않습니다." });
   }
 
   const { raw } = req.body || {};
@@ -79,19 +102,13 @@ export default async function handler(req, res) {
   let lastError = null;
 
   if (anthropicKey) {
-    try {
-      result = await callAnthropic(anthropicKey, prompt);
-    } catch (err) {
-      lastError = err;
-    }
+    try { result = await callAnthropic(anthropicKey, prompt); } catch (err) { lastError = err; }
   }
-
   if (!result && openaiKey) {
-    try {
-      result = await callOpenAI(openaiKey, prompt);
-    } catch (err) {
-      lastError = err;
-    }
+    try { result = await callOpenAI(openaiKey, prompt); } catch (err) { lastError = err; }
+  }
+  if (!result && geminiKey) {
+    try { result = await callGemini(geminiKey, prompt); } catch (err) { lastError = err; }
   }
 
   if (!result) {
