@@ -201,6 +201,15 @@ const seedQuestionBlocks = [
   { id: "qb_5", label: "어려움을 극복한 경험", expIds: ["e_1"] },
   { id: "qb_6", label: "문제 해결 경험", expIds: ["e_2"] },
 ];
+// 신규 사용자 기본값 — 예시 경험을 참조하지 않는 빈 질문 블록
+const emptyQuestionBlocks = [
+  { id: "qb_1", label: "가장 큰 성과", expIds: [] },
+  { id: "qb_2", label: "주도적으로 개선한 경험", expIds: [] },
+  { id: "qb_3", label: "협업 경험", expIds: [] },
+  { id: "qb_4", label: "리더십 경험", expIds: [] },
+  { id: "qb_5", label: "어려움을 극복한 경험", expIds: [] },
+  { id: "qb_6", label: "문제 해결 경험", expIds: [] },
+];
 
 const seedApplications = [
   { id: "ap_1", company: "A 리테일 기업", position: "MD (상품기획)", deadline: "2026-08-03", status: "writing", priority: "high",
@@ -292,6 +301,13 @@ function formatMetric(m, fmt) {
   else v = "?";
   if (fmt === "rounded" && m.changeValue != null) v = `약 ${Math.round(m.changeValue / 5) * 5}${m.unit}`;
   return v;
+}
+function resolveTokenText(text, metrics) {
+  if (!text) return "";
+  return text.replace(/\{\{metric:([^|}]+)\|?([^}]*)\}\}/g, (_, id, fmt) => {
+    const metric = metrics.find(x => x.id === id);
+    return formatMetric(metric, fmt || "exact");
+  });
 }
 function TokenText({ text, metrics }) {
   const parts = text.split(/(\{\{metric:[^}]+\}\})/g);
@@ -387,12 +403,13 @@ function usePersisted(key, initialValue) {
 
 export default function App() {
   const [nav, setNav] = useState("home"); // home | analyze | archive | apply | resume
-  const [experiences, setExperiences] = usePersisted("experiences", seedExperiences);
-  const [metrics, setMetrics] = usePersisted("metrics", seedMetrics);
-  const [outputs, setOutputs] = usePersisted("outputs", seedOutputs);
-  const [applications, setApplications] = usePersisted("applications", seedApplications);
-  const [skills, setSkills] = usePersisted("skills", seedSkills);
-  const [certs, setCerts] = usePersisted("certs", seedCerts);
+  const backupInputRef = useRef(null);
+  const [experiences, setExperiences] = usePersisted("experiences", []);
+  const [metrics, setMetrics] = usePersisted("metrics", []);
+  const [outputs, setOutputs] = usePersisted("outputs", []);
+  const [applications, setApplications] = usePersisted("applications", []);
+  const [skills, setSkills] = usePersisted("skills", []);
+  const [certs, setCerts] = usePersisted("certs", []);
   const [awards, setAwards] = usePersisted("awards", []);
   const [resumeProfile, setResumeProfile] = usePersisted("resumeProfile", { name: "", targetRole: "", headline: "", phone: "", email: "" });
   const [detailId, setDetailId] = useState(null);     // 경험 상세
@@ -403,10 +420,64 @@ export default function App() {
   const [masterInterviews, setMasterInterviews] = usePersisted("masterInterviews", seedMasterInterviews);
   const [interviewCategories, setInterviewCategories] = usePersisted("interviewCategories", ["성과", "실패", "협업", "갈등", "인성"]);
   const [expCategories, setExpCategories] = usePersisted("expCategories", ["온라인 쇼핑몰 인턴", "동아리 활동"]);
-  const [questionBlocks, setQuestionBlocks] = usePersisted("questionBlocks", seedQuestionBlocks);
+  const [questionBlocks, setQuestionBlocks] = usePersisted("questionBlocks", emptyQuestionBlocks);
   const [reviewChatHistory, setReviewChatHistory] = usePersisted("reviewChatHistory", []);
   const addInterviewCategory = (c) => setInterviewCategories(prev => prev.includes(c) ? prev : [...prev, c]);
   const addExpCategory = (c) => setExpCategories(prev => prev.includes(c) ? prev : [...prev, c]);
+
+  const isBlankSlate = experiences.length === 0 && applications.length === 0 && skills.length === 0 && certs.length === 0;
+  const loadDemoData = () => {
+    setExperiences(seedExperiences);
+    setMetrics(seedMetrics);
+    setOutputs(seedOutputs);
+    setApplications(seedApplications);
+    setSkills(seedSkills);
+    setCerts(seedCerts);
+    setQuestionBlocks(seedQuestionBlocks);
+  };
+
+  const exportBackup = () => {
+    const payload = {
+      _type: "career-os-backup", _version: 1, exportedAt: new Date().toISOString(),
+      experiences, metrics, outputs, applications, skills, certs, awards,
+      resumeProfile, masterEssays, masterInterviews, interviewCategories,
+      expCategories, questionBlocks,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `career-os-백업-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const importBackup = (file) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const d = JSON.parse(reader.result);
+        if (d._type !== "career-os-backup") throw new Error("Career OS 백업 파일이 아닙니다.");
+        if (!window.confirm("불러오면 현재 데이터를 덮어씁니다. 계속할까요?")) return;
+        if (d.experiences) setExperiences(d.experiences);
+        if (d.metrics) setMetrics(d.metrics);
+        if (d.outputs) setOutputs(d.outputs);
+        if (d.applications) setApplications(d.applications);
+        if (d.skills) setSkills(d.skills);
+        if (d.certs) setCerts(d.certs);
+        if (d.awards) setAwards(d.awards);
+        if (d.resumeProfile) setResumeProfile(d.resumeProfile);
+        if (d.masterEssays) setMasterEssays(d.masterEssays);
+        if (d.masterInterviews) setMasterInterviews(d.masterInterviews);
+        if (d.interviewCategories) setInterviewCategories(d.interviewCategories);
+        if (d.expCategories) setExpCategories(d.expCategories);
+        if (d.questionBlocks) setQuestionBlocks(d.questionBlocks);
+        alert("백업을 불러왔습니다.");
+      } catch (err) {
+        alert("백업 파일을 읽지 못했습니다: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const addTrash = (type, label, payload) => setTrash(prev => [
     { id: "t_" + Date.now() + Math.random().toString(36).slice(2, 6), type, label, deletedAt: new Date().toISOString(), payload },
@@ -437,7 +508,7 @@ export default function App() {
   const menuGroups = [
     { label: "시작", items: [["home", "홈"], ["guide", "사용 가이드"]] },
     { label: "경험 정리", items: [["import", "파일 가져오기"], ["analyze", "경험 분석"], ["archive", "경험 보관함"], ["skills", "역량·스킬"]] },
-    { label: "지원 준비", items: [["apply", "지원 관리"], ["master", "마스터 자소서·면접"], ["resume", "기본 이력서"]] },
+    { label: "지원 준비", items: [["apply", "지원 관리"], ["master", "자소서·면접 준비"], ["resume", "기본 이력서"]] },
     { label: "기타", items: [["trash", "휴지통"]] },
   ];
   const [openGroups, setOpenGroups] = useState(() => Object.fromEntries(menuGroups.map(g => [g.label, true])));
@@ -459,8 +530,9 @@ export default function App() {
             </div>
             {openGroups[g.label] && g.items.map(([k, l]) => (
               <div key={k} onClick={() => go(k)} style={{
-                padding: "9px 12px", borderRadius: 14, fontSize: 13.5, fontWeight: nav === k ? 700 : 500, cursor: "pointer",
-                background: nav === k ? C.lineSoft : "transparent", color: nav === k ? C.text : C.sub, marginBottom: 2 }}>
+                padding: "9px 12px", fontSize: 13.5, fontWeight: nav === k ? 700 : 500, cursor: "pointer",
+                textDecoration: nav === k ? "underline" : "none", textUnderlineOffset: "3px",
+                color: nav === k ? C.text : C.sub, marginBottom: 2 }}>
                 {l}
               </div>
             ))}
@@ -468,16 +540,26 @@ export default function App() {
         ))}
         <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.lineSoft}` }}>
           <div style={{ fontSize: 11, color: C.faint, marginBottom: 6 }}>이 브라우저에 자동 저장됨</div>
-          <div onClick={() => { if (window.confirm("이 브라우저에 저장된 모든 데이터를 지우고 초기 상태로 되돌릴까요? 되돌릴 수 없습니다.")) { Object.keys(window.localStorage).filter(k => k.startsWith(STORAGE_PREFIX)).forEach(k => window.localStorage.removeItem(k)); window.location.reload(); } }}
-            style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
-            전체 데이터 초기화
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span onClick={exportBackup} style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
+              데이터 백업 (다운로드)
+            </span>
+            <span onClick={() => backupInputRef.current?.click()} style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
+              백업 불러오기
+            </span>
+            <input ref={backupInputRef} type="file" accept="application/json" style={{ display: "none" }}
+              onChange={e => { const f = e.target.files[0]; if (f) importBackup(f); e.target.value = ""; }} />
+            <span onClick={() => { if (window.confirm("이 브라우저에 저장된 모든 데이터를 지우고 초기 상태로 되돌릴까요? 되돌릴 수 없습니다.")) { Object.keys(window.localStorage).filter(k => k.startsWith(STORAGE_PREFIX)).forEach(k => window.localStorage.removeItem(k)); window.location.reload(); } }}
+              style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
+              전체 데이터 초기화
+            </span>
           </div>
         </div>
       </aside>
 
       {/* Main */}
       <main style={{ flex: 1, padding: "26px 32px", maxWidth: 1120, minWidth: 0 }}>
-        {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} />}
+        {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => go("guide")} />}
         {nav === "guide" && <Guide onGo={go} />}
         {nav === "analyze" && <Analyze experiences={experiences} setExperiences={setExperiences} analyzeId={analyzeId} setAnalyzeId={setAnalyzeId} metrics={metrics} onDone={openDetail} />}
         {nav === "archive" && !detailId && <Archive experiences={experiences} setExperiences={setExperiences} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} onOpen={openDetail} onAnalyze={openAnalyze} onGoImport={() => go("import")} addTrash={addTrash} expCategories={expCategories} addExpCategory={addExpCategory} questionBlocks={questionBlocks} setQuestionBlocks={setQuestionBlocks} reviewChatHistory={reviewChatHistory} setReviewChatHistory={setReviewChatHistory} />}
@@ -606,7 +688,52 @@ function Guide({ onGo }) {
   );
 }
 
-function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail, onOpenApp }) {
+/* ============================================================ 첫 방문자 온보딩 화면 */
+function HomeOnboarding({ onGoAnalyze, onGoImport, onLoadDemo, onGoGuide }) {
+  const steps = [
+    { icon: "upload", title: "파일 가져오기", desc: "기존 이력서·메모가 있다면 AI가 초안을 뽑아줍니다", act: onGoImport, primary: false },
+    { icon: "layers", title: "새 경험 등록", desc: "빈 페이지부터 하나씩 정리하고 싶다면", act: onGoAnalyze, primary: true },
+  ];
+  return (
+    <div style={{ maxWidth: 640, margin: "40px auto 0" }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, color: C.green }}>
+          <Icon name="sparkle" size={34} />
+        </div>
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>Career OS에 오신 걸 환영합니다</h1>
+        <div style={{ fontSize: 13.5, color: C.sub, lineHeight: 1.6 }}>
+          아직 등록된 경험이 없습니다. 아래 두 가지 중 편한 방법으로 시작해보세요.
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        {steps.map(s => (
+          <Card key={s.title} onClick={s.act} style={{
+            textAlign: "center", padding: "26px 18px",
+            border: s.primary ? `1px solid ${C.green}` : `1px solid ${C.line}`,
+            background: s.primary ? C.greenBg : C.panel }}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: s.primary ? C.green : C.sub }}>
+              <Icon name={s.icon} size={28} />
+            </div>
+            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{s.title}</div>
+            <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.5 }}>{s.desc}</div>
+          </Card>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 18, fontSize: 12.5 }}>
+        <span onClick={onGoGuide} style={{ color: C.sub, textDecoration: "underline", cursor: "pointer" }}>전체 사용법 먼저 보기</span>
+        <span onClick={onLoadDemo} style={{ color: C.sub, textDecoration: "underline", cursor: "pointer" }}>예시 데이터로 먼저 둘러보기</span>
+      </div>
+    </div>
+  );
+}
+
+function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail, onOpenApp, isBlankSlate, onLoadDemo, onGoGuide }) {
+  if (isBlankSlate) {
+    return <HomeOnboarding onGoAnalyze={onGoAnalyze} onGoImport={onGoImport} onLoadDemo={onLoadDemo} onGoGuide={onGoGuide} />;
+  }
+
   const total = experiences.length;
   const done = experiences.filter(e => e.status === "complete").length;
   const needs = experiences.filter(e => e.status === "needs_revision").length;
@@ -1018,6 +1145,22 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
   const [mergeStep, setMergeStep] = useState(false); // 병합 확인 화면 표시 여부
   const [collapsed, setCollapsed] = useState({}); // 카테고리 블록 접힘 상태
 
+  const exportExcel = () => {
+    const rows = experiences.map(e => ({
+      제목: e.title, 카테고리: e.primaryCategory || "", 소속: e.organization || "", 역할: e.role || "",
+      시작: e.startDate || "", 종료: e.endDate || "", 상태: STATUS_LABEL[e.status] || e.status,
+      배경: e.context || "", 문제: e.discoveredProblem || "", 본인기여: e.personalContribution || "",
+      기여근거: e.contributionEvidence || "", 성과요약: e.oneLineSummary || "",
+      어려움: e.difficulty || "", 배운점: e.learning || "", 직무연결: e.jobRelevance || "",
+      역량태그: (e.competencies || []).join(", "), 활용횟수: e.usageCount || 0, 최근수정: e.updatedAt || "",
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws["!cols"] = Object.keys(rows[0] || {}).map(k => ({ wch: Math.min(Math.max(k.length + 2, 12), 40) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "경험 목록");
+    XLSX.writeFile(wb, `career-os-경험목록-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+
   const deleteExp = (id) => {
     const exp = experiences.find(e => e.id === id);
     setExperiences(prev => prev.filter(e => e.id !== id));
@@ -1084,6 +1227,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
           ) : (
             <>
               <Btn small onClick={onGoImport}>파일 가져오기</Btn>
+              <Btn small onClick={exportExcel}>엑셀로 내보내기</Btn>
               <Btn small onClick={() => setShowReview(true)}>AI 진단 받기</Btn>
               <Btn small onClick={() => setMergeMode(true)}>경험 합치기</Btn>
               {[["exp", "경험별"], ["comp", "역량별"], ["question", "질문별"]].map(([v, l]) => (
@@ -2472,7 +2616,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
 
   return (
     <div style={{ maxWidth: 820 }}>
-      <H2>마스터 자소서·면접</H2>
+      <H2>자소서·면접 준비 (공통)</H2>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 16, lineHeight: 1.6 }}>
         특정 회사에 매지 않고, 자주 나오는 공통 문항을 미리 준비해두는 곳입니다. 여기서 만든 답변은 지원 관리의 각 회사별 문항을 쓸 때 참고용으로 활용하세요.
       </div>
@@ -2627,13 +2771,61 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
     (s.scopeItems || []).filter(it => it.evidenceExpId).slice(0, 1).map(it => `${s.name} · ${it.text}`)
   );
 
+  const exportWord = () => {
+    const careerHtml = Object.entries(groups).map(([label, items]) => `
+      <h3 style="font-size:14px;margin:14px 0 4px;">${label}</h3>
+      <ul style="margin:0 0 8px 0; padding-left:18px;">
+        ${items.map(o => `<li style="margin-bottom:4px;">${resolveTokenText(o.content, metrics)}</li>`).join("")}
+      </ul>`).join("") || "<p>등록된 경력 문장이 없습니다.</p>";
+
+    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="utf-8"><title>이력서</title></head>
+      <body style="font-family:'맑은 고딕',sans-serif; font-size:13px; color:#222;">
+        <h1 style="font-size:22px; margin-bottom:4px;">${resumeProfile.name || "이름 미입력"}</h1>
+        <p style="color:#555; margin:0 0 4px;">${resumeProfile.targetRole || ""}</p>
+        <p style="color:#555; margin:0 0 16px;">${[resumeProfile.email, resumeProfile.phone].filter(Boolean).join(" · ")}</p>
+        <p style="margin:0 0 16px;">${resumeProfile.headline || ""}</p>
+        <h2 style="font-size:16px; border-bottom:1px solid #ccc; padding-bottom:4px;">경력</h2>
+        ${careerHtml}
+        <h2 style="font-size:16px; border-bottom:1px solid #ccc; padding-bottom:4px; margin-top:20px;">역량</h2>
+        <p>${linkedSkillBadges.join(", ") || "등록된 역량이 없습니다."}</p>
+        <h2 style="font-size:16px; border-bottom:1px solid #ccc; padding-bottom:4px; margin-top:20px;">자격증 · 어학</h2>
+        <ul style="padding-left:18px;">${(certs.length ? certs : [{ name: "등록된 자격증이 없습니다." }]).map(c => `<li>${c.name}${c.issuer ? ` · ${c.issuer}` : ""}${c.date ? ` · ${c.date}` : ""}</li>`).join("")}</ul>
+        <h2 style="font-size:16px; border-bottom:1px solid #ccc; padding-bottom:4px; margin-top:20px;">수상기록</h2>
+        <ul style="padding-left:18px;">${(awards.length ? awards : [{ name: "등록된 수상기록이 없습니다." }]).map(a => `<li>${a.name}${a.issuer ? ` · ${a.issuer}` : ""}${a.date ? ` · ${a.date}` : ""}</li>`).join("")}</ul>
+      </body></html>`;
+
+    const blob = new Blob(["\ufeff", html], { type: "application/msword" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `이력서_${resumeProfile.name || "career_os"}.doc`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div style={{ maxWidth: 700 }}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .print-area, .print-area * { visibility: visible; }
+          .print-area { position: absolute; left: 0; top: 0; width: 100%; }
+        }
+      `}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <H2>기본 이력서</H2>
-        <AutosaveIndicator state={autosave} />
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <AutosaveIndicator state={autosave} />
+        </div>
       </div>
-      <div style={{ fontSize: 13, color: C.sub, marginBottom: 16 }}>경력 문장은 직접 입력하지 않고, 경험 보관함의 <b>승인된</b> 문장만 불러옵니다.</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: C.sub }}>경력 문장은 직접 입력하지 않고, 경험 보관함의 <b>승인된</b> 문장만 불러옵니다.</div>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <Btn small onClick={() => window.print()}>PDF로 저장 (인쇄)</Btn>
+          <Btn small onClick={exportWord}>Word로 내보내기</Btn>
+        </div>
+      </div>
+      <div className="print-area">
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Label>기본 정보</Label>
@@ -2716,6 +2908,7 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
           <Btn small onClick={addAward}>추가</Btn>
         </div>
       </Card>
+      </div>
     </div>
   );
 }
