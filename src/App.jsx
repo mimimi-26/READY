@@ -3460,6 +3460,7 @@ function BrandingHub() {
   const [profileItems, setProfileItems] = useState([]);
   const [answersProgress, setAnswersProgress] = useState([]);
   const [jumpTo, setJumpTo] = useState(null); // 프로필에서 워크북으로 점프할 질문 id
+  const [showDiag, setShowDiag] = useState(false);
 
   const connect = async () => {
     setConnecting(true); setAuthError(null);
@@ -3545,7 +3546,6 @@ function BrandingHub() {
   }
 
   const tabs = [["home", "홈"], ["workbook", "워크북"], ["profile", "프로필"], ["result", "결과"]];
-  const [showDiag, setShowDiag] = useState(false);
 
   return (
     <div style={{ maxWidth: 820 }}>
