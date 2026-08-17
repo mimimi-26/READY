@@ -1040,8 +1040,8 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 6 }}>
-        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, background: C.blue, marginRight: 4 }} />하루·한 달짜리 활동 (미정리)</span>
-        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 12, height: 8, borderRadius: 3, background: C.greenBg, border: `1px solid ${C.green}`, marginRight: 4 }} />정리된 경험</span>
+        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, background: C.panel, border: `2px solid ${C.sub}`, marginRight: 5 }} />미정리 (점선/테두리만)</span>
+        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 12, height: 8, borderRadius: 3, background: C.greenBg, border: `1px solid ${C.green}`, marginRight: 5 }} />정리된 경험 (채움)</span>
       </div>
 
       <div style={{ display: "flex" }}>
@@ -1060,9 +1060,9 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
         </div>
 
         <div style={{ flex: 1, overflowX: "auto" }}>
-          <div style={{ position: "relative", height: totalRows * TIMELINE_ROW_H, display: "flex", gap: 10, paddingLeft: 12, borderLeft: `1px solid ${C.line}`, minWidth: laneCount * 130 }}>
+          <div style={{ position: "relative", height: totalRows * TIMELINE_ROW_H, display: "flex", gap: 12, paddingLeft: 12, borderLeft: `1px solid ${C.line}`, minWidth: laneCount * 162 }}>
             {Array.from({ length: laneCount }).map((_, laneIdx) => (
-              <div key={laneIdx} style={{ position: "relative", width: 120, flexShrink: 0 }}>
+              <div key={laneIdx} style={{ position: "relative", width: 150, flexShrink: 0 }}>
                 {rows.map((idx, i) => (
                   <div key={idx} style={{ position: "absolute", top: i * TIMELINE_ROW_H, left: 0, right: 0, height: 1, background: i === 0 ? "transparent" : C.lineSoft }} />
                 ))}
@@ -1073,22 +1073,24 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
                   const height = (bottomRow - topRow + 1) * TIMELINE_ROW_H - 6;
                   const isDot = it.startIdx === it.endIdx && it.kind === "activity";
                   const isSelected = selected.has(it.key);
+                  const isOrganized = it.kind === "experience";
                   const onClick = () => it.kind === "experience" ? onOpenExp(it.raw.id) : toggleSelect(it.key);
                   if (isDot) {
                     return (
-                      <div key={it.key} onClick={onClick} title={it.title} style={{ position: "absolute", top: top + 7, left: 4, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                        <span style={{ width: 9, height: 9, borderRadius: 99, background: C.blue, border: isSelected ? `2px solid ${C.text}` : "none", flexShrink: 0 }} />
-                        <span style={{ fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 96 }}>{it.title}</span>
+                      <div key={it.key} onClick={onClick} title={it.title} style={{ position: "absolute", top: top + 6, left: 2, right: 2, display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer" }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 99, background: isSelected ? C.text : C.panel, border: `2px solid ${isSelected ? C.text : C.sub}`, flexShrink: 0, marginTop: 2 }} />
+                        <span style={{ fontSize: 12, fontWeight: isSelected ? 700 : 500, color: C.text, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.title}</span>
                       </div>
                     );
                   }
-                  const isOrganized = it.kind === "experience";
                   return (
                     <div key={it.key} onClick={onClick} title={it.title} style={{
-                      position: "absolute", top, left: 3, right: 3, height: Math.max(height, 20), borderRadius: 8, cursor: "pointer",
-                      background: isOrganized ? C.greenBg : C.blueBg, border: `1px solid ${isOrganized ? C.green : C.blue}`,
-                      outline: isSelected ? `2px solid ${C.text}` : "none",
-                      padding: "4px 6px", fontSize: 11.5, color: isOrganized ? C.green : C.blue, lineHeight: 1.3, overflow: "hidden" }}>
+                      position: "absolute", top, left: 3, right: 3, height: Math.max(height, 24), borderRadius: 8, cursor: "pointer", boxSizing: "border-box",
+                      background: isOrganized ? C.greenBg : C.panel,
+                      border: isOrganized ? `1px solid ${C.green}` : `1.5px dashed ${isSelected ? C.text : C.sub}`,
+                      outline: isSelected ? `2px solid ${C.text}` : "none", outlineOffset: 1,
+                      padding: "6px 8px", fontSize: 12, fontWeight: isSelected ? 700 : 500, color: isOrganized ? C.green : C.text, lineHeight: 1.35,
+                      display: "-webkit-box", WebkitLineClamp: Math.max(1, Math.floor((Math.max(height, 24) - 12) / 16)), WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                       {it.title}
                     </div>
                   );
