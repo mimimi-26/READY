@@ -514,6 +514,18 @@ async function baInsertProfileItems(supabase, userId, items, sourceEntryId) {
   if (error) throw error;
   return data;
 }
+async function baInsertConsolidatedItems(supabase, userId, constants, entries) {
+  const seqToId = Object.fromEntries(entries.map(e => [e.seq, e.id]));
+  const rows = (constants || []).map(c => ({
+    user_id: userId, type: "pattern", content: c.content, confidence: "high",
+    evidence: null, source_entry_ids: (c.seqs || []).map(s => seqToId[s]).filter(Boolean),
+    status: "제안", origin: "consolidate",
+  }));
+  if (rows.length === 0) return [];
+  const { data, error } = await supabase.from("branding_profile_items").insert(rows).select();
+  if (error) throw error;
+  return data;
+}
 async function baListProfileItems(supabase, userId) {
   const { data, error } = await supabase.from("branding_profile_items")
     .select("*").eq("user_id", userId).order("created_at", { ascending: false });
@@ -846,7 +858,7 @@ export default function App() {
         {nav === "guide" && <Guide onGo={go} />}
         {nav === "analyze" && <Analyze experiences={experiences} setExperiences={setExperiences} analyzeId={analyzeId} setAnalyzeId={setAnalyzeId} metrics={metrics} setMetrics={setMetrics} onDone={openDetail} />}
         {nav === "archive" && !detailId && <Archive experiences={experiences} setExperiences={setExperiences} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} onOpen={openDetail} onAnalyze={openAnalyze} onGoImport={() => go("import")} addTrash={addTrash} expCategories={expCategories} addExpCategory={addExpCategory} questionBlocks={questionBlocks} setQuestionBlocks={setQuestionBlocks} reviewChatHistory={reviewChatHistory} setReviewChatHistory={setReviewChatHistory} />}
-        {nav === "archive" && detailId && <ExperienceDetail exp={experiences.find(e => e.id === detailId)} metrics={metrics} outputs={outputs} setOutputs={setOutputs} setExperiences={setExperiences} onBack={() => setDetailId(null)} onAnalyze={openAnalyze} onDeleted={() => setDetailId(null)} addTrash={addTrash} />}
+        {nav === "archive" && detailId && <ExperienceDetail exp={experiences.find(e => e.id === detailId)} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} setExperiences={setExperiences} onBack={() => setDetailId(null)} onAnalyze={openAnalyze} onDeleted={() => setDetailId(null)} addTrash={addTrash} />}
         {nav === "timeline" && <Timeline experiences={experiences} setExperiences={setExperiences} activities={timelineActivities} setActivities={setTimelineActivities} addTrash={addTrash} onOpenExp={openDetail} onAnalyze={openAnalyze} onGoArchive={() => go("archive")} />}
         {nav === "import" && <ImportFlow setExperiences={setExperiences} setSkills={setSkills} setCerts={setCerts} setResumeProfile={setResumeProfile} onDone={openDetail} experiences={experiences} />}
         {nav === "skills" && <Skills skills={skills} setSkills={setSkills} experiences={experiences} onOpenExp={openDetail} addTrash={addTrash} />}
@@ -989,6 +1001,46 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
     setSelected(new Set());
   };
 
+  // 블록 드래그로 시기 이동 (기간 길이는 유지한 채 통째로 이동)
+  const dragRef = useRef({ moved: false, justDragged: false });
+  const startDrag = (it) => (e) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const startY = e.clientY;
+    const durationMonths = it.endIdx - it.startIdx;
+    dragRef.current = { moved: false, justDragged: false, deltaRows: 0 };
+
+    const onMove = (ev) => {
+      const deltaRows = Math.round((ev.clientY - startY) / TIMELINE_ROW_H);
+      if (deltaRows !== dragRef.current.deltaRows) dragRef.current.moved = true;
+      dragRef.current.deltaRows = deltaRows;
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      const { moved, deltaRows } = dragRef.current;
+      if (moved && deltaRows) {
+        dragRef.current.justDragged = true;
+        const newStartIdx = it.startIdx - deltaRows;
+        const newEndIdx = newStartIdx + durationMonths;
+        const s = indexToYM(newStartIdx), en = indexToYM(newEndIdx);
+        const sStr = `${s.y}-${String(s.m).padStart(2, "0")}-01`;
+        const enStr = `${en.y}-${String(en.m).padStart(2, "0")}-01`;
+        if (it.kind === "activity") {
+          setActivities(prev => prev.map(a => a.id === it.raw.id ? { ...a, date: sStr, endDate: enStr } : a));
+        } else {
+          setExperiences(prev => prev.map(x => x.id === it.raw.id ? { ...x, startDate: sStr.slice(0, 7), endDate: enStr.slice(0, 7) } : x));
+        }
+      }
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+  const handleBlockClick = (it) => {
+    if (dragRef.current.justDragged) { dragRef.current.justDragged = false; return; }
+    toggleSelect(it.key);
+  };
+
   // 경험 + (미정리 필터가 아니면 정리된 활동도 숨김 — 이미 경험으로 존재하므로 중복 방지)
   const expItems = experiences.filter(e => e.startDate).map(e => {
     const s = ymToIndex(e.startDate.slice(0, 7));
@@ -1074,18 +1126,18 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
                   const isDot = it.startIdx === it.endIdx && it.kind === "activity";
                   const isSelected = selected.has(it.key);
                   const isOrganized = it.kind === "experience";
-                  const onClick = () => it.kind === "experience" ? onOpenExp(it.raw.id) : toggleSelect(it.key);
                   if (isDot) {
                     return (
-                      <div key={it.key} onClick={onClick} title={it.title} style={{ position: "absolute", top: top + 6, left: 2, right: 2, display: "flex", alignItems: "flex-start", gap: 7, cursor: "pointer" }}>
+                      <div key={it.key} onMouseDown={startDrag(it)} onClick={() => handleBlockClick(it)} title={it.title + " (드래그해서 시기 이동)"}
+                        style={{ position: "absolute", top: top + 6, left: 2, right: 2, display: "flex", alignItems: "flex-start", gap: 7, cursor: "grab" }}>
                         <span style={{ width: 10, height: 10, borderRadius: 99, background: isSelected ? C.text : C.panel, border: `2px solid ${isSelected ? C.text : C.sub}`, flexShrink: 0, marginTop: 2 }} />
                         <span style={{ fontSize: 12, fontWeight: isSelected ? 700 : 500, color: C.text, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.title}</span>
                       </div>
                     );
                   }
                   return (
-                    <div key={it.key} onClick={onClick} title={it.title} style={{
-                      position: "absolute", top, left: 3, right: 3, height: Math.max(height, 24), borderRadius: 8, cursor: "pointer", boxSizing: "border-box",
+                    <div key={it.key} onMouseDown={startDrag(it)} onClick={() => handleBlockClick(it)} title={it.title + " (드래그해서 시기 이동)"} style={{
+                      position: "absolute", top, left: 3, right: 3, height: Math.max(height, 24), borderRadius: 8, cursor: "grab", boxSizing: "border-box",
                       background: isOrganized ? C.greenBg : C.panel,
                       border: isOrganized ? `1px solid ${C.green}` : `1.5px dashed ${isSelected ? C.text : C.sub}`,
                       outline: isSelected ? `2px solid ${C.text}` : "none", outlineOffset: 1,
@@ -1101,12 +1153,26 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
         </div>
       </div>
 
-      {selected.size > 0 && (
+      {selected.size === 1 && (() => {
+        const key = [...selected][0];
+        if (key.startsWith("a_")) {
+          const a = activities.find(x => "a_" + x.id === key);
+          if (!a) return null;
+          return <TimelineActivityPanel activity={a} setActivities={setActivities} onDeselect={() => setSelected(new Set())}
+            onOrganize={() => organizeSelected()} onDelete={() => deleteSelected()} />;
+        }
+        const e = experiences.find(x => "e_" + x.id === key);
+        if (!e) return null;
+        return <TimelineExperienceNote exp={e} setExperiences={setExperiences} onOpenExp={onOpenExp} onDeselect={() => setSelected(new Set())} />;
+      })()}
+
+      {selected.size > 1 && (
         <div style={{ position: "sticky", bottom: 16, marginTop: 16, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
-          <span style={{ fontSize: 12.5 }}>{selected.size}개 선택됨</span>
+          <span style={{ fontSize: 12.5 }}>{selected.size}개 선택됨{selectedActivities.length < selected.size ? " (정리된 경험은 일괄 작업 대상에서 제외)" : ""}</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <Btn small onClick={deleteSelected}>삭제</Btn>
-            <Btn small primary onClick={organizeSelected}>선택한 항목 정리하기</Btn>
+            <Btn small onClick={() => setSelected(new Set())}>선택 해제</Btn>
+            <Btn small onClick={deleteSelected} disabled={selectedActivities.length === 0}>삭제</Btn>
+            <Btn small primary onClick={organizeSelected} disabled={selectedActivities.length === 0}>선택한 항목 정리하기</Btn>
           </div>
         </div>
       )}
@@ -1114,6 +1180,68 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
   );
 }
 
+function TimelineActivityPanel({ activity, setActivities, onDeselect, onOrganize, onDelete }) {
+  const [title, setTitle] = useState(activity.title);
+  const [date, setDate] = useState(activity.date.slice(0, 7));
+  const [endDate, setEndDate] = useState((activity.endDate || activity.date).slice(0, 7));
+
+  const save = () => {
+    if (!title.trim() || !date) return;
+    const finalEnd = endDate && endDate >= date ? endDate : date;
+    setActivities(prev => prev.map(a => a.id === activity.id ? { ...a, title: title.trim(), date: date + "-01", endDate: finalEnd + "-01" } : a));
+  };
+
+  return (
+    <Card style={{ marginTop: 16, background: C.accent }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <Label>미정리 활동 — 수정</Label>
+        <span onClick={onDeselect} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+      </div>
+      <Input value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <input type="month" value={date} onChange={e => setDate(e.target.value)}
+          style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
+        <span style={{ fontSize: 12, color: C.faint }}>~</span>
+        <input type="month" value={endDate} min={date} onChange={e => setEndDate(e.target.value)}
+          style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <Btn small primary onClick={save}>저장</Btn>
+        <Btn small onClick={onOrganize}>정리하기 →</Btn>
+        <Btn small onClick={onDelete}>삭제</Btn>
+      </div>
+    </Card>
+  );
+}
+
+function TimelineExperienceNote({ exp, setExperiences, onOpenExp, onDeselect }) {
+  const [note, setNote] = useState(exp.rawNote || "");
+  const autosave = useAutosave(note);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setExperiences(prev => prev.map(e => e.id === exp.id ? { ...e, rawNote: note } : e));
+    }, 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [note]);
+
+  return (
+    <Card style={{ marginTop: 16, background: C.greenBg }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div>
+          <Label>정리된 경험 — 관련 메모</Label>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{exp.title}</div>
+        </div>
+        <span onClick={onDeselect} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+      </div>
+      <Textarea value={note} onChange={e => setNote(e.target.value)} placeholder="이 경험과 관련해서 떠오른 걸 자유롭게 적어두세요" rows={4} />
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+        <AutosaveIndicator state={autosave} />
+        <Btn small primary onClick={() => onOpenExp(exp.id)}>전체 경험 보기 →</Btn>
+      </div>
+    </Card>
+  );
+}
 function Guide({ onGo }) {
   const flow = [
     { icon: "upload", title: "자료 준비", desc: "기존 이력서·메모 파일을 가져오거나, 경험을 새로 등록" },
@@ -2071,10 +2199,13 @@ function MergeReview({ ids, experiences, setExperiences, metrics, setMetrics, ou
 }
 
 /* ============================================================ 경험 상세 */
-function ExperienceDetail({ exp, metrics, outputs, setOutputs, setExperiences, onBack, onAnalyze, onDeleted, addTrash }) {
+function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setExperiences, onBack, onAnalyze, onDeleted, addTrash }) {
   const [tab, setTab] = useState("요약");
   const mine = metrics.filter(m => m.experienceId === exp.id);
   const myOutputs = outputs.filter(o => o.experienceId === exp.id);
+
+  const patchField = (k, v) => setExperiences(prev => prev.map(e => e.id === exp.id ? { ...e, [k]: v } : e));
+  const setExpLocal = (updater) => setExperiences(prev => prev.map(e => e.id === exp.id ? (typeof updater === "function" ? updater(e) : updater) : e));
 
   const approve = (id) => setOutputs(prev => prev.map(o => o.id === id ? { ...o, approvalStatus: "approved", isStale: false } : o));
   const reject = (id) => setOutputs(prev => prev.map(o => o.id === id ? { ...o, approvalStatus: "rejected" } : o));
@@ -2124,8 +2255,8 @@ function ExperienceDetail({ exp, metrics, outputs, setOutputs, setExperiences, o
 
       {tab === "요약" && (
         <div style={{ display: "grid", gap: 12 }}>
-          {exp.oneLineSummary && <Card><Label>한 줄 요약</Label><div style={{ fontSize: 14.5, lineHeight: 1.6 }}>{exp.oneLineSummary}</div></Card>}
-          {exp.coreMessage && <Card style={{ background: C.accent }}><Label>핵심 메시지</Label><div style={{ fontSize: 14, lineHeight: 1.6 }}>{exp.coreMessage}</div></Card>}
+          <Card><Label>한 줄 요약</Label><Textarea value={exp.oneLineSummary || ""} placeholder="이 경험을 한 줄로 요약하면" onChange={e => patchField("oneLineSummary", e.target.value)} style={{ fontSize: 14.5, minHeight: 50 }} /></Card>
+          <Card style={{ background: C.accent }}><Label>핵심 메시지</Label><Textarea value={exp.coreMessage || ""} placeholder="이 경험의 핵심 메시지" onChange={e => patchField("coreMessage", e.target.value)} style={{ fontSize: 14, minHeight: 50, background: "transparent" }} /></Card>
           <Card>
             <Label>대표 역량 — 추가·삭제 가능</Label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
@@ -2154,45 +2285,38 @@ function ExperienceDetail({ exp, metrics, outputs, setOutputs, setExperiences, o
 
       {tab === "사실" && (
         <Card>
-          <Label>사실 보관함 — 검증된 원본만 저장</Label>
-          {[["소속", exp.organization], ["역할", exp.role], ["주어진 업무", exp.assignedTask], ["발견한 문제", exp.discoveredProblem],
-            ["기여 수준", CONTRIB_LABEL[exp.contributionLevel]], ["기여 근거", exp.contributionEvidence]].map(([k, v]) => (
-            <div key={k} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
-              <span style={{ color: C.faint, fontWeight: 600 }}>{k}</span>
-              <span style={{ lineHeight: 1.55 }}>{v || <span style={{ color: C.faint }}>미입력</span>}</span>
+          <Label>사실 보관함 — 직접 수정 가능</Label>
+          {[["organization", "소속"], ["role", "역할"], ["assignedTask", "주어진 업무"], ["discoveredProblem", "발견한 문제"]].map(([k, label]) => (
+            <div key={k} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5, alignItems: "center" }}>
+              <span style={{ color: C.faint, fontWeight: 600 }}>{label}</span>
+              <Input value={exp[k] || ""} placeholder="미입력" onChange={e => patchField(k, e.target.value)} style={{ border: "none", padding: "2px 0" }} />
             </div>
           ))}
-          <div style={{ fontSize: 12, color: C.faint, marginTop: 10 }}>사실은 수정 이력이 남습니다. 활용 문장을 고쳐도 이 원본은 바뀌지 않습니다.</div>
+          <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5, alignItems: "center" }}>
+            <span style={{ color: C.faint, fontWeight: 600 }}>기여 수준</span>
+            <select value={exp.contributionLevel || ""} onChange={e => patchField("contributionLevel", e.target.value)}
+              style={{ fontFamily: font, fontSize: 13.5, padding: "6px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, width: 200 }}>
+              <option value="">미입력</option>
+              {Object.entries(CONTRIB_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </select>
+          </div>
+          <div style={{ padding: "9px 0", fontSize: 13.5 }}>
+            <div style={{ color: C.faint, fontWeight: 600, marginBottom: 6 }}>기여 근거</div>
+            <Textarea value={exp.contributionEvidence || ""} placeholder="본인 기여를 증명할 근거를 적어주세요" onChange={e => patchField("contributionEvidence", e.target.value)} />
+          </div>
+          <div style={{ fontSize: 12, color: C.faint, marginTop: 10 }}>여기서 고친 내용은 활용 문장이 참조하는 원본에 바로 반영됩니다. 이미 승인된 문장 자체는 자동으로 바뀌지 않으니, 필요하면 "재생성"으로 새로 만들어주세요.</div>
         </Card>
       )}
 
       {tab === "행동" && (
         <Card>
-          <Label>행동 타임라인</Label>
-          {exp.actions.map((a, i) => (
-            <div key={a.id} style={{ display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 0", borderBottom: i < exp.actions.length - 1 ? `1px solid ${C.lineSoft}` : "none" }}>
-              <div style={{ width: 22, height: 22, borderRadius: 99, background: C.lineSoft, fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{i + 1}</div>
-              <Badge label={ACTION_LABEL[a.actionType]} color={C.blue} bg={C.blueBg} />
-              <span style={{ fontSize: 13.5, lineHeight: 1.55 }}>{a.description}</span>
-            </div>
-          ))}
-          {exp.actions.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>행동이 아직 없습니다.</div>}
+          <ActionEditor local={exp} setLocal={setExpLocal} />
         </Card>
       )}
 
       {tab === "성과" && (
         <Card>
-          <Label>성과 수치 — 단일 원본 (모든 문장이 여기를 참조)</Label>
-          {mine.map(m => (
-            <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr 130px 140px 140px 140px", gap: 8, alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
-              <span style={{ fontWeight: 600 }}>{m.metricName}</span>
-              <span style={{ color: C.blue, fontWeight: 700 }}>{formatMetric(m, "exact")}</span>
-              <span style={{ fontSize: 12, color: C.sub }}>{m.comparisonBasis || "—"}</span>
-              <span style={{ fontSize: 12, color: C.sub }}>{m.evidenceSource || "근거 없음"}</span>
-              <Badge label={CERTAINTY[m.certainty][0]} color={CERTAINTY[m.certainty][1]} bg={CERTAINTY[m.certainty][2]} />
-            </div>
-          ))}
-          {mine.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>수치가 없습니다.</div>}
+          <MetricEditor expId={exp.id} metrics={metrics} setMetrics={setMetrics} local={null} patch={null} />
         </Card>
       )}
 
@@ -3940,6 +4064,9 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
   const [editContent, setEditContent] = useState("");
   const [chainLoading, setChainLoading] = useState({});
   const [toast, setToast] = useState("");
+  const [consolidateResult, setConsolidateResult] = useState(null);
+  const [consolidating, setConsolidating] = useState(false);
+  const [consolidateError, setConsolidateError] = useState("");
 
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(""), 4000); return () => clearTimeout(t); } }, [toast]);
 
@@ -4061,11 +4188,37 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
   };
 
   const skipQuestion = async () => { await baSetAnswerStatus(supabase, answer.id, "skipped"); goNext(); };
-  const goNext = () => { if (idx < BRANDING_FLAT_QUESTIONS.length - 1) setIdx(idx + 1); };
-  const goPrev = () => { if (idx > 0) setIdx(idx - 1); };
+  const goNext = () => { setConsolidateResult(null); if (idx < BRANDING_FLAT_QUESTIONS.length - 1) setIdx(idx + 1); };
+  const goPrev = () => { setConsolidateResult(null); if (idx > 0) setIdx(idx - 1); };
 
   const activeEntries = entries.filter(e => e.state === "active");
   const stepInfo = BRANDING_STEPS.find(s => s.id === question.step);
+
+  const runConsolidate = async () => {
+    setConsolidating(true); setConsolidateError(""); setConsolidateResult(null);
+    try {
+      const payload = activeEntries.map(e => ({
+        seq: e.seq, label: e.label, content: e.content, created_at: e.created_at,
+        followups: (e.branding_followups || []).map(f => ({ question: f.question, answer: f.answer })),
+      }));
+      const result = await baCallAI("/api/branding-consolidate", { question: { text: question.text }, entries: payload });
+      setConsolidateResult(result);
+    } catch (e) {
+      setConsolidateError(e.message || String(e));
+    } finally {
+      setConsolidating(false);
+    }
+  };
+
+  const saveConsolidatePatterns = async () => {
+    if (!consolidateResult?.constants?.length) return;
+    const inserted = await baInsertConsolidatedItems(supabase, userId, consolidateResult.constants, activeEntries);
+    if (inserted.length > 0) {
+      setToast(`프로필에 패턴 ${inserted.length}개가 제안됐어`);
+      onProfileChange();
+    }
+    setConsolidateResult(null);
+  };
 
   return (
     <div>
@@ -4134,8 +4287,71 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
           ) : (
             <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <Btn small onClick={() => setComposerOpen(true)}>+ 답변 추가</Btn>
-              {activeEntries.length >= 3 && <Btn small disabled title="다음 업데이트에서 제공됩니다">답변들 종합하기</Btn>}
+              {activeEntries.length >= 3 && <Btn small onClick={runConsolidate} disabled={consolidating}>{consolidating ? "종합하는 중…" : "답변들 종합하기"}</Btn>}
             </div>
+          )}
+
+          {consolidateError && (
+            <div style={{ marginTop: 10, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 4 }}>오류</div>
+              <div style={{ fontSize: 12, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{consolidateError}</div>
+            </div>
+          )}
+
+          {consolidateResult && (
+            <Card style={{ marginTop: 10, background: C.accent }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <Label>{activeEntries.length}개 답변 종합 결과</Label>
+                <span onClick={() => setConsolidateResult(null)} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+              </div>
+
+              {consolidateResult.constants?.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 6 }}>반복되는 패턴 (신뢰도 높음)</div>
+                  {consolidateResult.constants.map((c, i) => (
+                    <div key={i} style={{ fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+                      {c.content} <span style={{ fontSize: 11, color: C.faint }}>(답변 {c.seqs?.join(", ")})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {consolidateResult.changes?.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 6 }}>시간에 따라 달라진 것</div>
+                  {consolidateResult.changes.map((c, i) => (
+                    <div key={i} style={{ fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+                      {c.content} <span style={{ fontSize: 11, color: C.faint }}>(답변 {c.from_seq} → {c.to_seq})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {consolidateResult.contradictions?.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 6 }}>서로 모순되는 것</div>
+                  {consolidateResult.contradictions.map((c, i) => (
+                    <div key={i} style={{ fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+                      {c.content} — {c.detail} <span style={{ fontSize: 11, color: C.faint }}>(답변 {c.seqs?.join(", ")})</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {consolidateResult.constants?.length === 0 && consolidateResult.changes?.length === 0 && consolidateResult.contradictions?.length === 0 && (
+                <div style={{ fontSize: 13, color: C.faint, marginBottom: 12 }}>아직 뚜렷한 패턴·변화·모순이 보이지 않습니다. 답변이 더 쌓이면 다시 시도해보세요.</div>
+              )}
+
+              {consolidateResult.question_for_user && (
+                <div style={{ fontSize: 13, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
+                  💬 {consolidateResult.question_for_user}
+                </div>
+              )}
+
+              {consolidateResult.constants?.length > 0 && (
+                <Btn small primary onClick={saveConsolidatePatterns}>반복되는 패턴을 프로필에 제안하기</Btn>
+              )}
+            </Card>
           )}
         </>
       )}
