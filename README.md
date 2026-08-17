@@ -21,7 +21,8 @@ career-os-app/
     ├── extract-jd.js          # 채용공고 요구 역량 추출
     ├── branding-followup.js   # 브랜딩 — 꼬리질문 생성
     ├── branding-extract.js    # 브랜딩 — 프로필 항목 추출
-    └── branding-synthesize.js # 브랜딩 — 포지셔닝·헤드라인·아키타입 생성
+    ├── branding-synthesize.js # 브랜딩 — 포지셔닝·헤드라인·아키타입 생성
+    └── health.js               # AI 키 등록 여부 확인 (연결 진단용)
 ```
 
 서버리스 함수들은 전부 Anthropic/OpenAI/Gemini API 키를 서버에서만 사용하며, 브라우저는 `/api/*` 경로만 호출합니다.
@@ -101,6 +102,20 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 **Supabase를 설정하지 않으면**: 예전처럼 localStorage만 사용하는 개인 브라우저 저장 방식으로 그대로 동작합니다 (브랜딩 탭만 설정 안내 화면이 뜨고, 나머지 기능은 정상 작동).
 
 **AI 서버리스 함수 3개 추가됨(브랜딩용)**: `api/branding-followup.js`, `api/branding-extract.js`, `api/branding-synthesize.js` — 기존 AI 제공사 폴백(Anthropic→OpenAI→Gemini) 구조를 그대로 따릅니다. 별도 설정 불필요.
+
+## 연결이 안 되거나 자주 끊길 때
+
+브랜딩 탭 우측 상단의 **"연결 상태 확인"**을 누르면 자동으로 5가지를 점검하고, 문제가 있으면 구체적인 해결 방법까지 보여줍니다:
+1. Supabase 환경변수 존재 여부
+2. Supabase 클라이언트 생성 여부
+3. 익명 로그인 성공 여부
+4. 데이터베이스(테이블) 접근 가능 여부
+5. 서버에 AI 키가 등록되어 있는지 (`/api/health`)
+
+**"연결하는 중…"에서 안 넘어갈 때 가장 흔한 원인**: Supabase 대시보드에서 **Anonymous Sign-Ins**가 꺼져 있는 경우입니다.
+→ Supabase 대시보드 → **Authentication → Sign In / Providers → Anonymous Sign-Ins** 켜기
+
+**클라우드 연결이 안 될 때도 작업이 끊기지 않도록**: 브랜딩 워크북에서 연결에 실패하면 "오프라인으로 계속하기"를 선택할 수 있습니다. AI 꼬리질문·프로필 추출 없이 답변 작성만 가능하고, 이 브라우저에 안전하게 저장됩니다. 나중에 연결되면 화면 상단에 업로드 배너가 뜹니다.
 
 ## AI 제공사 폴백 (선택 기능)
 
