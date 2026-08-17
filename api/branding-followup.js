@@ -81,7 +81,7 @@ async function callOpenAI(apiKey, prompt) {
   return { content: [{ type: "text", text: data.choices?.[0]?.message?.content || "" }], _provider: "openai" };
 }
 async function callGemini(apiKey, prompt) {
-  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${apiKey}`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { responseMimeType: "application/json", temperature: 0.7 } }),
   });
