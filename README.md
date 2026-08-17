@@ -123,7 +123,7 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 
 1. **Anthropic (Claude)** — `ANTHROPIC_API_KEY` 있을 때, 품질 최우선
 2. **OpenAI (GPT, `gpt-4o-mini`)** — `OPENAI_API_KEY` 있을 때
-3. **Google Gemini (`gemini-2.5-flash`)** — `GEMINI_API_KEY` 있을 때, **무료**
+3. **Google Gemini (`gemini-3.5-flash-lite`)** — `GEMINI_API_KEY` 있을 때, **무료**
 
 세 개 다 실패하면 마지막 오류 메시지를 그대로 화면에 보여줍니다. 어떤 제공사가 응답했는지는 화면에 표시하지 않고 조용히 전환됩니다.
 
