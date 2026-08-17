@@ -428,22 +428,28 @@ function getCloudClient() {
 
 let _cloudAuthPromise = null;
 function ensureCloudAuth(supabase) {
-  if (!supabase) return Promise.resolve(null);
+  if (!supabase) return Promise.resolve({ user: null, error: "Supabase 클라이언트가 없습니다 (환경변수 미설정)" });
   if (_cloudAuthPromise) return _cloudAuthPromise;
   _cloudAuthPromise = (async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) return session.user;
+      const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+      if (sessErr) return { user: null, error: `세션 확인 실패: ${sessErr.message}` };
+      if (session?.user) return { user: session.user, error: null };
       const { data, error } = await supabase.auth.signInAnonymously();
-      if (error) { console.error("[branding auth]", error); return null; }
-      return data.user;
+      if (error) return { user: null, error: `익명 로그인 실패: ${error.message}` };
+      if (!data?.user) return { user: null, error: "익명 로그인 응답에 사용자 정보가 없습니다." };
+      return { user: data.user, error: null };
     } catch (e) {
-      console.error("[branding auth]", e);
-      return null;
+      return { user: null, error: `연결 중 예외 발생: ${e.message || String(e)}` };
     }
   })();
   return _cloudAuthPromise;
 }
+function resetCloudAuth() { _cloudAuthPromise = null; }
+
+let _lastCloudAuthError = null;
+function setLastCloudAuthError(msg) { _lastCloudAuthError = msg; }
+function getLastCloudAuthError() { return _lastCloudAuthError; }
 
 /* ---------- 브랜딩 데이터 CRUD (Supabase) ---------- */
 async function baGetOrCreateAnswer(supabase, userId, question) {
@@ -583,8 +589,12 @@ function usePersisted(key, initialValue) {
     (async () => {
       const supabase = await getCloudClient();
       if (!supabase) { setCloudStatus("offline"); return; }
-      const user = await ensureCloudAuth(supabase);
-      if (!user || cancelled) { setCloudStatus("offline"); return; }
+      const { user, error: authErr } = await ensureCloudAuth(supabase);
+      if (!user || cancelled) {
+        if (authErr) setLastCloudAuthError(authErr);
+        setCloudStatus("offline");
+        return;
+      }
       try {
         const { data, error } = await supabase.from("career_os_state")
           .select("value").eq("user_id", user.id).eq("key", key).maybeSingle();
@@ -602,6 +612,7 @@ function usePersisted(key, initialValue) {
         setCloudStatus("synced");
       } catch (e) {
         console.error("[cloud sync 실패]", key, e);
+        setLastCloudAuthError(e.message || String(e));
         setCloudStatus("error");
       }
     })();
@@ -618,7 +629,7 @@ function usePersisted(key, initialValue) {
     const t = setTimeout(async () => {
       const supabase = await getCloudClient();
       if (!supabase) return;
-      const user = await ensureCloudAuth(supabase);
+      const { user } = await ensureCloudAuth(supabase);
       if (!user) return;
       try {
         await supabase.from("career_os_state").upsert({ user_id: user.id, key, value: state });
@@ -3246,6 +3257,176 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
 }
 
 /* ============================================================ 퍼스널 브랜딩 — UI ============================================================ */
+/* ---------- 브랜딩 오프라인 모드 (클라우드 연결 안 될 때 로컬에만 답변 저장) ---------- */
+function loadOfflineAnswers() {
+  try { return JSON.parse(window.localStorage.getItem(STORAGE_PREFIX + "branding_offline") || "{}"); }
+  catch { return {}; }
+}
+function saveOfflineAnswers(data) {
+  try { window.localStorage.setItem(STORAGE_PREFIX + "branding_offline", JSON.stringify(data)); } catch (e) { /* ignore */ }
+}
+function clearOfflineAnswers() {
+  try { window.localStorage.removeItem(STORAGE_PREFIX + "branding_offline"); } catch (e) { /* ignore */ }
+}
+
+function CloudDiagnostics() {
+  const [checks, setChecks] = useState(null);
+  const [running, setRunning] = useState(false);
+
+  const run = async () => {
+    setRunning(true);
+    const results = [];
+
+    let url, anonKey;
+    try {
+      url = typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_URL : undefined;
+      anonKey = typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_ANON_KEY : undefined;
+    } catch { /* ignore */ }
+    results.push({
+      label: "Supabase 환경변수",
+      ok: !!(url && anonKey),
+      detail: url && anonKey ? `${url}` : "VITE_SUPABASE_URL 또는 VITE_SUPABASE_ANON_KEY가 비어있습니다.",
+      hint: !(url && anonKey) ? "Vercel 프로젝트 → Settings → Environment Variables 확인 후 Redeploy 하세요." : null,
+    });
+
+    const supabase = await getCloudClient();
+    results.push({ label: "Supabase 클라이언트 생성", ok: !!supabase, detail: supabase ? "정상" : "클라이언트를 만들지 못했습니다 (환경변수 또는 라이브러리 문제)." });
+
+    if (supabase) {
+      resetCloudAuth();
+      const { user, error } = await ensureCloudAuth(supabase);
+      results.push({
+        label: "익명 로그인",
+        ok: !!user,
+        detail: user ? `사용자 ID ${user.id.slice(0, 8)}…` : (error || "알 수 없는 오류"),
+        hint: !user ? 'Supabase 대시보드 → Authentication → Sign In / Providers → "Anonymous Sign-Ins"가 꺼져있을 가능성이 가장 높습니다. 켜고 다시 시도하세요.' : null,
+      });
+
+      if (user) {
+        try {
+          const { error: qErr } = await supabase.from("career_os_state").select("key").eq("user_id", user.id).limit(1);
+          results.push({
+            label: "데이터베이스 접근 (core_os_state)", ok: !qErr, detail: qErr ? qErr.message : "정상",
+            hint: qErr ? "supabase/core-state-schema.sql을 SQL Editor에서 실행했는지 확인하세요." : null,
+          });
+        } catch (e) {
+          results.push({ label: "데이터베이스 접근", ok: false, detail: e.message, hint: "SQL 스키마가 적용되지 않았을 수 있습니다." });
+        }
+      }
+    }
+
+    try {
+      const res = await fetch("/api/health");
+      const data = await res.json();
+      results.push({
+        label: "서버 AI 키 등록 상태", ok: data.anthropic || data.openai || data.gemini,
+        detail: `Anthropic ${data.anthropic ? "✓" : "✗"} · OpenAI ${data.openai ? "✓" : "✗"} · Gemini ${data.gemini ? "✓" : "✗"}`,
+        hint: (!data.anthropic && !data.openai && !data.gemini) ? "Vercel 환경변수에 ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY 중 최소 하나를 등록하세요." : null,
+      });
+    } catch (e) {
+      results.push({ label: "서버 연결 (/api/health)", ok: false, detail: "응답 없음 — 로컬 미리보기 등 서버리스 함수가 없는 환경일 수 있습니다.", hint: null });
+    }
+
+    setChecks(results); setRunning(false);
+  };
+
+  useEffect(() => { run(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, []);
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <Label>연결 상태 진단</Label>
+        <Btn small onClick={run} disabled={running}>{running ? "확인 중…" : "다시 확인"}</Btn>
+      </div>
+      {!checks ? <div style={{ fontSize: 13, color: C.faint }}>확인 중…</div> : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {checks.map((c, i) => (
+            <div key={i} style={{ fontSize: 12.5 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 99, background: c.ok ? C.green : C.red, flexShrink: 0 }} />
+                <span style={{ fontWeight: 700 }}>{c.label}</span>
+              </div>
+              <div style={{ color: C.sub, marginLeft: 14, wordBreak: "break-all" }}>{c.detail}</div>
+              {c.hint && <div style={{ color: C.red, marginLeft: 14, marginTop: 2 }}>💡 {c.hint}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function BrandingOfflineWorkbook({ onRetryConnect, authError }) {
+  const [idx, setIdx] = useState(0);
+  const question = BRANDING_FLAT_QUESTIONS[idx];
+  const [store, setStore] = useState(loadOfflineAnswers);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [content, setContent] = useState("");
+
+  const entries = store[question.id] || [];
+  const totalOffline = Object.values(store).reduce((s, arr) => s + arr.length, 0);
+
+  const addEntry = () => {
+    if (!content.trim()) return;
+    const next = { ...store, [question.id]: [...entries, { id: "off_" + Date.now(), label, content, createdAt: new Date().toISOString() }] };
+    setStore(next); saveOfflineAnswers(next);
+    setContent(""); setLabel(""); setComposerOpen(false);
+  };
+  const removeEntry = (id) => {
+    const next = { ...store, [question.id]: entries.filter(e => e.id !== id) };
+    setStore(next); saveOfflineAnswers(next);
+  };
+
+  return (
+    <div style={{ maxWidth: 820 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <H2>퍼스널 브랜딩 (오프라인 모드)</H2>
+        <Btn small onClick={onRetryConnect}>연결 다시 시도</Btn>
+      </div>
+      <Card style={{ marginBottom: 16, background: C.accent }}>
+        <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
+          클라우드에 연결되지 않아 AI 꼬리질문·프로필 추출 없이 <b>답변만</b> 저장됩니다. 답변은 이 브라우저에 안전하게 남고, 연결되면 자동으로 업로드를 제안합니다.
+          {authError && <div style={{ marginTop: 6, fontFamily: "monospace", color: C.red, fontSize: 11.5 }}>마지막 오류: {authError}</div>}
+        </div>
+        {totalOffline > 0 && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700 }}>오프라인 저장된 답변 {totalOffline}개</div>}
+      </Card>
+
+      <div style={{ fontSize: 12, color: C.faint, marginBottom: 6 }}>{idx + 1}/{BRANDING_FLAT_QUESTIONS.length}</div>
+      <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, lineHeight: 1.5 }}>{question.text}</div>
+      {question.hint && <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, padding: "8px 12px", borderRadius: 12, marginBottom: 16 }}>💡 {question.hint}</div>}
+
+      {entries.map(e => (
+        <Card key={e.id} style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, color: C.faint }}>{(e.createdAt || "").slice(0, 10)}{e.label ? ` · "${e.label}"` : ""}</div>
+            <span onClick={() => removeEntry(e.id)} style={{ fontSize: 11.5, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>삭제</span>
+          </div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{e.content}</div>
+        </Card>
+      ))}
+
+      {composerOpen ? (
+        <Card style={{ marginBottom: 12 }}>
+          <Input placeholder="라벨 (선택)" value={label} onChange={e => setLabel(e.target.value)} style={{ marginBottom: 8 }} />
+          <Textarea placeholder="답변을 적어주세요" value={content} onChange={e => setContent(e.target.value)} rows={5} />
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <Btn small primary disabled={!content.trim()} onClick={addEntry}>저장</Btn>
+            <Btn small onClick={() => setComposerOpen(false)}>취소</Btn>
+          </div>
+        </Card>
+      ) : (
+        <Btn small onClick={() => setComposerOpen(true)}>+ 답변 추가</Btn>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+        <Btn onClick={() => setIdx(i => Math.max(i - 1, 0))} disabled={idx === 0}>← 이전</Btn>
+        <Btn primary onClick={() => setIdx(i => Math.min(i + 1, BRANDING_FLAT_QUESTIONS.length - 1))} disabled={idx >= BRANDING_FLAT_QUESTIONS.length - 1}>다음 →</Btn>
+      </div>
+    </div>
+  );
+}
+
 function BrandingSetupNotice() {
   return (
     <div style={{ maxWidth: 640 }}>
@@ -3272,18 +3453,28 @@ function BrandingSetupNotice() {
 function BrandingHub() {
   const [supabase, setSupabase] = useState(undefined); // undefined=로딩중, null=미설정
   const [user, setUser] = useState(null);
+  const [authError, setAuthError] = useState(null);
+  const [connecting, setConnecting] = useState(true);
+  const [offlineMode, setOfflineMode] = useState(false);
   const [tab, setTab] = useState("home");
   const [profileItems, setProfileItems] = useState([]);
   const [answersProgress, setAnswersProgress] = useState([]);
   const [jumpTo, setJumpTo] = useState(null); // 프로필에서 워크북으로 점프할 질문 id
 
-  useEffect(() => {
-    (async () => {
-      const sb = await getCloudClient();
-      setSupabase(sb);
-      if (sb) setUser(await ensureCloudAuth(sb));
-    })();
-  }, []);
+  const connect = async () => {
+    setConnecting(true); setAuthError(null);
+    resetCloudAuth();
+    const sb = await getCloudClient();
+    setSupabase(sb);
+    if (sb) {
+      const { user: u, error } = await ensureCloudAuth(sb);
+      setUser(u);
+      if (error) setAuthError(error);
+    }
+    setConnecting(false);
+  };
+
+  useEffect(() => { connect(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, []);
 
   const refreshProfile = async () => {
     if (!supabase || !user) return;
@@ -3295,15 +3486,82 @@ function BrandingHub() {
   };
   useEffect(() => { if (supabase && user) { refreshProfile(); refreshProgress(); } }, [supabase, user]);
 
-  if (supabase === undefined) return <div style={{ fontSize: 13, color: C.sub }}>불러오는 중…</div>;
+  const [offlineCount, setOfflineCount] = useState(0);
+  const [syncingOffline, setSyncingOffline] = useState(false);
+  useEffect(() => {
+    if (supabase && user) {
+      const store = loadOfflineAnswers();
+      setOfflineCount(Object.values(store).reduce((s, arr) => s + arr.length, 0));
+    }
+  }, [supabase, user]);
+
+  const syncOfflineToCloud = async () => {
+    setSyncingOffline(true);
+    try {
+      const store = loadOfflineAnswers();
+      for (const [questionId, entries] of Object.entries(store)) {
+        const question = BRANDING_FLAT_QUESTIONS.find(q => q.id === questionId);
+        if (!question || entries.length === 0) continue;
+        const answer = await baGetOrCreateAnswer(supabase, user.id, question);
+        for (const e of entries) {
+          await baAddEntry(supabase, user.id, answer.id, { label: e.label, content: e.content });
+        }
+      }
+      clearOfflineAnswers();
+      setOfflineCount(0);
+      refreshProgress();
+      alert("오프라인 답변을 클라우드에 업로드했습니다. 워크북에서 열어보면 AI 꼬리질문·프로필 추출이 새로 진행됩니다 (해당 문항에 새 답변을 추가하면 자동 실행돼요).");
+    } catch (e) {
+      alert("동기화 중 오류: " + (e.message || String(e)));
+    } finally {
+      setSyncingOffline(false);
+    }
+  };
+
+  if (supabase === undefined || connecting) return <div style={{ fontSize: 13, color: C.sub }}>불러오는 중…</div>;
   if (supabase === null) return <BrandingSetupNotice />;
-  if (!user) return <div style={{ fontSize: 13, color: C.sub }}>연결하는 중…</div>;
+
+  if (!user && !offlineMode) {
+    return (
+      <div style={{ maxWidth: 640 }}>
+        <H2>퍼스널 브랜딩</H2>
+        <Card style={{ marginBottom: 12 }}>
+          <Label>클라우드 연결에 실패했습니다</Label>
+          <div style={{ fontSize: 13, color: C.red, background: C.redBg, padding: "10px 12px", borderRadius: 12, marginTop: 8, marginBottom: 12, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
+            {authError || "알 수 없는 오류"}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn small primary onClick={connect}>다시 연결하기</Btn>
+            <Btn small onClick={() => setOfflineMode(true)}>오프라인으로 계속하기</Btn>
+          </div>
+        </Card>
+        <CloudDiagnostics />
+      </div>
+    );
+  }
+
+  if (offlineMode && !user) {
+    return <BrandingOfflineWorkbook onGoOnline={() => setOfflineMode(false)} onRetryConnect={connect} authError={authError} />;
+  }
 
   const tabs = [["home", "홈"], ["workbook", "워크북"], ["profile", "프로필"], ["result", "결과"]];
+  const [showDiag, setShowDiag] = useState(false);
 
   return (
     <div style={{ maxWidth: 820 }}>
-      <H2>퍼스널 브랜딩</H2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <H2>퍼스널 브랜딩</H2>
+        <span onClick={() => setShowDiag(p => !p)} style={{ fontSize: 11.5, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
+          {showDiag ? "연결 상태 닫기" : "연결 상태 확인"}
+        </span>
+      </div>
+      {showDiag && <div style={{ marginBottom: 16 }}><CloudDiagnostics /></div>}
+      {offlineCount > 0 && (
+        <Card style={{ marginBottom: 16, background: C.accent, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ fontSize: 12.5 }}>오프라인 상태에서 저장한 답변 {offlineCount}개가 있습니다.</span>
+          <Btn small primary disabled={syncingOffline} onClick={syncOfflineToCloud}>{syncingOffline ? "업로드 중…" : "클라우드로 업로드"}</Btn>
+        </Card>
+      )}
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 16 }}>
         질문에 답하면 AI가 꼬리질문으로 더 캐묻고, 답변에서 프로필 항목을 뽑아 누적합니다. 충분히 쌓이면 나만의 포지셔닝·슬로건을 만듭니다.
       </div>
