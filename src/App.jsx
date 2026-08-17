@@ -914,11 +914,11 @@ function assignLanes(items) {
   return sorted;
 }
 
-function makeDraftExperience(title, ym) {
+function makeDraftExperience(title, ym, endYm) {
   const id = "e_" + Date.now() + Math.random().toString(36).slice(2, 5);
   return {
     id, title: title || "(제목 없음)", organization: "", experienceType: "other",
-    startDate: ym, endDate: ym, status: "draft", depthDone: false, usageCount: 0,
+    startDate: ym, endDate: endYm || ym, status: "draft", depthDone: false, usageCount: 0,
     updatedAt: new Date().toISOString().slice(0, 10), primaryCategory: "",
     competencies: [], tags: [], actions: [], context: "", assignedTask: "", discoveredProblem: "", goal: "", personalContribution: "",
     contributionLevel: "", contributionEvidence: "", coreMessage: "", oneLineSummary: "",
@@ -932,6 +932,7 @@ const TIMELINE_START_YM = "2021-01";
 function Timeline({ experiences, setExperiences, activities, setActivities, addTrash, onOpenExp, onAnalyze, onGoArchive }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [filter, setFilter] = useState("all"); // all | unorganized
   const [selected, setSelected] = useState(new Set());
 
@@ -941,8 +942,9 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
 
   const addActivity = () => {
     if (!title.trim() || !date) return;
-    setActivities(prev => [...prev, { id: "act_" + Date.now(), title: title.trim(), date, organized: false, linkedExpId: null }]);
-    setTitle(""); setDate("");
+    const finalEnd = endDate && endDate >= date ? endDate : date;
+    setActivities(prev => [...prev, { id: "act_" + Date.now(), title: title.trim(), date, endDate: finalEnd, organized: false, linkedExpId: null }]);
+    setTitle(""); setDate(""); setEndDate("");
   };
 
   const toggleSelect = (key) => setSelected(prev => {
@@ -957,7 +959,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
     if (selectedActivities.length === 0) return;
     if (selectedActivities.length === 1) {
       const a = selectedActivities[0];
-      const draft = makeDraftExperience(a.title, a.date.slice(0, 7));
+      const draft = makeDraftExperience(a.title, a.date.slice(0, 7), (a.endDate || a.date).slice(0, 7));
       setExperiences(prev => [...prev, draft]);
       setActivities(prev => prev.map(x => x.id === a.id ? { ...x, organized: true, linkedExpId: draft.id } : x));
       setSelected(new Set());
@@ -966,7 +968,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
     }
     const newIds = [];
     setExperiences(prev => {
-      const drafts = selectedActivities.map(a => makeDraftExperience(a.title, a.date.slice(0, 7)));
+      const drafts = selectedActivities.map(a => makeDraftExperience(a.title, a.date.slice(0, 7), (a.endDate || a.date).slice(0, 7)));
       drafts.forEach(d => newIds.push(d.id));
       return [...prev, ...drafts];
     });
@@ -996,7 +998,8 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
 
   const actItems = activities.filter(a => !a.organized).map(a => {
     const s = ymToIndex(a.date.slice(0, 7));
-    return { key: "a_" + a.id, kind: "activity", title: a.title, startIdx: Math.max(s, startIdx), endIdx: Math.max(s, startIdx), raw: a };
+    const en = Math.max(ymToIndex((a.endDate || a.date).slice(0, 7)) || s, s);
+    return { key: "a_" + a.id, kind: "activity", title: a.title, startIdx: Math.max(s, startIdx), endIdx: Math.min(en, endIdx), raw: a };
   }).filter(it => it.startIdx <= endIdx);
 
   const allItems = filter === "unorganized" ? actItems : [...expItems, ...actItems];
@@ -1014,12 +1017,19 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
       </div>
 
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 8 }}>
-          <Input placeholder="이때 무슨 일이 있었나요? (예: 팀 프로젝트 발표)" value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1 }} />
-          <input type="month" value={date ? date.slice(0, 7) : ""} onChange={e => setDate(e.target.value + "-01")}
-            style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`, width: 150 }} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <Input placeholder="이때 무슨 일이 있었나요? (예: 팀 프로젝트 발표)" value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input type="month" value={date ? date.slice(0, 7) : ""} onChange={e => setDate(e.target.value ? e.target.value + "-01" : "")}
+              style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
+            <span style={{ fontSize: 12, color: C.faint }}>~</span>
+            <input type="month" value={endDate ? endDate.slice(0, 7) : ""} min={date ? date.slice(0, 7) : undefined}
+              onChange={e => setEndDate(e.target.value ? e.target.value + "-01" : "")}
+              style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
+          </div>
           <Btn primary disabled={!title.trim() || !date} onClick={addActivity}>추가</Btn>
         </div>
+        <div style={{ fontSize: 11.5, color: C.faint, marginTop: 6 }}>종료 년월은 선택 사항입니다 — 비워두면 하루·한 달짜리 활동(점)으로, 채우면 기간이 있는 활동(막대)으로 표시됩니다.</div>
       </Card>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
