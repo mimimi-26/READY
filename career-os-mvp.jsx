@@ -667,6 +667,7 @@ export default function App() {
   const [interviewCategories, setInterviewCategories] = usePersisted("interviewCategories", ["성과", "실패", "협업", "갈등", "인성"]);
   const [expCategories, setExpCategories] = usePersisted("expCategories", ["온라인 쇼핑몰 인턴", "동아리 활동"]);
   const [questionBlocks, setQuestionBlocks] = usePersisted("questionBlocks", emptyQuestionBlocks);
+  const [timelineActivities, setTimelineActivities] = usePersisted("timelineActivities", []);
   const [reviewChatHistory, setReviewChatHistory] = usePersisted("reviewChatHistory", []);
   const addInterviewCategory = (c) => setInterviewCategories(prev => prev.includes(c) ? prev : [...prev, c]);
   const addExpCategory = (c) => setExpCategories(prev => prev.includes(c) ? prev : [...prev, c]);
@@ -741,6 +742,7 @@ export default function App() {
     else if (type === "requirement") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, requirements: [...a.requirements, payload.item] } : a));
     else if (type === "essay") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, essays: [...a.essays, payload.item] } : a));
     else if (type === "interview") setApplications(prev => prev.map(a => a.id === payload.appId ? { ...a, interviews: [...a.interviews, payload.item] } : a));
+    else if (type === "timeline_activity") setTimelineActivities(prev => [...prev, payload]);
     setTrash(prev => prev.filter(t => t.id !== id));
   };
   const purgeTrash = (id) => setTrash(prev => prev.filter(t => t.id !== id));
@@ -753,7 +755,7 @@ export default function App() {
 
   const menuGroups = [
     { label: "시작", items: [["home", "홈"], ["guide", "사용 가이드"]] },
-    { label: "경험 정리", items: [["import", "파일 가져오기"], ["analyze", "경험 분석"], ["archive", "경험 보관함"], ["skills", "역량·스킬"]] },
+    { label: "경험 정리", items: [["timeline", "타임라인"], ["import", "파일 가져오기"], ["analyze", "경험 분석"], ["archive", "경험 보관함"], ["skills", "역량·스킬"]] },
     { label: "브랜딩", items: [["branding", "퍼스널 브랜딩"]] },
     { label: "지원 준비", items: [["apply", "지원 관리"], ["master", "자소서·면접 준비"], ["resume", "기본 이력서"]] },
     { label: "기타", items: [["trash", "휴지통"]] },
@@ -845,6 +847,7 @@ export default function App() {
         {nav === "analyze" && <Analyze experiences={experiences} setExperiences={setExperiences} analyzeId={analyzeId} setAnalyzeId={setAnalyzeId} metrics={metrics} setMetrics={setMetrics} onDone={openDetail} />}
         {nav === "archive" && !detailId && <Archive experiences={experiences} setExperiences={setExperiences} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} onOpen={openDetail} onAnalyze={openAnalyze} onGoImport={() => go("import")} addTrash={addTrash} expCategories={expCategories} addExpCategory={addExpCategory} questionBlocks={questionBlocks} setQuestionBlocks={setQuestionBlocks} reviewChatHistory={reviewChatHistory} setReviewChatHistory={setReviewChatHistory} />}
         {nav === "archive" && detailId && <ExperienceDetail exp={experiences.find(e => e.id === detailId)} metrics={metrics} outputs={outputs} setOutputs={setOutputs} setExperiences={setExperiences} onBack={() => setDetailId(null)} onAnalyze={openAnalyze} onDeleted={() => setDetailId(null)} addTrash={addTrash} />}
+        {nav === "timeline" && <Timeline experiences={experiences} setExperiences={setExperiences} activities={timelineActivities} setActivities={setTimelineActivities} addTrash={addTrash} onOpenExp={openDetail} onAnalyze={openAnalyze} onGoArchive={() => go("archive")} />}
         {nav === "import" && <ImportFlow setExperiences={setExperiences} setSkills={setSkills} setCerts={setCerts} setResumeProfile={setResumeProfile} onDone={openDetail} experiences={experiences} />}
         {nav === "skills" && <Skills skills={skills} setSkills={setSkills} experiences={experiences} onOpenExp={openDetail} addTrash={addTrash} />}
         {nav === "branding" && <BrandingHub />}
@@ -878,6 +881,227 @@ const Icon = ({ name, size = 22, color = "currentColor" }) => {
 };
 
 /* ============================================================ 사용 가이드 */
+/* ============================================================ 타임라인 ============================================================ */
+function ymToIndex(ym) { // "2024-08" -> 2024*12+8 (오래될수록 작은 수)
+  if (!ym) return null;
+  const [y, m] = ym.split("-").map(Number);
+  if (!y) return null;
+  return y * 12 + (m || 1);
+}
+function indexToYM(idx) {
+  const y = Math.floor((idx - 1) / 12);
+  const m = idx - y * 12;
+  return { y, m };
+}
+function nowYM() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// 겹치지 않으면 최대한 왼쪽(레인 0)에, 겹치면 다음 레인으로 배치하는 그리디 알고리즘
+function assignLanes(items) {
+  const sorted = [...items].sort((a, b) => a.startIdx - b.startIdx);
+  const laneEnds = [];
+  for (const item of sorted) {
+    let placed = false;
+    for (let i = 0; i < laneEnds.length; i++) {
+      if (item.startIdx > laneEnds[i]) {
+        item.lane = i; laneEnds[i] = item.endIdx; placed = true; break;
+      }
+    }
+    if (!placed) { item.lane = laneEnds.length; laneEnds.push(item.endIdx); }
+  }
+  return sorted;
+}
+
+function makeDraftExperience(title, ym) {
+  const id = "e_" + Date.now() + Math.random().toString(36).slice(2, 5);
+  return {
+    id, title: title || "(제목 없음)", organization: "", experienceType: "other",
+    startDate: ym, endDate: ym, status: "draft", depthDone: false, usageCount: 0,
+    updatedAt: new Date().toISOString().slice(0, 10), primaryCategory: "",
+    competencies: [], tags: [], actions: [], context: "", assignedTask: "", discoveredProblem: "", goal: "", personalContribution: "",
+    contributionLevel: "", contributionEvidence: "", coreMessage: "", oneLineSummary: "",
+    completion: Object.fromEntries([...CORE_STEPS, ...DEPTH_STEPS].map(s => [s, "미입력"])),
+  };
+}
+
+const TIMELINE_ROW_H = 30;
+const TIMELINE_START_YM = "2021-01";
+
+function Timeline({ experiences, setExperiences, activities, setActivities, addTrash, onOpenExp, onAnalyze, onGoArchive }) {
+  const [title, setTitle] = useState("");
+  const [date, setDate] = useState("");
+  const [filter, setFilter] = useState("all"); // all | unorganized
+  const [selected, setSelected] = useState(new Set());
+
+  const startIdx = ymToIndex(TIMELINE_START_YM);
+  const endIdx = ymToIndex(nowYM());
+  const totalRows = endIdx - startIdx + 1;
+
+  const addActivity = () => {
+    if (!title.trim() || !date) return;
+    setActivities(prev => [...prev, { id: "act_" + Date.now(), title: title.trim(), date, organized: false, linkedExpId: null }]);
+    setTitle(""); setDate("");
+  };
+
+  const toggleSelect = (key) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    return next;
+  });
+
+  const selectedActivities = activities.filter(a => selected.has("a_" + a.id));
+
+  const organizeSelected = () => {
+    if (selectedActivities.length === 0) return;
+    if (selectedActivities.length === 1) {
+      const a = selectedActivities[0];
+      const draft = makeDraftExperience(a.title, a.date.slice(0, 7));
+      setExperiences(prev => [...prev, draft]);
+      setActivities(prev => prev.map(x => x.id === a.id ? { ...x, organized: true, linkedExpId: draft.id } : x));
+      setSelected(new Set());
+      onAnalyze(draft.id);
+      return;
+    }
+    const newIds = [];
+    setExperiences(prev => {
+      const drafts = selectedActivities.map(a => makeDraftExperience(a.title, a.date.slice(0, 7)));
+      drafts.forEach(d => newIds.push(d.id));
+      return [...prev, ...drafts];
+    });
+    setActivities(prev => prev.map(x => {
+      const i = selectedActivities.findIndex(a => a.id === x.id);
+      return i >= 0 ? { ...x, organized: true, linkedExpId: newIds[i] } : x;
+    }));
+    setSelected(new Set());
+    onGoArchive();
+  };
+
+  const deleteSelected = () => {
+    if (selectedActivities.length === 0) return;
+    if (!window.confirm(`선택한 활동 ${selectedActivities.length}개를 삭제할까요?`)) return;
+    selectedActivities.forEach(a => addTrash("timeline_activity", a.title, a));
+    const idsToRemove = new Set(selectedActivities.map(a => a.id));
+    setActivities(prev => prev.filter(a => !idsToRemove.has(a.id)));
+    setSelected(new Set());
+  };
+
+  // 경험 + (미정리 필터가 아니면 정리된 활동도 숨김 — 이미 경험으로 존재하므로 중복 방지)
+  const expItems = experiences.filter(e => e.startDate).map(e => {
+    const s = ymToIndex(e.startDate.slice(0, 7));
+    const en = ymToIndex((e.endDate || e.startDate).slice(0, 7)) || s;
+    return { key: "e_" + e.id, kind: "experience", title: e.title, startIdx: Math.max(s, startIdx), endIdx: Math.min(Math.max(en, s), endIdx), raw: e };
+  }).filter(it => it.startIdx <= endIdx && it.endIdx >= startIdx);
+
+  const actItems = activities.filter(a => !a.organized).map(a => {
+    const s = ymToIndex(a.date.slice(0, 7));
+    return { key: "a_" + a.id, kind: "activity", title: a.title, startIdx: Math.max(s, startIdx), endIdx: Math.max(s, startIdx), raw: a };
+  }).filter(it => it.startIdx <= endIdx);
+
+  const allItems = filter === "unorganized" ? actItems : [...expItems, ...actItems];
+  const lanedItems = assignLanes(allItems);
+  const laneCount = Math.max(1, ...lanedItems.map(it => it.lane + 1));
+
+  const rows = [];
+  for (let idx = endIdx; idx >= startIdx; idx--) rows.push(idx);
+
+  return (
+    <div>
+      <H2>타임라인</H2>
+      <div style={{ fontSize: 13, color: C.sub, marginBottom: 16, lineHeight: 1.6 }}>
+        연도·월을 쭉 훑어보면서, 아직 경험 보관함에 정리하지 않은 활동을 빠르게 기록하고 골라서 정리하세요.
+      </div>
+
+      <Card style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Input placeholder="이때 무슨 일이 있었나요? (예: 팀 프로젝트 발표)" value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1 }} />
+          <input type="month" value={date ? date.slice(0, 7) : ""} onChange={e => setDate(e.target.value + "-01")}
+            style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`, width: 150 }} />
+          <Btn primary disabled={!title.trim() || !date} onClick={addActivity}>추가</Btn>
+        </div>
+      </Card>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+        {[["all", "전체"], ["unorganized", "미정리만"]].map(([v, l]) => (
+          <button key={v} onClick={() => setFilter(v)} style={{ fontFamily: font, fontSize: 12.5, padding: "6px 12px", borderRadius: 14, cursor: "pointer",
+            border: `1px solid ${filter === v ? C.text : C.line}`, background: filter === v ? C.text : C.panel, color: filter === v ? "#fff" : C.sub }}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", gap: 16, marginBottom: 6 }}>
+        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, background: C.blue, marginRight: 4 }} />하루·한 달짜리 활동 (미정리)</span>
+        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 12, height: 8, borderRadius: 3, background: C.greenBg, border: `1px solid ${C.green}`, marginRight: 4 }} />정리된 경험</span>
+      </div>
+
+      <div style={{ display: "flex" }}>
+        <div style={{ width: 52, flexShrink: 0 }}>
+          {rows.map((idx, i) => {
+            const { y, m } = indexToYM(idx);
+            const isJan = m === 1;
+            const isTop = i === 0;
+            return (
+              <div key={idx} style={{ height: TIMELINE_ROW_H, display: "flex", alignItems: "center", fontSize: 11, color: C.faint,
+                borderTop: i === 0 ? "none" : `1px solid ${C.lineSoft}` }}>
+                {(isJan || isTop) ? <span style={{ fontWeight: 700, color: C.text, fontSize: 11.5 }}>{y}·{m}월</span> : `${m}월`}
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ flex: 1, overflowX: "auto" }}>
+          <div style={{ position: "relative", height: totalRows * TIMELINE_ROW_H, display: "flex", gap: 10, paddingLeft: 12, borderLeft: `1px solid ${C.line}`, minWidth: laneCount * 130 }}>
+            {Array.from({ length: laneCount }).map((_, laneIdx) => (
+              <div key={laneIdx} style={{ position: "relative", width: 120, flexShrink: 0 }}>
+                {rows.map((idx, i) => (
+                  <div key={idx} style={{ position: "absolute", top: i * TIMELINE_ROW_H, left: 0, right: 0, height: 1, background: i === 0 ? "transparent" : C.lineSoft }} />
+                ))}
+                {lanedItems.filter(it => it.lane === laneIdx).map(it => {
+                  const topRow = endIdx - it.endIdx;
+                  const bottomRow = endIdx - it.startIdx;
+                  const top = topRow * TIMELINE_ROW_H + 3;
+                  const height = (bottomRow - topRow + 1) * TIMELINE_ROW_H - 6;
+                  const isDot = it.startIdx === it.endIdx && it.kind === "activity";
+                  const isSelected = selected.has(it.key);
+                  const onClick = () => it.kind === "experience" ? onOpenExp(it.raw.id) : toggleSelect(it.key);
+                  if (isDot) {
+                    return (
+                      <div key={it.key} onClick={onClick} title={it.title} style={{ position: "absolute", top: top + 7, left: 4, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                        <span style={{ width: 9, height: 9, borderRadius: 99, background: C.blue, border: isSelected ? `2px solid ${C.text}` : "none", flexShrink: 0 }} />
+                        <span style={{ fontSize: 11.5, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 96 }}>{it.title}</span>
+                      </div>
+                    );
+                  }
+                  const isOrganized = it.kind === "experience";
+                  return (
+                    <div key={it.key} onClick={onClick} title={it.title} style={{
+                      position: "absolute", top, left: 3, right: 3, height: Math.max(height, 20), borderRadius: 8, cursor: "pointer",
+                      background: isOrganized ? C.greenBg : C.blueBg, border: `1px solid ${isOrganized ? C.green : C.blue}`,
+                      outline: isSelected ? `2px solid ${C.text}` : "none",
+                      padding: "4px 6px", fontSize: 11.5, color: isOrganized ? C.green : C.blue, lineHeight: 1.3, overflow: "hidden" }}>
+                      {it.title}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {selected.size > 0 && (
+        <div style={{ position: "sticky", bottom: 16, marginTop: 16, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
+          <span style={{ fontSize: 12.5 }}>{selected.size}개 선택됨</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn small onClick={deleteSelected}>삭제</Btn>
+            <Btn small primary onClick={organizeSelected}>선택한 항목 정리하기</Btn>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Guide({ onGo }) {
   const flow = [
     { icon: "upload", title: "자료 준비", desc: "기존 이력서·메모 파일을 가져오거나, 경험을 새로 등록" },
@@ -3124,7 +3348,7 @@ function formatDeletedAt(iso) {
 }
 
 function Trash({ trash, onRestore, onPurge, onClear }) {
-  const typeLabel = { experience: "경험", skill: "스킬", cert: "자격증", award: "수상기록", application: "지원", requirement: "요구 역량", essay: "자소서 문항", interview: "면접 질문" };
+  const typeLabel = { experience: "경험", skill: "스킬", cert: "자격증", award: "수상기록", application: "지원", requirement: "요구 역량", essay: "자소서 문항", interview: "면접 질문", timeline_activity: "타임라인 활동" };
   return (
     <div style={{ maxWidth: 700 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -3486,6 +3710,7 @@ function BrandingHub() {
   const [profileItems, setProfileItems] = useState([]);
   const [answersProgress, setAnswersProgress] = useState([]);
   const [jumpTo, setJumpTo] = useState(null); // 프로필에서 워크북으로 점프할 질문 id
+  const [showDiag, setShowDiag] = useState(false);
 
   const connect = async () => {
     setConnecting(true); setAuthError(null);
@@ -3571,7 +3796,6 @@ function BrandingHub() {
   }
 
   const tabs = [["home", "홈"], ["workbook", "워크북"], ["profile", "프로필"], ["result", "결과"]];
-  const [showDiag, setShowDiag] = useState(false);
 
   return (
     <div style={{ maxWidth: 820 }}>
