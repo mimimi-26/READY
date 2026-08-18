@@ -798,20 +798,21 @@ export default function App() {
           )}
         </div>
         {(!isMobile || mobileMenuOpen) && (
-          <div style={{ marginTop: isMobile ? 12 : 0 }}>
-            {menuGroups.map(g => (
-              <div key={g.label} style={{ marginBottom: 6 }}>
+          <div style={{ marginTop: isMobile ? 12 : 4 }}>
+            {menuGroups.map((g, gi) => (
+              <div key={g.label} style={{ marginBottom: 4, marginTop: gi === 0 ? 0 : 14, paddingTop: gi === 0 ? 0 : 14, borderTop: gi === 0 ? "none" : `1px solid ${C.lineSoft}` }}>
                 <div onClick={() => toggleGroup(g.label)} style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 10px",
-                  background: C.greenBg, borderRadius: 10, fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: ".03em", cursor: "pointer" }}>
-                  <span>{g.label}</span>
-                  <span style={{ fontSize: 10, color: C.green, transform: openGroups[g.label] ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .1s" }}>▾</span>
+                  display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px 8px",
+                  fontSize: 10.5, fontWeight: 700, color: C.faint, letterSpacing: ".07em", cursor: "pointer" }}>
+                  <span>{g.label.toUpperCase()}</span>
+                  <span style={{ fontSize: 9, color: C.faint, transform: openGroups[g.label] ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .1s" }}>▾</span>
                 </div>
                 {openGroups[g.label] && g.items.map(([k, l]) => (
                   <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }} style={{
-                    padding: "9px 12px", fontSize: 13.5, fontWeight: nav === k ? 700 : 500, cursor: "pointer",
-                    textDecoration: nav === k ? "underline" : "none", textUnderlineOffset: "3px",
-                    color: nav === k ? C.text : C.sub, marginBottom: 2 }}>
+                    position: "relative", padding: "8px 10px 8px 16px", fontSize: 13.5, fontWeight: nav === k ? 700 : 500, cursor: "pointer",
+                    color: nav === k ? C.text : C.sub, marginBottom: 1, borderRadius: 10,
+                    background: nav === k ? C.lineSoft : "transparent" }}>
+                    {nav === k && <span style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", width: 3, height: 14, borderRadius: 99, background: C.green }} />}
                     {l}
                   </div>
                 ))}
@@ -865,7 +866,7 @@ export default function App() {
         {nav === "branding" && <BrandingHub />}
         {nav === "apply" && !appDetailId && <Applications applications={applications} setApplications={setApplications} onOpen={setAppDetailId} addTrash={addTrash} />}
         {nav === "apply" && appDetailId && <ApplicationDetail app={applications.find(a => a.id === appDetailId)} setApplications={setApplications} experiences={experiences} outputs={outputs} metrics={metrics} onBack={() => setAppDetailId(null)} onOpenExp={openDetail} addTrash={addTrash} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
-        {nav === "master" && <MasterPrep essays={masterEssays} setEssays={setMasterEssays} interviews={masterInterviews} setInterviews={setMasterInterviews} experiences={experiences} resumeProfile={resumeProfile} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
+        {nav === "master" && <MasterPrep essays={masterEssays} setEssays={setMasterEssays} interviews={masterInterviews} setInterviews={setMasterInterviews} experiences={experiences} metrics={metrics} resumeProfile={resumeProfile} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
         {nav === "resume" && <Resume experiences={experiences} outputs={outputs} metrics={metrics} resumeProfile={resumeProfile} setResumeProfile={setResumeProfile} skills={skills} certs={certs} setCerts={setCerts} awards={awards} setAwards={setAwards} addTrash={addTrash} />}
         {nav === "trash" && <Trash trash={trash} onRestore={restoreTrash} onPurge={purgeTrash} onClear={clearTrash} />}
       </main>
@@ -947,6 +948,8 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
   const [endDate, setEndDate] = useState("");
   const [filter, setFilter] = useState("all"); // all | unorganized
   const [selected, setSelected] = useState(new Set());
+  const laneScrollRef = useRef(null);
+  const scrollLanes = (dir) => { if (laneScrollRef.current) laneScrollRef.current.scrollBy({ left: dir * 320, behavior: "smooth" }); };
 
   const startIdx = ymToIndex(TIMELINE_START_YM);
   const endIdx = ymToIndex(nowYM());
@@ -1111,7 +1114,17 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
           })}
         </div>
 
-        <div style={{ flex: 1, overflowX: "auto" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {laneCount > 1 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+              <span style={{ fontSize: 11.5, color: C.faint }}>동시에 진행된 활동이 많아서 옆으로 넘어갑니다 ({laneCount}칸)</span>
+              <div style={{ display: "flex", gap: 4 }}>
+                <button onClick={() => scrollLanes(-1)} style={{ fontFamily: font, fontSize: 12, padding: "3px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>◀</button>
+                <button onClick={() => scrollLanes(1)} style={{ fontFamily: font, fontSize: 12, padding: "3px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>▶</button>
+              </div>
+            </div>
+          )}
+          <div ref={laneScrollRef} style={{ overflowX: "auto", scrollbarWidth: "thin" }}>
           <div style={{ position: "relative", height: totalRows * TIMELINE_ROW_H, display: "flex", gap: 12, paddingLeft: 12, borderLeft: `1px solid ${C.line}`, minWidth: laneCount * 162 }}>
             {Array.from({ length: laneCount }).map((_, laneIdx) => (
               <div key={laneIdx} style={{ position: "relative", width: 150, flexShrink: 0 }}>
@@ -1149,6 +1162,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
                 })}
               </div>
             ))}
+          </div>
           </div>
         </div>
       </div>
@@ -1823,7 +1837,7 @@ function MetricEditor({ expId, metrics, setMetrics, local, patch }) {
       </div>
       <div style={{ marginTop: 12 }}>
         <Label>정성 성과 / 성과 설명</Label>
-        <Textarea style={{ minHeight: 60 }} placeholder="예: 출고 실패 0건, 협업 프로세스 표준화, 매뉴얼 배포" value={local.qualitative || ""} onChange={e => patch("qualitative", e.target.value)} />
+        <Textarea style={{ minHeight: 60 }} placeholder="예: 출고 실패 0건, 협업 프로세스 표준화, 매뉴얼 배포" value={(local && local.qualitative) || ""} onChange={e => patch && patch("qualitative", e.target.value)} />
       </div>
     </div>
   );
@@ -2316,7 +2330,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
 
       {tab === "성과" && (
         <Card>
-          <MetricEditor expId={exp.id} metrics={metrics} setMetrics={setMetrics} local={null} patch={null} />
+          <MetricEditor expId={exp.id} metrics={metrics} setMetrics={setMetrics} local={exp} patch={patchField} />
         </Card>
       )}
 
@@ -2329,7 +2343,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
             chatMode.type === "regenerate"
               ? { question: `아래 기존 문장을 더 설득력 있게 다시 써주세요 (성과 중심, 이력서용 한 문장):\n"${outputs.find(o => o.id === chatMode.outputId)?.content || ""}"`, characterLimit: 150 }
               : { question: "이 경험을 바탕으로 이력서에 쓸 성과 중심의 한 문장을 만들어주세요.", characterLimit: 150 },
-            [exp])}
+            [exp], metrics)}
           autoStartMessage={chatMode.type === "regenerate" ? "다시 써주세요." : "문장을 만들어주세요."}
           onClose={closeChat}
           onSaveDraft={(text) => {
@@ -2968,13 +2982,29 @@ function buildReviewContext(experiences) {
 ${lines || "등록된 경험이 없습니다."}`;
 }
 
-function buildEssayContext(app, essay, experiences) {
+function buildEssayContext(app, essay, experiences, metrics) {
   const describeExp = (e) => {
     const parts = [`- [${e.title}] ${e.organization || ""} · ${e.role || ""} (${e.startDate}~${e.endDate})`];
     if (e.context) parts.push(`  배경: ${e.context}`);
     if (e.discoveredProblem) parts.push(`  문제: ${e.discoveredProblem}`);
     if (e.personalContribution) parts.push(`  본인 행동/기여: ${e.personalContribution}`);
-    if (e.oneLineSummary) parts.push(`  성과 요약: ${e.oneLineSummary} (주의: 정확한 수치는 사용자가 직접 확인한 것만 활용. 확실하지 않으면 "정확한 수치는 확인이 필요합니다"라고 언급할 것)`);
+    if (e.contributionEvidence) parts.push(`  기여 근거: ${e.contributionEvidence}`);
+    if (e.actions?.length) {
+      const actionLines = e.actions.map(a => `    · (${ACTION_LABEL[a.actionType] || a.actionType}) ${a.description}`).join("\n");
+      parts.push(`  행동 타임라인:\n${actionLines}`);
+    }
+    const myMetrics = (metrics || []).filter(m => m.experienceId === e.id);
+    if (myMetrics.length) {
+      const metricLines = myMetrics.map(m =>
+        `    · ${m.metricName}: ${formatMetric(m, "exact")} (${CERTAINTY[m.certainty]?.[0] || m.certainty}${m.evidenceSource ? `, 근거: ${m.evidenceSource}` : ""})`
+      ).join("\n");
+      parts.push(`  성과 수치 (certainty가 "확인 필요"인 값은 문장에 그대로 확정적으로 쓰지 말고 사용자에게 확인을 권할 것):\n${metricLines}`);
+    }
+    if (e.oneLineSummary) parts.push(`  성과 요약: ${e.oneLineSummary}`);
+    if (e.qualitative) parts.push(`  정성 성과: ${e.qualitative}`);
+    if (e.difficulty) parts.push(`  어려움: ${e.difficulty}`);
+    if (e.learning) parts.push(`  배운 점: ${e.learning}`);
+    if (e.coreMessage) parts.push(`  핵심 메시지: ${e.coreMessage}`);
     if (e.competencies?.length) parts.push(`  관련 역량: ${e.competencies.join(", ")}`);
     return parts.join("\n");
   };
@@ -3333,7 +3363,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
             title="자소서 작성 도우미"
             subtitle={q.question || "문항 미입력"}
             systemPrompt={ESSAY_COACH_SYSTEM_PROMPT}
-            contextText={buildEssayContext(app, q, experiences)}
+            contextText={buildEssayContext(app, q, experiences, metrics)}
             autoStartMessage="안녕하세요, 이 문항에 사용할 경험을 추천해 주시고 초안을 작성해 주세요."
             onClose={() => setChatEssayId(null)}
             history={q.chatHistory || []}
@@ -3393,12 +3423,16 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                     {experiences.filter(e => !q.selectedExperienceIds.includes(e.id)).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
                   </select>
                 </div>
-                {q.draft && (
-                  <div style={{ marginTop: 10, padding: "10px 12px", background: C.bg, border: `1px solid ${C.line}`, borderRadius: 14, fontSize: 12.5, color: C.sub, lineHeight: 1.6, maxHeight: 100, overflow: "hidden" }}>
-                    {q.draft}
+                <div style={{ marginTop: 10 }}>
+                  <Textarea value={q.draft || ""} placeholder="여기에 직접 작성해도 되고, 아래 'AI와 함께 작성'으로 도움받아도 됩니다."
+                    onChange={e => patchQ("draft", e.target.value)}
+                    onBlur={() => { if (q.draft?.trim() && q.status === "not_started") patchQ("status", "drafting"); }}
+                    disabled={q.isLocked} rows={5} style={{ fontSize: 13, lineHeight: 1.6 }} />
+                  <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11.5, color: (q.draft || "").length > q.characterLimit ? C.red : C.faint, marginTop: 4 }}>
+                    {(q.draft || "").length} / {q.characterLimit}자
                   </div>
-                )}
-                {!q.isLocked && <div style={{ marginTop: 12 }}><Btn small onClick={() => setChatEssayId(q.id)}>{q.draft ? "이어서 작성하기 →" : "작성 화면 열기 →"}</Btn></div>}
+                </div>
+                {!q.isLocked && <div style={{ marginTop: 6 }}><Btn small onClick={() => setChatEssayId(q.id)}>AI와 함께 작성하기 →</Btn></div>}
               </Card>
             );
           })}
@@ -3515,7 +3549,7 @@ function Trash({ trash, onRestore, onPurge, onClear }) {
 }
 
 /* ============================================================ 마스터 자소서·면접 */
-function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences, resumeProfile, interviewCategories, addInterviewCategory }) {
+function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences, metrics, resumeProfile, interviewCategories, addInterviewCategory }) {
   const [tab, setTab] = useState("자소서");
   const [chatId, setChatId] = useState(null);
   const [iqChatId, setIqChatId] = useState(null);
@@ -3550,7 +3584,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
             title="자소서 작성 도우미"
             subtitle={q.question || "문항 미입력"}
             systemPrompt={ESSAY_COACH_SYSTEM_PROMPT}
-            contextText={buildEssayContext(masterApp, q, experiences)}
+            contextText={buildEssayContext(masterApp, q, experiences, metrics)}
             autoStartMessage="안녕하세요, 이 문항에 사용할 경험을 추천해 주시고 초안을 작성해 주세요."
             onClose={() => setChatId(null)}
             history={q.chatHistory || []}
@@ -3572,12 +3606,14 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
                   <span onClick={() => removeQ(q.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
                 </div>
               </div>
-              {q.draft && (
-                <div style={{ padding: "10px 12px", background: C.bg, border: `1px solid ${C.line}`, borderRadius: 12, fontSize: 12.5, color: C.sub, lineHeight: 1.6, maxHeight: 100, overflow: "hidden" }}>
-                  {q.draft}
-                </div>
-              )}
-              <div style={{ marginTop: 12 }}><Btn small onClick={() => setChatId(q.id)}>{q.draft ? "이어서 작성하기 →" : "작성 도우미 열기 →"}</Btn></div>
+              <Textarea value={q.draft || ""} placeholder="여기에 직접 작성해도 되고, 아래 'AI와 함께 작성'으로 도움받아도 됩니다."
+                onChange={e => patchQ(q.id, "draft", e.target.value)}
+                onBlur={() => { if (q.draft?.trim() && q.status === "not_started") patchQ(q.id, "status", "drafting"); }}
+                rows={5} style={{ fontSize: 13, lineHeight: 1.6 }} />
+              <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11.5, color: (q.draft || "").length > q.characterLimit ? C.red : C.faint, marginTop: 4, marginBottom: 8 }}>
+                {(q.draft || "").length} / {q.characterLimit}자
+              </div>
+              <Btn small onClick={() => setChatId(q.id)}>AI와 함께 작성하기 →</Btn>
             </Card>
           ))}
           <Btn small onClick={addQ}>+ 문항 추가</Btn>
@@ -3592,7 +3628,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
             title="면접 답변 작성 도우미"
             subtitle={iq.question || "질문 미입력"}
             systemPrompt={ESSAY_COACH_SYSTEM_PROMPT}
-            contextText={buildEssayContext(masterApp, pseudoEssay, experiences)}
+            contextText={buildEssayContext(masterApp, pseudoEssay, experiences, metrics)}
             autoStartMessage="안녕하세요, 이 면접 질문에 쓸 경험을 추천해 주시고 답변 초안을 작성해 주세요."
             saveDraftLabel="이 답변을 초안으로 저장"
             onClose={() => setIqChatId(null)}
