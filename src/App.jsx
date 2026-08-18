@@ -681,6 +681,7 @@ export default function App() {
   const [questionBlocks, setQuestionBlocks] = usePersisted("questionBlocks", emptyQuestionBlocks);
   const [timelineActivities, setTimelineActivities] = usePersisted("timelineActivities", []);
   const [reviewChatHistory, setReviewChatHistory] = usePersisted("reviewChatHistory", []);
+  const [personalChatHistory, setPersonalChatHistory] = usePersisted("personalChatHistory", []);
   const addInterviewCategory = (c) => setInterviewCategories(prev => prev.includes(c) ? prev : [...prev, c]);
   const addExpCategory = (c) => setExpCategories(prev => prev.includes(c) ? prev : [...prev, c]);
 
@@ -766,7 +767,7 @@ export default function App() {
   const openDetail = (id) => { setDetailId(id); setNav("archive"); };
 
   const menuGroups = [
-    { label: "시작", items: [["home", "홈"], ["guide", "사용 가이드"]] },
+    { label: "시작", items: [["home", "홈"], ["guide", "사용 가이드"], ["chat", "AI에게 물어보기"]] },
     { label: "경험 정리", items: [["timeline", "타임라인"], ["import", "파일 가져오기"], ["analyze", "경험 분석"], ["archive", "경험 보관함"], ["skills", "역량·스킬"]] },
     { label: "브랜딩", items: [["branding", "퍼스널 브랜딩"]] },
     { label: "지원 준비", items: [["apply", "지원 관리"], ["master", "자소서·면접 준비"], ["resume", "기본 이력서"]] },
@@ -857,6 +858,8 @@ export default function App() {
       <main style={{ flex: 1, padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0 }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => go("guide")} />}
         {nav === "guide" && <Guide onGo={go} />}
+        {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications}
+          history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={go} />}
         {nav === "analyze" && <Analyze experiences={experiences} setExperiences={setExperiences} analyzeId={analyzeId} setAnalyzeId={setAnalyzeId} metrics={metrics} setMetrics={setMetrics} onDone={openDetail} />}
         {nav === "archive" && !detailId && <Archive experiences={experiences} setExperiences={setExperiences} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} onOpen={openDetail} onAnalyze={openAnalyze} onGoImport={() => go("import")} addTrash={addTrash} expCategories={expCategories} addExpCategory={addExpCategory} questionBlocks={questionBlocks} setQuestionBlocks={setQuestionBlocks} reviewChatHistory={reviewChatHistory} setReviewChatHistory={setReviewChatHistory} />}
         {nav === "archive" && detailId && <ExperienceDetail exp={experiences.find(e => e.id === detailId)} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} setExperiences={setExperiences} onBack={() => setDetailId(null)} onAnalyze={openAnalyze} onDeleted={() => setDetailId(null)} addTrash={addTrash} />}
@@ -1273,6 +1276,29 @@ function TimelineExperienceNote({ exp, setExperiences, onOpenExp, onDeselect }) 
     </Card>
   );
 }
+function PersonalAssistant({ experiences, skills, certs, awards, resumeProfile, applications, history, setHistory, onGo }) {
+  return (
+    <div style={{ maxWidth: 720 }}>
+      <H2>AI에게 물어보기</H2>
+      <div style={{ fontSize: 13, color: C.sub, marginBottom: 16, lineHeight: 1.6 }}>
+        취업 준비하면서 드는 사소한 질문이나 개인적인 고민을 편하게 물어보세요. 정리해두신 경험·역량·지원 현황을 참고해서 답합니다. 채용담당자처럼 평가하는 곳이 아니라, 옆에서 같이 생각해보는 곳입니다.
+      </div>
+      <EssayChat
+        title="AI에게 물어보기"
+        subtitle="내 정보를 참고해서 답합니다"
+        systemPrompt={PERSONAL_ASSISTANT_SYSTEM_PROMPT}
+        contextText={buildPersonalContext(experiences, skills, certs, awards, resumeProfile, applications)}
+        autoStartMessage="안녕! 요즘 취업 준비하면서 궁금한 거나 고민되는 거 있으면 편하게 물어봐."
+        inputPlaceholder="예: 내 경험 중에 뭐가 제일 강점인 것 같아? / 이 회사 지원할까 말까 고민돼"
+        onClose={() => onGo("home")}
+        closeLabel="← 홈으로"
+        history={history}
+        onHistoryChange={setHistory}
+      />
+    </div>
+  );
+}
+
 function Guide({ onGo }) {
   const flow = [
     { icon: "upload", title: "자료 준비", desc: "기존 이력서·메모 파일을 가져오거나, 경험을 새로 등록" },
@@ -3073,6 +3099,47 @@ const ESSAY_COACH_SYSTEM_PROMPT = `지금부터 당신은 국내 대기업·외�
 작성이 끝나면 다음 안내만 덧붙이십시오.
 "초안을 검토해 보시고 수정하고 싶은 부분(분량, 강조점, 표현 등)을 말씀해 주세요. 마음에 드신다면 '다음 문항'이라고 입력해 주세요."`;
 
+const PERSONAL_ASSISTANT_SYSTEM_PROMPT = `당신은 사용자의 취업 준비를 옆에서 도와주는 친근한 개인 어시스턴트입니다. 채용담당자나 컨설턴트 페르소나가 아니라, 사용자의 경험과 상황을 잘 아는 친구 같은 존재입니다.
+
+역할
+사용자가 취업 준비 중 드는 개인적인 고민이나 사소한 질문(예: "이 회사 지원할까 말까", "내 경험 중에 뭐가 제일 강점인 것 같아?", "요즘 너무 불안한데 어떻게 해야 할까", "이 자격증 딸 가치가 있을까")에, 아래 제공되는 사용자의 실제 데이터(경험/역량/자격증/지원 현황)를 참고해서 답합니다.
+
+원칙
+- 아래 데이터에 없는 사실을 지어내지 마십시오. 데이터에 없으면 "그 부분은 아직 정리가 안 되어 있네요"라고 솔직히 말하십시오.
+- 채용담당자처럼 평가하거나 심사하는 톤을 쓰지 마십시오. 옆에서 같이 고민해주는 톤을 쓰십시오.
+- 진로·심리적으로 무거운 고민이면 성급하게 정답을 주기보다 사용자의 상황을 먼저 이해하려는 질문을 해도 됩니다.
+- 사소한 질문(맞춤법, 이 표현이 나은지 등)은 바로 간단히 답하십시오.
+- 답변은 짧고 자연스럽게. 보고서처럼 항목별로 나열하지 말고, 대화하듯 쓰십시오.`;
+
+function buildPersonalContext(experiences, skills, certs, awards, resumeProfile, applications) {
+  const expLines = experiences.map(e =>
+    `- ${e.title} (${e.organization || "소속 미상"}, ${e.status}) — ${e.oneLineSummary || e.context || "요약 없음"}${(e.competencies || []).length ? ` [역량: ${e.competencies.join(", ")}]` : ""}`
+  ).join("\n");
+  const skillLines = (skills || []).map(s => `- ${s.name}`).join(", ");
+  const certLines = (certs || []).map(c => `- ${c.name}${c.date ? ` (${c.date})` : ""}`).join(", ");
+  const awardLines = (awards || []).map(a => `- ${a.name}`).join(", ");
+  const appLines = (applications || []).map(a => `- ${a.company} · ${a.position} (${a.status}${a.deadline ? `, 마감 ${a.deadline}` : ""})`).join("\n");
+
+  return `[사용자 프로필]
+이름: ${resumeProfile?.name || "미입력"} / 희망 직무: ${resumeProfile?.targetRole || "미입력"}
+한 줄 소개: ${resumeProfile?.headline || "미입력"}
+
+[정리된 경험 — ${experiences.length}건]
+${expLines || "아직 정리된 경험이 없습니다."}
+
+[역량·스킬]
+${skillLines || "없음"}
+
+[자격증·어학]
+${certLines || "없음"}
+
+[수상기록]
+${awardLines || "없음"}
+
+[지원 현황]
+${appLines || "등록된 지원처가 없습니다."}`;
+}
+
 const EXPERIENCE_REVIEW_SYSTEM_PROMPT = `당신은 국내 대기업·외국계·스타트업 채용을 두루 경험한 시니어 채용담당자입니다. 지금부터 지원자가 정리한 "경험 데이터베이스" 전체를 검토합니다.
 
 역할
@@ -3163,7 +3230,7 @@ ${factLines || "선택되었거나 분석 완료된 경험이 없습니다. 먼�
 ${others.length > 0 ? `\n[그 외 참고 가능한 경험 (제목만) — 선택된 경험이 문항과 잘 안 맞아 보이면 이 중에서 대안을 제안할 것]\n${otherTitles}` : ""}`;
 }
 
-function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessage, inputPlaceholder, onClose, onSaveDraft, saveDraftLabel, history, onHistoryChange }) {
+function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessage, inputPlaceholder, onClose, closeLabel, onSaveDraft, saveDraftLabel, history, onHistoryChange }) {
   const [messages, setMessages] = useState(history || []); // {role, content}
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -3235,7 +3302,7 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
         <div style={{ display: "flex", gap: 8 }}>
           {messages.length > 0 && <Btn small onClick={() => { updateMessages([]); started.current = false; }}>대화 초기화</Btn>}
           {onSaveDraft && lastAssistant && <Btn small onClick={() => onSaveDraft(lastAssistant.content)}>{saveDraftLabel || "이 답변을 초안으로 저장"}</Btn>}
-          <Btn small onClick={onClose}>← 목록으로</Btn>
+          <Btn small onClick={onClose}>{closeLabel || "← 목록으로"}</Btn>
         </div>
       </div>
 
