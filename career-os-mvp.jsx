@@ -1230,7 +1230,11 @@ function TimelineActivityPanel({ activity, setActivities, onDeselect, onOrganize
 
 function TimelineExperienceNote({ exp, setExperiences, onOpenExp, onDeselect }) {
   const [note, setNote] = useState(exp.rawNote || "");
+  const [title, setTitle] = useState(exp.title);
+  const [startYm, setStartYm] = useState((exp.startDate || "").slice(0, 7));
+  const [endYm, setEndYm] = useState((exp.endDate || exp.startDate || "").slice(0, 7));
   const autosave = useAutosave(note);
+
   useEffect(() => {
     const t = setTimeout(() => {
       setExperiences(prev => prev.map(e => e.id === exp.id ? { ...e, rawNote: note } : e));
@@ -1239,19 +1243,32 @@ function TimelineExperienceNote({ exp, setExperiences, onOpenExp, onDeselect }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [note]);
 
+  const saveDates = () => {
+    if (!title.trim() || !startYm) return;
+    const finalEnd = endYm && endYm >= startYm ? endYm : startYm;
+    setExperiences(prev => prev.map(e => e.id === exp.id ? { ...e, title: title.trim(), startDate: startYm, endDate: finalEnd } : e));
+  };
+
   return (
     <Card style={{ marginTop: 16, background: C.greenBg }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <div>
-          <Label>정리된 경험 — 관련 메모</Label>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>{exp.title}</div>
-        </div>
+        <Label>정리된 경험 — 제목·시기 수정</Label>
         <span onClick={onDeselect} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
       </div>
+      <Input value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8, fontWeight: 700 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+        <input type="month" value={startYm} onChange={e => setStartYm(e.target.value)}
+          style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
+        <span style={{ fontSize: 12, color: C.faint }}>~</span>
+        <input type="month" value={endYm} min={startYm} onChange={e => setEndYm(e.target.value)}
+          style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
+        <Btn small primary onClick={saveDates}>저장</Btn>
+      </div>
+      <Label>관련 메모</Label>
       <Textarea value={note} onChange={e => setNote(e.target.value)} placeholder="이 경험과 관련해서 떠오른 걸 자유롭게 적어두세요" rows={4} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
         <AutosaveIndicator state={autosave} />
-        <Btn small primary onClick={() => onOpenExp(exp.id)}>전체 경험 보기 →</Btn>
+        <Btn small onClick={() => onOpenExp(exp.id)}>전체 경험 보기 →</Btn>
       </div>
     </Card>
   );
@@ -1622,6 +1639,58 @@ function AnalyzeFlow({ exp, setExperiences, metrics, setMetrics, onExit, onDone 
   };
   const finishCore = () => { commit({ completion: markStep(step), status: "complete" }); onDone(exp.id); };
 
+  const [reviewIssues, setReviewIssues] = useState(null);
+  const [reviewOverall, setReviewOverall] = useState("");
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+
+  const runConsistencyReview = async () => {
+    setReviewLoading(true); setReviewError(""); setReviewIssues(null);
+    try {
+      const myMetrics = metrics.filter(m => m.experienceId === exp.id);
+      const prompt = `당신은 채용담당자 시점에서 지원자가 정리한 경험 하나를 검토합니다. 5개 단계(배경/문제/행동/기여도/성과)를 한꺼번에 보고, 서로 이어지는 이야기로서 문제가 있는지 확인하세요.
+
+[배경] ${local.context || "(없음)"}
+[문제] ${local.discoveredProblem || "(없음)"} (주어진 업무: ${local.assignedTask || "(없음)"})
+[행동] ${(local.actions || []).map(a => `- (${ACTION_LABEL[a.actionType] || a.actionType}) ${a.description}`).join("\n") || "(없음)"}
+[기여도] 수준: ${CONTRIB_LABEL[local.contributionLevel] || "(없음)"} / 근거: ${local.contributionEvidence || "(없음)"}
+[성과] ${local.oneLineSummary || "(없음)"} / 정성 성과: ${local.qualitative || "(없음)"} / 수치: ${myMetrics.map(m => `${m.metricName} ${formatMetric(m, "exact")}`).join(", ") || "(없음)"}
+
+확인할 것:
+- 빠진 정보: 특정 단계에 근거나 구체성이 없는 곳
+- 개연성 문제: 앞뒤 단계가 서로 안 맞는 곳 (예: 문제에서 언급 안 된 게 성과에 갑자기 나옴, 기여도는 "혼자"라는데 행동엔 협업이 많음). 판단하지 말고 사실만 병치할 것.
+- 구체성 부족: 숫자·장면 없이 추상적으로만 쓴 곳
+
+없는 사실을 지어내지 마라. 각 이슈는 어느 단계(배경/문제/행동/기여도/성과) 얘기인지 명시하라. 문제가 없으면 issues를 빈 배열로 두라.
+
+JSON만 응답 (마크다운 백틱 없이):
+{"issues":[{"step":"성과","issue":"..."}],"overall":"전체적으로 한 줄 총평"}`;
+
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "claude-sonnet-4-6", max_tokens: 800, messages: [{ role: "user", content: prompt }] }),
+      });
+      let data;
+      try { data = await res.json(); }
+      catch { throw new Error(`서버 응답을 읽지 못했습니다 (HTTP ${res.status})`); }
+      if (!res.ok) {
+        throw new Error(data?.error?.message || (typeof data?.error === "string" ? data.error : null) || `API 오류 (HTTP ${res.status}) — 응답 원문: ${JSON.stringify(data).slice(0, 300)}`);
+      }
+      const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      setReviewIssues(parsed.issues || []);
+      setReviewOverall(parsed.overall || "");
+    } catch (e) {
+      setReviewError(e.message || String(e));
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+  const jumpToStep = (stepName) => {
+    const i = CORE_STEPS.indexOf(stepName);
+    if (i >= 0) { setShowDepth(false); setStepIdx(i); }
+  };
+
   const fieldFor = {
     배경: [["context", "배경·상황", "언제, 어디서, 어떤 상황이었는지"], ],
     문제: [["assignedTask", "주어진 업무", "원래 맡은 업무"], ["discoveredProblem", "내가 발견한 문제", "주어진 업무와 구분해서 작성"]],
@@ -1713,13 +1782,51 @@ function AnalyzeFlow({ exp, setExperiences, metrics, setMetrics, onExit, onDone 
         <Btn onClick={() => stepIdx > 0 ? setStepIdx(stepIdx - 1) : (showDepth ? (setShowDepth(false), setStepIdx(CORE_STEPS.length - 1)) : null)} disabled={stepIdx === 0 && !showDepth}>← 이전</Btn>
         <div style={{ display: "flex", gap: 8 }}>
           {!showDepth && stepIdx === CORE_STEPS.length - 1 && (
-            <Btn onClick={finishCore}>핵심 5단계로 완료</Btn>
+            <>
+              <Btn onClick={runConsistencyReview} disabled={reviewLoading}>{reviewLoading ? "검토 중…" : "AI로 검토받기"}</Btn>
+              <Btn onClick={finishCore}>핵심 5단계로 완료</Btn>
+            </>
           )}
           <Btn primary onClick={next}>
             {stepIdx < steps.length - 1 ? "다음 →" : showDepth ? "심화 분석 완료" : "심화 단계 계속 →"}
           </Btn>
         </div>
       </div>
+
+      {!showDepth && stepIdx === CORE_STEPS.length - 1 && (
+        <>
+          {reviewError && (
+            <div style={{ marginTop: 12, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 4 }}>오류</div>
+              <div style={{ fontSize: 12, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{reviewError}</div>
+            </div>
+          )}
+          {reviewIssues && (
+            <Card style={{ marginTop: 12, background: C.accent }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <Label>AI 검토 결과</Label>
+                <span onClick={() => setReviewIssues(null)} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+              </div>
+              {reviewOverall && <div style={{ fontSize: 13, marginBottom: 10, lineHeight: 1.6 }}>{reviewOverall}</div>}
+              {reviewIssues.length === 0 ? (
+                <div style={{ fontSize: 13, color: C.sub }}>뚜렷한 문제가 안 보입니다. 이대로 완료해도 좋습니다.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {reviewIssues.map((iss, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px", gap: 10 }}>
+                      <div>
+                        <Badge label={iss.step} color={C.blue} bg={C.blueBg} />
+                        <div style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>{iss.issue}</div>
+                      </div>
+                      <Btn small onClick={() => jumpToStep(iss.step)} style={{ flexShrink: 0 }}>이 단계로 가기</Btn>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+        </>
+      )}
       {!showDepth && (
         <div style={{ fontSize: 12, color: C.faint, marginTop: 10, textAlign: "right" }}>
           핵심 5단계만으로 경험 카드가 생성됩니다. 심화 4단계(목표·어려움·배운 점·직무 연결)는 나중에 추가할 수 있습니다.
@@ -1807,6 +1914,7 @@ function MetricEditor({ expId, metrics, setMetrics, local, patch }) {
     }]);
     setDraft({ metricName: "", changeValue: "", unit: "", evidenceSource: "" });
   };
+  const updateCertainty = (id, certainty) => setMetrics(prev => prev.map(m => m.id === id ? { ...m, certainty } : m));
   const removeMetric = (id) => setMetrics(prev => prev.filter(m => m.id !== id));
 
   return (
@@ -1814,13 +1922,17 @@ function MetricEditor({ expId, metrics, setMetrics, local, patch }) {
       <Label>성과 수치 — ExperienceMetric 단일 원본</Label>
       <div style={{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>
         수치는 여기에만 저장됩니다. 이력서·자소서·면접 문장은 이 수치를 토큰으로 참조하며, 원본이 바뀌면 모든 문장에 반영됩니다.
+        <br />"추가 확인 필요"는 자소서 AI가 이 수치를 확정적으로 쓰지 않고 조심스럽게 다루게 하고, 면접 복습 화면에서도 경고로 표시됩니다. 실제 자료로 맞는지 확인했다면 아래에서 상태를 바꿔주세요.
       </div>
       {mine.length > 0 ? mine.map(m => (
-        <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 130px 130px 20px", gap: 8, alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
+        <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 130px 150px 20px", gap: 8, alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
           <span style={{ fontWeight: 600 }}>{m.metricName}</span>
           <span style={{ color: C.blue, fontWeight: 700 }}>{formatMetric(m, "exact")}</span>
           <span style={{ fontSize: 12, color: C.sub }}>{m.comparisonBasis || m.evidenceSource || "—"}</span>
-          <Badge label={CERTAINTY[m.certainty][0]} color={CERTAINTY[m.certainty][1]} bg={CERTAINTY[m.certainty][2]} />
+          <select value={m.certainty} onChange={e => updateCertainty(m.id, e.target.value)}
+            style={{ fontFamily: font, fontSize: 11.5, padding: "4px 6px", borderRadius: 10, border: `1px solid ${CERTAINTY[m.certainty][1]}55`, background: CERTAINTY[m.certainty][2], color: CERTAINTY[m.certainty][1] }}>
+            {Object.entries(CERTAINTY).map(([v, [label]]) => <option key={v} value={v}>{label}</option>)}
+          </select>
           <span onClick={() => removeMetric(m.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
         </div>
       )) : (
@@ -1945,13 +2057,13 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
         <H2>경험 보관함</H2>
         <div style={{ display: "flex", gap: 6 }}>
           {mergeMode ? (
-            <Btn small onClick={cancelMerge}>합치기 취소</Btn>
+            <Btn small onClick={cancelMerge}>선택 모드 종료</Btn>
           ) : (
             <>
               <Btn small onClick={onGoImport}>파일 가져오기</Btn>
               <Btn small onClick={exportExcel}>엑셀로 내보내기</Btn>
               <Btn small onClick={() => setShowReview(true)}>AI 진단 받기</Btn>
-              <Btn small onClick={() => setMergeMode(true)}>경험 합치기</Btn>
+              <Btn small onClick={() => setMergeMode(true)}>선택 모드</Btn>
               {[["exp", "경험별"], ["comp", "역량별"], ["question", "질문별"]].map(([v, l]) => (
                 <Btn key={v} small primary={view === v} onClick={() => setView(v)}>{l}</Btn>
               ))}
@@ -1961,9 +2073,20 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
       </div>
 
       {mergeMode && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 14px", marginBottom: 14 }}>
-          <span style={{ fontSize: 13 }}>같은 경험이 여러 카드로 나뉘어 있다면 2개 이상 선택하세요. 현재 {selected.length}개 선택됨.</span>
-          <Btn small primary disabled={selected.length < 2} onClick={() => setMergeStep(true)}>선택한 경험 합치기 →</Btn>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 14px", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+          <span style={{ fontSize: 13 }}>{selected.length}개 선택됨</span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <CategorySelect value="" options={expCategories} placeholder="카테고리 일괄 지정"
+              onAddOption={addExpCategory}
+              onChange={(v) => { setExperiences(prev => prev.map(e => selected.includes(e.id) ? { ...e, primaryCategory: v } : e)); }} />
+            <Btn small disabled={selected.length === 0} onClick={() => {
+              if (!window.confirm(`선택한 경험 ${selected.length}개를 삭제할까요?`)) return;
+              selected.forEach(id => { const e = experiences.find(x => x.id === id); if (e) addTrash("experience", e.title, e); });
+              setExperiences(prev => prev.filter(e => !selected.includes(e.id)));
+              setSelected([]);
+            }}>선택 삭제</Btn>
+            <Btn small primary disabled={selected.length < 2} onClick={() => setMergeStep(true)}>선택한 경험 합치기 →</Btn>
+          </div>
         </div>
       )}
 
@@ -2239,6 +2362,8 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
   const removeTag = (t) => setExperiences(prev => prev.map(e => e.id === exp.id ? { ...e, competencies: e.competencies.filter(c => c !== t) } : e));
 
   const [chatMode, setChatMode] = useState(null); // { type: "regenerate", outputId } | { type: "new" }
+  const [showReview, setShowReview] = useState(false);
+  const [reviewHistory, setReviewHistory] = useState([]);
   const expApp = { company: exp.organization || exp.title, position: exp.role || "", requirements: [] };
   const closeChat = () => setChatMode(null);
 
@@ -2254,11 +2379,28 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
         <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{exp.title}</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Badge label={STATUS_LABEL[exp.status]} color={STATUS_COLOR[exp.status][0]} bg={STATUS_COLOR[exp.status][1]} />
+          <Btn small onClick={() => setShowReview(true)}>이 경험만 AI 진단</Btn>
           <Btn small onClick={() => onAnalyze(exp.id)}>{exp.depthDone ? "수정하기" : "심화 분석 계속"}</Btn>
           <span onClick={deleteExp} title="이 경험 삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 14, padding: "0 4px" }}>✕</span>
         </div>
       </div>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 16 }}>{exp.organization} · {exp.role} · {exp.startDate}~{exp.endDate}</div>
+
+      {showReview && (
+        <div style={{ marginBottom: 18 }}>
+          <EssayChat
+            title="AI 경험 진단 (이 경험만)"
+            subtitle={exp.title}
+            systemPrompt={EXPERIENCE_REVIEW_SYSTEM_PROMPT}
+            contextText={buildReviewContext([exp])}
+            autoStartMessage="이 경험 하나만 자세히 검토하고, 우선순위 높은 보완점부터 짚어주세요."
+            inputPlaceholder="더 물어보거나, 다른 관점으로 다시 봐달라고 요청해보세요"
+            onClose={() => setShowReview(false)}
+            history={reviewHistory}
+            onHistoryChange={setReviewHistory}
+          />
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {["요약", "사실", "행동", "성과", "활용 문장", "완성도"].map(t => (
