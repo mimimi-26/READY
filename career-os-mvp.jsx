@@ -2066,7 +2066,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
           title="AI 경험 진단"
           subtitle="현직 채용담당자 시점으로 전체 경험을 검토합니다"
           systemPrompt={EXPERIENCE_REVIEW_SYSTEM_PROMPT}
-          contextText={buildReviewContext(experiences)}
+          contextText={buildReviewContext(experiences, metrics)}
           autoStartMessage="제 경험 데이터를 전체적으로 검토하고, 우선순위 높은 보완점부터 짚어주세요."
           inputPlaceholder="특정 경험에 대해 더 물어보거나, 다른 관점으로 다시 봐달라고 요청해보세요"
           onClose={() => setShowReview(false)}
@@ -2418,7 +2418,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
             title="AI 경험 진단 (이 경험만)"
             subtitle={exp.title}
             systemPrompt={EXPERIENCE_REVIEW_SYSTEM_PROMPT}
-            contextText={buildReviewContext([exp])}
+            contextText={buildReviewContext([exp], metrics)}
             autoStartMessage="이 경험 하나만 자세히 검토하고, 우선순위 높은 보완점부터 짚어주세요."
             inputPlaceholder="더 물어보거나, 다른 관점으로 다시 봐달라고 요청해보세요"
             onClose={() => setShowReview(false)}
@@ -3175,14 +3175,23 @@ const EXPERIENCE_REVIEW_SYSTEM_PROMPT = `당신은 국내 대기업·외국계·
    * 절대 지어내지 마십시오 — 데이터에 없는 내용을 추측해서 "이랬을 것이다"라고 단정하지 말고, 없으면 "확인이 필요합니다"라고 하십시오.
    * 사용자가 특정 경험에 대해 더 파고들어 질문하면 그 경험에 집중해서 답하십시오.`;
 
-function buildReviewContext(experiences) {
+function buildReviewContext(experiences, metrics) {
   const lines = experiences.map(e => {
     const parts = [`- [${e.title}] (${e.organization || "소속 미상"} · ${e.status}${e.depthDone ? "" : " · 심화 미입력"})`];
     parts.push(`  배경: ${e.context || "(없음)"}`);
     parts.push(`  문제: ${e.discoveredProblem || "(없음)"}`);
     parts.push(`  본인 기여: ${e.personalContribution || "(없음)"} / 기여 근거: ${e.contributionEvidence || "(없음)"}`);
+    if (e.actions?.length) {
+      parts.push(`  행동:\n${e.actions.map(a => `    · (${ACTION_LABEL[a.actionType] || a.actionType}) ${a.description}`).join("\n")}`);
+    }
+    const myMetrics = (metrics || []).filter(m => m.experienceId === e.id);
+    if (myMetrics.length) {
+      parts.push(`  성과 수치:\n${myMetrics.map(m => `    · ${m.metricName}: ${formatMetric(m, "exact")} (${CERTAINTY[m.certainty]?.[0] || m.certainty})`).join("\n")}`);
+    }
     parts.push(`  성과 요약: ${e.oneLineSummary || "(없음)"}`);
+    if (e.qualitative) parts.push(`  정성 성과: ${e.qualitative}`);
     parts.push(`  어려움: ${e.difficulty || "(없음)"} / 배운 점: ${e.learning || "(없음)"}`);
+    if (e.coreMessage) parts.push(`  핵심 메시지: ${e.coreMessage}`);
     parts.push(`  역량 태그: ${(e.competencies || []).join(", ") || "(없음)"}`);
     return parts.join("\n");
   }).join("\n\n");
