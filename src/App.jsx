@@ -858,7 +858,7 @@ export default function App() {
       <main style={{ flex: 1, padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0 }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => go("guide")} />}
         {nav === "guide" && <Guide onGo={go} />}
-        {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications}
+        {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
           history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={go} />}
         {nav === "analyze" && <Analyze experiences={experiences} setExperiences={setExperiences} analyzeId={analyzeId} setAnalyzeId={setAnalyzeId} metrics={metrics} setMetrics={setMetrics} onDone={openDetail} />}
         {nav === "archive" && !detailId && <Archive experiences={experiences} setExperiences={setExperiences} metrics={metrics} setMetrics={setMetrics} outputs={outputs} setOutputs={setOutputs} onOpen={openDetail} onAnalyze={openAnalyze} onGoImport={() => go("import")} addTrash={addTrash} expCategories={expCategories} addExpCategory={addExpCategory} questionBlocks={questionBlocks} setQuestionBlocks={setQuestionBlocks} reviewChatHistory={reviewChatHistory} setReviewChatHistory={setReviewChatHistory} />}
@@ -1276,7 +1276,7 @@ function TimelineExperienceNote({ exp, setExperiences, onOpenExp, onDeselect }) 
     </Card>
   );
 }
-function PersonalAssistant({ experiences, skills, certs, awards, resumeProfile, applications, history, setHistory, onGo }) {
+function PersonalAssistant({ experiences, skills, certs, awards, resumeProfile, applications, metrics, history, setHistory, onGo }) {
   return (
     <div style={{ maxWidth: 720 }}>
       <H2>AI에게 물어보기</H2>
@@ -1287,7 +1287,7 @@ function PersonalAssistant({ experiences, skills, certs, awards, resumeProfile, 
         title="AI에게 물어보기"
         subtitle="내 정보를 참고해서 답합니다"
         systemPrompt={PERSONAL_ASSISTANT_SYSTEM_PROMPT}
-        contextText={buildPersonalContext(experiences, skills, certs, awards, resumeProfile, applications)}
+        contextText={buildPersonalContext(experiences, skills, certs, awards, resumeProfile, applications, metrics)}
         autoStartMessage="안녕! 요즘 취업 준비하면서 궁금한 거나 고민되는 거 있으면 편하게 물어봐."
         inputPlaceholder="예: 내 경험 중에 뭐가 제일 강점인 것 같아? / 이 회사 지원할까 말까 고민돼"
         onClose={() => onGo("home")}
@@ -3111,10 +3111,12 @@ const PERSONAL_ASSISTANT_SYSTEM_PROMPT = `당신은 사용자의 취업 준비�
 - 사소한 질문(맞춤법, 이 표현이 나은지 등)은 바로 간단히 답하십시오.
 - 답변은 짧고 자연스럽게. 보고서처럼 항목별로 나열하지 말고, 대화하듯 쓰십시오.`;
 
-function buildPersonalContext(experiences, skills, certs, awards, resumeProfile, applications) {
-  const expLines = experiences.map(e =>
-    `- ${e.title} (${e.organization || "소속 미상"}, ${e.status}) — ${e.oneLineSummary || e.context || "요약 없음"}${(e.competencies || []).length ? ` [역량: ${e.competencies.join(", ")}]` : ""}`
-  ).join("\n");
+function buildPersonalContext(experiences, skills, certs, awards, resumeProfile, applications, metrics) {
+  const expLines = experiences.map(e => {
+    const myMetrics = (metrics || []).filter(m => m.experienceId === e.id);
+    const metricStr = myMetrics.length ? ` [수치: ${myMetrics.map(m => `${m.metricName} ${formatMetric(m, "exact")}`).join(", ")}]` : "";
+    return `- ${e.title} (${e.organization || "소속 미상"}, ${e.status}) — ${e.oneLineSummary || e.context || "요약 없음"}${metricStr}${(e.competencies || []).length ? ` [역량: ${e.competencies.join(", ")}]` : ""}`;
+  }).join("\n");
   const skillLines = (skills || []).map(s => `- ${s.name}`).join(", ");
   const certLines = (certs || []).map(c => `- ${c.name}${c.date ? ` (${c.date})` : ""}`).join(", ");
   const awardLines = (awards || []).map(a => `- ${a.name}`).join(", ");
