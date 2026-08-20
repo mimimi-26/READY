@@ -259,6 +259,14 @@ const STATUS_LABEL = { draft: "초기 메모", analyzing: "분석 중", needs_re
 const STATUS_COLOR = { draft: [C.sub, C.lineSoft], analyzing: [C.blue, C.blueBg], needs_revision: [C.orange, C.orangeBg], complete: [C.green, C.greenBg] };
 const CONTRIB_LABEL = { participated: "참여", responsible: "담당", led: "주도", proposed_and_executed: "제안 후 실행", full_ownership: "전체 책임" };
 const ACTION_LABEL = { analysis: "분석", judgment: "판단", execution: "실행", collaboration: "협업", improvement: "개선" };
+// 행동 카드 전용 색상 (앱 전체는 무채색 기조지만, 유형 구분이 중요한 이 영역만 예외적으로 색을 씀)
+const ACTION_COLOR = {
+  analysis: ["#2F6FA8", "#E7F0F7"],
+  judgment: ["#7A5AA8", "#EFEAF6"],
+  execution: ["#3F7A5C", "#E7F1EA"],
+  collaboration: ["#B8547E", "#FBEAF0"],
+  improvement: ["#B0791A", "#FBF1DF"],
+};
 const APPROVAL = {
   ai_draft: { label: "AI 초안 · 미승인", color: C.ai, bg: C.aiBg },
   user_editing: { label: "수정 중", color: C.blue, bg: C.blueBg },
@@ -1863,34 +1871,112 @@ JSON만 응답 (마크다운 백틱 없이):
 }
 
 function ActionEditor({ local, setLocal }) {
-  const [draft, setDraft] = useState({ actionType: "analysis", description: "", isDirectAction: true });
+  const actions = local.actions || [];
+  const [draft, setDraft] = useState({ actionType: "analysis", description: "", isDirectAction: true, parentId: "" });
+  const [editingId, setEditingId] = useState(null);
+  const [editDraft, setEditDraft] = useState(null);
+
   const add = () => {
     if (!draft.description.trim()) return;
-    setLocal(p => ({ ...p, actions: [...(p.actions || []), { ...draft, id: "a_" + Date.now() }] }));
-    setDraft({ actionType: "analysis", description: "", isDirectAction: true });
+    setLocal(p => ({ ...p, actions: [...(p.actions || []), {
+      id: "a_" + Date.now(), actionType: draft.actionType, description: draft.description.trim(),
+      isDirectAction: draft.isDirectAction, parentId: draft.parentId || null,
+    }] }));
+    setDraft({ actionType: "analysis", description: "", isDirectAction: true, parentId: "" });
   };
+
+  const startEdit = (a) => { setEditingId(a.id); setEditDraft({ actionType: a.actionType, description: a.description, isDirectAction: a.isDirectAction, parentId: a.parentId || "" }); };
+  const cancelEdit = () => { setEditingId(null); setEditDraft(null); };
+  const saveEdit = (id) => {
+    if (!editDraft.description.trim()) return;
+    setLocal(p => ({ ...p, actions: p.actions.map(x => x.id === id ? {
+      ...x, actionType: editDraft.actionType, description: editDraft.description.trim(),
+      isDirectAction: editDraft.isDirectAction, parentId: editDraft.parentId || null,
+    } : x) }));
+    cancelEdit();
+  };
+  const remove = (id) => {
+    // 부모를 지우면 자식은 삭제되지 않고 최상위로 승격됨 (데이터 손실 방지)
+    setLocal(p => ({ ...p, actions: p.actions.filter(x => x.id !== id).map(x => x.parentId === id ? { ...x, parentId: null } : x) }));
+  };
+
+  const childrenOf = (id) => actions.filter(a => a.parentId === id);
+  const validParentIds = new Set(actions.map(a => a.id));
+  const roots = actions.filter(a => !a.parentId || !validParentIds.has(a.parentId));
+
+  const parentOptions = (excludeId) => actions.filter(a => a.id !== excludeId);
+
+  const renderRow = (a) => {
+    const [color, bg] = ACTION_COLOR[a.actionType] || [C.blue, C.blueBg];
+    const isEditing = editingId === a.id;
+    return (
+      <div key={a.id}>
+        {isEditing ? (
+          <div style={{ padding: "10px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+              <select value={editDraft.actionType} onChange={e => setEditDraft(d => ({ ...d, actionType: e.target.value }))}
+                style={{ fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.panel }}>
+                {Object.entries(ACTION_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <select value={editDraft.parentId} onChange={e => setEditDraft(d => ({ ...d, parentId: e.target.value }))}
+                style={{ fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 12, border: `1px solid ${C.line}`, background: C.panel, maxWidth: 220 }}>
+                <option value="">최상위 (독립 행동)</option>
+                {parentOptions(a.id).map(o => <option key={o.id} value={o.id}>↳ {o.description.slice(0, 20)}{o.description.length > 20 ? "…" : ""}</option>)}
+              </select>
+              <label style={{ fontSize: 12, color: C.sub, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+                <input type="checkbox" checked={editDraft.isDirectAction} onChange={e => setEditDraft(d => ({ ...d, isDirectAction: e.target.checked }))} /> 직접 수행
+              </label>
+            </div>
+            <Textarea value={editDraft.description} onChange={e => setEditDraft(d => ({ ...d, description: e.target.value }))} rows={2} style={{ fontSize: 13 }} />
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <Btn small primary onClick={() => saveEdit(a.id)}>저장</Btn>
+              <Btn small onClick={cancelEdit}>취소</Btn>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+            <Badge label={ACTION_LABEL[a.actionType]} color={color} bg={bg} />
+            <span onClick={() => startEdit(a)} style={{ fontSize: 13.5, flex: 1, cursor: "pointer" }}>{a.description}</span>
+            {!a.isDirectAction && <Badge label="타인 수행" color={C.orange} bg={C.orangeBg} />}
+            <span onClick={() => startEdit(a)} title="수정" style={{ cursor: "pointer", color: C.faint, fontSize: 12, textDecoration: "underline" }}>수정</span>
+            <span onClick={() => remove(a.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+          </div>
+        )}
+        {childrenOf(a.id).length > 0 && (
+          <div style={{ marginLeft: 10, paddingLeft: 14, borderLeft: `2px solid ${C.line}` }}>
+            {childrenOf(a.id).map(renderRow)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ marginBottom: 12 }}>
-      <Label>행동 카드 (유형별로 분리)</Label>
-      {(local.actions || []).map((a, i) => (
-        <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-          <Badge label={ACTION_LABEL[a.actionType]} color={C.blue} bg={C.blueBg} />
-          <span style={{ fontSize: 13.5, flex: 1 }}>{a.description}</span>
-          {!a.isDirectAction && <Badge label="타인 수행" color={C.orange} bg={C.orangeBg} />}
-          <span onClick={() => setLocal(p => ({ ...p, actions: p.actions.filter(x => x.id !== a.id) }))} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+      <Label>행동 카드 — 연관된 행동은 아래로 이어서 연결할 수 있습니다</Label>
+      {roots.map(renderRow)}
+      {actions.length === 0 && <div style={{ fontSize: 13, color: C.faint, padding: "8px 0" }}>아직 입력된 행동이 없습니다.</div>}
+
+      <div style={{ marginTop: 12, padding: 12, background: C.bg, borderRadius: 14 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+          <select value={draft.actionType} onChange={e => setDraft(d => ({ ...d, actionType: e.target.value }))}
+            style={{ fontFamily: font, fontSize: 13, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel }}>
+            {Object.entries(ACTION_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <select value={draft.parentId} onChange={e => setDraft(d => ({ ...d, parentId: e.target.value }))}
+            style={{ fontFamily: font, fontSize: 13, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, maxWidth: 220 }}>
+            <option value="">최상위 (독립 행동)</option>
+            {actions.map(a => <option key={a.id} value={a.id}>↳ {a.description.slice(0, 24)}{a.description.length > 24 ? "…" : ""}</option>)}
+          </select>
+          <label style={{ fontSize: 12, color: C.sub, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
+            <input type="checkbox" checked={draft.isDirectAction} onChange={e => setDraft(d => ({ ...d, isDirectAction: e.target.checked }))} /> 직접 수행
+          </label>
         </div>
-      ))}
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <select value={draft.actionType} onChange={e => setDraft(d => ({ ...d, actionType: e.target.value }))}
-          style={{ fontFamily: font, fontSize: 13, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel }}>
-          {Object.entries(ACTION_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-        </select>
-        <Input placeholder="행동 설명 — 예: 과거 3년 판매량, 장바구니 데이터 분석" value={draft.description}
-          onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: 1 }} />
-        <label style={{ fontSize: 12, color: C.sub, display: "flex", alignItems: "center", gap: 4, whiteSpace: "nowrap" }}>
-          <input type="checkbox" checked={draft.isDirectAction} onChange={e => setDraft(d => ({ ...d, isDirectAction: e.target.checked }))} /> 직접 수행
-        </label>
-        <Btn small onClick={add}>추가</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Input placeholder="행동 설명 — 예: 과거 3년 판매량, 장바구니 데이터 분석" value={draft.description}
+            onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: 1 }} />
+          <Btn small onClick={add}>추가</Btn>
+        </div>
       </div>
     </div>
   );
