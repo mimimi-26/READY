@@ -258,9 +258,10 @@ const STEP_QUESTIONS = {
 const STATUS_LABEL = { draft: "초기 메모", analyzing: "분석 중", needs_revision: "보완 필요", complete: "분석 완료" };
 const STATUS_COLOR = { draft: [C.sub, C.lineSoft], analyzing: [C.blue, C.blueBg], needs_revision: [C.orange, C.orangeBg], complete: [C.green, C.greenBg] };
 const CONTRIB_LABEL = { participated: "참여", responsible: "담당", led: "주도", proposed_and_executed: "제안 후 실행", full_ownership: "전체 책임" };
-const ACTION_LABEL = { analysis: "분석", judgment: "판단", execution: "실행", collaboration: "협업", improvement: "개선" };
+const ACTION_LABEL = { goal: "목표", analysis: "분석", judgment: "판단", execution: "실행", collaboration: "협업", improvement: "개선" };
 // 행동 카드 전용 색상 (앱 전체는 무채색 기조지만, 유형 구분이 중요한 이 영역만 예외적으로 색을 씀)
 const ACTION_COLOR = {
+  goal: ["#5F6B99", "#EAECF5"],
   analysis: ["#2F6FA8", "#E7F0F7"],
   judgment: ["#7A5AA8", "#EFEAF6"],
   execution: ["#3F7A5C", "#E7F1EA"],
@@ -1682,20 +1683,25 @@ function AnalyzeFlow({ exp, setExperiences, metrics, setMetrics, onExit, onDone 
     setReviewLoading(true); setReviewError(""); setReviewIssues(null);
     try {
       const myMetrics = metrics.filter(m => m.experienceId === exp.id);
-      const prompt = `당신은 채용담당자 시점에서 지원자가 정리한 경험 하나를 검토합니다. 5개 단계(배경/문제/행동/기여도/성과)를 한꺼번에 보고, 서로 이어지는 이야기로서 문제가 있는지 확인하세요.
+      const depthFilled = local.goal || local.difficulty || local.learning || local.jobRelevance || local.coreMessage;
+      const prompt = `당신은 채용담당자 시점에서 지원자가 정리한 경험 하나를 검토합니다. 아래 단계들을 한꺼번에 보고, 서로 이어지는 이야기로서 문제가 있는지 확인하세요.
 
 [배경] ${local.context || "(없음)"}
 [문제] ${local.discoveredProblem || "(없음)"} (주어진 업무: ${local.assignedTask || "(없음)"})
 [행동] ${(local.actions || []).map(a => `- (${ACTION_LABEL[a.actionType] || a.actionType}) ${a.description}`).join("\n") || "(없음)"}
 [기여도] 수준: ${CONTRIB_LABEL[local.contributionLevel] || "(없음)"} / 근거: ${local.contributionEvidence || "(없음)"}
 [성과] ${local.oneLineSummary || "(없음)"} / 정성 성과: ${local.qualitative || "(없음)"} / 수치: ${myMetrics.map(m => `${m.metricName} ${formatMetric(m, "exact")}`).join(", ") || "(없음)"}
+${depthFilled ? `[목표] ${local.goal || "(없음)"}
+[어려움] ${local.difficulty || "(없음)"}
+[배운 점] ${local.learning || "(없음)"}
+[직무 연결] ${local.jobRelevance || "(없음)"} / 핵심 메시지: ${local.coreMessage || "(없음)"}` : "(심화 단계는 아직 입력하지 않았습니다 — 입력된 항목만 검토하세요)"}
 
 확인할 것:
 - 빠진 정보: 특정 단계에 근거나 구체성이 없는 곳
-- 개연성 문제: 앞뒤 단계가 서로 안 맞는 곳 (예: 문제에서 언급 안 된 게 성과에 갑자기 나옴, 기여도는 "혼자"라는데 행동엔 협업이 많음). 판단하지 말고 사실만 병치할 것.
+- 개연성 문제: 앞뒤 단계가 서로 안 맞는 곳 (예: 문제에서 언급 안 된 게 성과에 갑자기 나옴, 기여도는 "혼자"라는데 행동엔 협업이 많음, 목표와 실제 행동이 안 맞음). 판단하지 말고 사실만 병치할 것.
 - 구체성 부족: 숫자·장면 없이 추상적으로만 쓴 곳
 
-없는 사실을 지어내지 마라. 각 이슈는 어느 단계(배경/문제/행동/기여도/성과) 얘기인지 명시하라. 문제가 없으면 issues를 빈 배열로 두라.
+없는 사실을 지어내지 마라. 각 이슈는 어느 단계(배경/문제/행동/기여도/성과/목표/어려움/배운 점/직무 연결) 얘기인지 명시하라. 입력되지 않은 심화 단계는 "빠진 정보"로 지적하지 말고 건너뛰어라 (선택 사항이므로). 문제가 없으면 issues를 빈 배열로 두라.
 
 JSON만 응답 (마크다운 백틱 없이):
 {"issues":[{"step":"성과","issue":"..."}],"overall":"전체적으로 한 줄 총평"}`;
@@ -1721,8 +1727,10 @@ JSON만 응답 (마크다운 백틱 없이):
     }
   };
   const jumpToStep = (stepName) => {
-    const i = CORE_STEPS.indexOf(stepName);
-    if (i >= 0) { setShowDepth(false); setStepIdx(i); }
+    const coreI = CORE_STEPS.indexOf(stepName);
+    if (coreI >= 0) { setShowDepth(false); setStepIdx(coreI); return; }
+    const depthI = DEPTH_STEPS.indexOf(stepName);
+    if (depthI >= 0) { setShowDepth(true); setStepIdx(depthI); }
   };
 
   const fieldFor = {
@@ -1821,13 +1829,16 @@ JSON만 응답 (마크다운 백틱 없이):
               <Btn onClick={finishCore}>핵심 5단계로 완료</Btn>
             </>
           )}
+          {showDepth && stepIdx === DEPTH_STEPS.length - 1 && (
+            <Btn onClick={runConsistencyReview} disabled={reviewLoading}>{reviewLoading ? "검토 중…" : "AI로 검토받기"}</Btn>
+          )}
           <Btn primary onClick={next}>
             {stepIdx < steps.length - 1 ? "다음 →" : showDepth ? "심화 분석 완료" : "심화 단계 계속 →"}
           </Btn>
         </div>
       </div>
 
-      {!showDepth && stepIdx === CORE_STEPS.length - 1 && (
+      {((!showDepth && stepIdx === CORE_STEPS.length - 1) || (showDepth && stepIdx === DEPTH_STEPS.length - 1)) && (
         <>
           {reviewError && (
             <div style={{ marginTop: 12, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
@@ -3216,7 +3227,13 @@ function buildPersonalContext(experiences, skills, certs, awards, resumeProfile,
   const expLines = experiences.map(e => {
     const myMetrics = (metrics || []).filter(m => m.experienceId === e.id);
     const metricStr = myMetrics.length ? ` [수치: ${myMetrics.map(m => `${m.metricName} ${formatMetric(m, "exact")}`).join(", ")}]` : "";
-    return `- ${e.title} (${e.organization || "소속 미상"}, ${e.status}) — ${e.oneLineSummary || e.context || "요약 없음"}${metricStr}${(e.competencies || []).length ? ` [역량: ${e.competencies.join(", ")}]` : ""}`;
+    const extras = [
+      e.goal ? `목표: ${e.goal}` : null,
+      e.difficulty ? `어려움: ${e.difficulty}` : null,
+      e.learning ? `배운 점: ${e.learning}` : null,
+      e.jobRelevance ? `직무 연결: ${e.jobRelevance}` : null,
+    ].filter(Boolean).join(" / ");
+    return `- ${e.title} (${e.organization || "소속 미상"}, ${e.status}) — ${e.oneLineSummary || e.context || "요약 없음"}${metricStr}${(e.competencies || []).length ? ` [역량: ${e.competencies.join(", ")}]` : ""}${extras ? ` [${extras}]` : ""}`;
   }).join("\n");
   const skillLines = (skills || []).map(s => `- ${s.name}`).join(", ");
   const certLines = (certs || []).map(c => `- ${c.name}${c.date ? ` (${c.date})` : ""}`).join(", ");
@@ -3269,6 +3286,7 @@ function buildReviewContext(experiences, metrics) {
     parts.push(`  배경: ${e.context || "(없음)"}`);
     parts.push(`  문제: ${e.discoveredProblem || "(없음)"}`);
     parts.push(`  본인 기여: ${e.personalContribution || "(없음)"} / 기여 근거: ${e.contributionEvidence || "(없음)"}`);
+    if (e.goal) parts.push(`  목표: ${e.goal}`);
     if (e.actions?.length) {
       parts.push(`  행동:\n${e.actions.map(a => `    · (${ACTION_LABEL[a.actionType] || a.actionType}) ${a.description}`).join("\n")}`);
     }
@@ -3280,6 +3298,7 @@ function buildReviewContext(experiences, metrics) {
     if (e.qualitative) parts.push(`  정성 성과: ${e.qualitative}`);
     parts.push(`  어려움: ${e.difficulty || "(없음)"} / 배운 점: ${e.learning || "(없음)"}`);
     if (e.coreMessage) parts.push(`  핵심 메시지: ${e.coreMessage}`);
+    if (e.jobRelevance) parts.push(`  직무 연결: ${e.jobRelevance}`);
     parts.push(`  역량 태그: ${(e.competencies || []).join(", ") || "(없음)"}`);
     return parts.join("\n");
   }).join("\n\n");
@@ -3295,6 +3314,7 @@ function buildEssayContext(app, essay, experiences, metrics) {
     if (e.discoveredProblem) parts.push(`  문제: ${e.discoveredProblem}`);
     if (e.personalContribution) parts.push(`  본인 행동/기여: ${e.personalContribution}`);
     if (e.contributionEvidence) parts.push(`  기여 근거: ${e.contributionEvidence}`);
+    if (e.goal) parts.push(`  목표: ${e.goal}`);
     if (e.actions?.length) {
       const actionLines = e.actions.map(a => `    · (${ACTION_LABEL[a.actionType] || a.actionType}) ${a.description}`).join("\n");
       parts.push(`  행동 타임라인:\n${actionLines}`);
@@ -3311,6 +3331,7 @@ function buildEssayContext(app, essay, experiences, metrics) {
     if (e.difficulty) parts.push(`  어려움: ${e.difficulty}`);
     if (e.learning) parts.push(`  배운 점: ${e.learning}`);
     if (e.coreMessage) parts.push(`  핵심 메시지: ${e.coreMessage}`);
+    if (e.jobRelevance) parts.push(`  직무 연결: ${e.jobRelevance}`);
     if (e.competencies?.length) parts.push(`  관련 역량: ${e.competencies.join(", ")}`);
     return parts.join("\n");
   };
@@ -3451,11 +3472,9 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
   );
 }
 
-function JobPostingExtractor({ experiences, onExtracted }) {
-  const [raw, setRaw] = useState("");
+function JobPostingExtractor({ experiences, raw, onExtracted }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [open, setOpen] = useState(false);
 
   const extract = async () => {
     if (!raw.trim()) return;
@@ -3497,7 +3516,6 @@ ${raw}` }],
         };
       });
       onExtracted(newReqs);
-      setRaw(""); setOpen(false);
     } catch (e) {
       setError(e.message || String(e));
     } finally {
@@ -3505,20 +3523,15 @@ ${raw}` }],
     }
   };
 
-  if (!open) return <Btn small onClick={() => setOpen(true)}>채용공고 붙여넣고 AI로 추출하기</Btn>;
   return (
-    <div style={{ marginBottom: 14 }}>
-      <Textarea rows={6} placeholder="채용공고 원문을 여기에 붙여넣으세요" value={raw} onChange={e => setRaw(e.target.value)} />
+    <div style={{ marginTop: 10 }}>
       {error && (
-        <div style={{ marginTop: 8, padding: "8px 10px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 12 }}>
+        <div style={{ marginBottom: 8, padding: "8px 10px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 12 }}>
           <div style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>오류</div>
           <div style={{ fontSize: 12, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <Btn small primary disabled={loading || !raw.trim()} onClick={extract}>{loading ? "추출 중…" : "AI로 요구 역량 추출"}</Btn>
-        <Btn small onClick={() => { setOpen(false); setError(""); }}>취소</Btn>
-      </div>
+      <Btn small primary disabled={loading || !raw.trim()} onClick={extract}>{loading ? "추출 중…" : "AI로 요구 역량 추출"}</Btn>
     </div>
   );
 }
@@ -3622,44 +3635,54 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
       {tab === "복습" && <ApplicationReview app={app} experiences={experiences} metrics={metrics} />}
 
       {tab === "공고 분석" && (
-        <Card>
-          <JobPostingExtractor experiences={experiences} onExtracted={(newReqs) => setApplications(prev => prev.map(a => a.id === app.id
-            ? { ...a, requirements: [...a.requirements, ...newReqs] } : a))} />
-          <div style={{ marginTop: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 16, alignItems: "start" }}>
+          <Card style={{ position: "sticky", top: 16 }}>
+            <Label>채용공고 원문</Label>
+            <Textarea rows={20} placeholder="채용공고 원문을 여기에 붙여넣으세요" value={app.jobPostingRaw || ""}
+              onChange={e => setApplications(prev => prev.map(a => a.id === app.id ? { ...a, jobPostingRaw: e.target.value } : a))}
+              style={{ fontSize: 13, lineHeight: 1.6 }} />
+            <JobPostingExtractor experiences={experiences} raw={app.jobPostingRaw || ""}
+              onExtracted={(newReqs) => setApplications(prev => prev.map(a => a.id === app.id
+                ? { ...a, requirements: [...a.requirements, ...newReqs] } : a))} />
+          </Card>
+
+          <Card>
             <Label>요구 역량 ↔ 경험 매칭 (추천 이유와 부족한 점 필수)</Label>
-          </div>
-          {app.requirements.map(r => {
-            const exp = experiences.find(e => e.id === r.matchedExp);
-            const patchReq = (k, v) => setApplications(prev => prev.map(a => a.id === app.id
-              ? { ...a, requirements: a.requirements.map(x => x.id === r.id ? { ...x, [k]: v } : x) } : a));
-            const removeReq = () => {
-              setApplications(prev => prev.map(a => a.id === app.id
-                ? { ...a, requirements: a.requirements.filter(x => x.id !== r.id) } : a));
-              addTrash("requirement", r.requirement || "요구 역량 항목", { appId: app.id, item: r });
-            };
-            return (
-              <div key={r.id} style={{ display: "grid", gridTemplateColumns: "1.3fr 1.2fr 1.5fr 20px", gap: 12, padding: "11px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5, alignItems: "center" }}>
-                <div>
-                  <Input value={r.requirement} onChange={e => patchReq("requirement", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0" }} />
-                  <div style={{ fontSize: 11.5, color: C.faint }}>중요도 {"●".repeat(r.importance)}{"○".repeat(5 - r.importance)}</div>
+            {app.requirements.map(r => {
+              const exp = experiences.find(e => e.id === r.matchedExp);
+              const patchReq = (k, v) => setApplications(prev => prev.map(a => a.id === app.id
+                ? { ...a, requirements: a.requirements.map(x => x.id === r.id ? { ...x, [k]: v } : x) } : a));
+              const removeReq = () => {
+                setApplications(prev => prev.map(a => a.id === app.id
+                  ? { ...a, requirements: a.requirements.filter(x => x.id !== r.id) } : a));
+                addTrash("requirement", r.requirement || "요구 역량 항목", { appId: app.id, item: r });
+              };
+              return (
+                <div key={r.id} style={{ padding: "11px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <Input value={r.requirement} onChange={e => patchReq("requirement", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0", flex: 1 }} />
+                    <span onClick={removeReq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12, flexShrink: 0, marginTop: 4 }}>✕</span>
+                  </div>
+                  <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 6 }}>중요도 {"●".repeat(r.importance)}{"○".repeat(5 - r.importance)}</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <select value={r.matchedExp || ""} onChange={e => patchReq("matchedExp", e.target.value || null)}
+                      style={{ fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blue : C.text }}>
+                      <option value="">매칭 없음</option>
+                      {experiences.map(e2 => <option key={e2.id} value={e2.id}>{e2.title}</option>)}
+                    </select>
+                    <Input value={r.matchReason || ""} placeholder="매칭 이유 / 부족한 점" onChange={e => patchReq("matchReason", e.target.value)}
+                      style={{ fontSize: 12.5, color: C.sub, flex: 1, minWidth: 140 }} />
+                  </div>
                 </div>
-                <select value={r.matchedExp || ""} onChange={e => patchReq("matchedExp", e.target.value || null)}
-                  style={{ fontFamily: font, fontSize: 13, padding: "6px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blue : C.text }}>
-                  <option value="">매칭 없음</option>
-                  {experiences.map(e2 => <option key={e2.id} value={e2.id}>{e2.title}</option>)}
-                </select>
-                <Input value={r.matchReason || ""} placeholder="매칭 이유 / 부족한 점" onChange={e => patchReq("matchReason", e.target.value)}
-                  style={{ fontSize: 12.5, color: C.sub, border: "none", padding: "2px 0" }} />
-                <span onClick={removeReq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
-              </div>
-            );
-          })}
-          {app.requirements.length === 0 && <div style={{ fontSize: 13, color: C.faint, marginBottom: 10 }}>위 버튼으로 채용공고를 붙여넣거나, 아래에서 직접 추가하세요.</div>}
-          <Btn small onClick={() => setApplications(prev => prev.map(a => a.id === app.id
-            ? { ...a, requirements: [...a.requirements, { id: "r_" + Date.now(), requirement: "", category: "required_competency", importance: 3, matchedExp: null, matchReason: "", gap: "" }] } : a))}>
-            + 요구 역량 추가
-          </Btn>
-        </Card>
+              );
+            })}
+            {app.requirements.length === 0 && <div style={{ fontSize: 13, color: C.faint, marginBottom: 10 }}>왼쪽에 채용공고를 붙여넣고 "AI로 요구 역량 추출"을 누르거나, 아래에서 직접 추가하세요.</div>}
+            <Btn small onClick={() => setApplications(prev => prev.map(a => a.id === app.id
+              ? { ...a, requirements: [...a.requirements, { id: "r_" + Date.now(), requirement: "", category: "required_competency", importance: 3, matchedExp: null, matchReason: "", gap: "" }] } : a))}>
+              + 요구 역량 추가
+            </Btn>
+          </Card>
+        </div>
       )}
 
       {tab === "자소서" && chatEssayId && (() => {
