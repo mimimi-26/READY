@@ -3567,6 +3567,45 @@ function ApplicationReview({ app, experiences, metrics }) {
   );
 }
 
+function AppLinks({ app, setApplications }) {
+  const links = app.links || [];
+  const [adding, setAdding] = useState(false);
+  const [label, setLabel] = useState("");
+  const [url, setUrl] = useState("");
+
+  const normalizeUrl = (u) => /^https?:\/\//i.test(u) ? u : `https://${u}`;
+
+  const add = () => {
+    if (!url.trim()) return;
+    setApplications(prev => prev.map(a => a.id === app.id
+      ? { ...a, links: [...(a.links || []), { id: "lk_" + Date.now(), label: label.trim() || "링크", url: normalizeUrl(url.trim()) }] } : a));
+    setLabel(""); setUrl(""); setAdding(false);
+  };
+  const remove = (id) => setApplications(prev => prev.map(a => a.id === app.id ? { ...a, links: (a.links || []).filter(l => l.id !== id) } : a));
+
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
+      {links.map(l => (
+        <span key={l.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: C.lineSoft, borderRadius: 14, padding: "5px 10px", fontSize: 12.5 }}>
+          <a href={l.url} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: "none" }}>🔗 {l.label}</a>
+          <span onClick={() => remove(l.id)} style={{ cursor: "pointer", color: C.faint }}>✕</span>
+        </span>
+      ))}
+      {adding ? (
+        <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+          <Input placeholder="이름 (예: 회사 홈페이지)" value={label} onChange={e => setLabel(e.target.value)} style={{ width: 140, fontSize: 12.5, padding: "5px 8px" }} />
+          <Input placeholder="URL" value={url} onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && add()} style={{ width: 200, fontSize: 12.5, padding: "5px 8px" }} />
+          <Btn small primary onClick={add}>추가</Btn>
+          <Btn small onClick={() => { setAdding(false); setLabel(""); setUrl(""); }}>취소</Btn>
+        </span>
+      ) : (
+        <span onClick={() => setAdding(true)} style={{ fontSize: 12.5, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>+ 링크 추가 (회사 홈페이지, 채용공고, 지원 포탈 등)</span>
+      )}
+    </div>
+  );
+}
+
 function ApplicationDetail({ app, setApplications, experiences, outputs, metrics, onBack, onOpenExp, addTrash, interviewCategories, addInterviewCategory }) {
   const [tab, setTab] = useState("공고 분석");
   const [chatEssayId, setChatEssayId] = useState(null);
@@ -3587,7 +3626,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
         </div>
         <span onClick={deleteApp} title="이 지원 삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 14, padding: "4px" }}>✕</span>
       </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16, fontSize: 13, color: C.sub }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, fontSize: 13, color: C.sub }}>
         마감 <Input value={app.deadline || ""} placeholder="YYYY-MM-DD" onChange={e => patch("deadline", e.target.value)} style={{ width: 120, border: "none", padding: "2px 0", color: C.sub }} />
         <span>·</span>
         우선순위
@@ -3598,6 +3637,8 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
           <option value="low">낮음</option>
         </select>
       </div>
+
+      <AppLinks app={app} setApplications={setApplications} />
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {["공고 분석", "자소서", "면접", "복습"].map(t => (
