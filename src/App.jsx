@@ -255,6 +255,88 @@ const STEP_QUESTIONS = {
   "배운 점": ["이전에는 어떻게 생각했나?", "경험을 통해 무엇을 새롭게 알게 됐나?", "다시 한다면 무엇을 바꾸겠나?"],
   "직무 연결": ["이 경험은 어떤 직무와 연결되는가?", "어떤 역량을 보여주는가?", "이 경험의 핵심 메시지는 무엇인가?"],
 };
+/* ---------- 단계 충족도 평가 · 완성도 재계산 · 규칙 점검 ---------- */
+const hasNumber = (s) => /\d/.test(s || "");
+// 한 단계의 충족도를 실제 내용으로 평가한다: "미입력" | "보완 필요" | "충분"
+// 글자수뿐 아니라 가벼운 품질 규칙(성과=숫자, 직무 연결=직무+핵심메시지 모두)까지 본다.
+function evalStepStatus(name, e, metrics = []) {
+  const len = (v) => (v || "").trim().length;
+  if (name === "행동") {
+    const n = (e.actions || []).length;
+    return n === 0 ? "미입력" : "충분";
+  }
+  if (name === "성과") {
+    const myMetrics = metrics.filter(m => m.experienceId === e.id);
+    const txt = `${e.oneLineSummary || ""} ${e.qualitative || ""}`;
+    if (!len(e.oneLineSummary) && !len(e.qualitative) && myMetrics.length === 0) return "미입력";
+    // 정량 근거(수치)가 있어야 '충분' — 면접·자소서에서 성과의 핵심은 숫자다
+    return (myMetrics.length > 0 || hasNumber(txt)) ? "충분" : "보완 필요";
+  }
+  if (name === "직무 연결") {
+    const job = (e.jobRelevance || "").trim();
+    const core = (e.coreMessage || "").trim();
+    if (!job && !core) return "미입력";
+    // 직무 연결과 핵심 메시지를 모두 채워야 '충분'
+    return (job.length >= 4 && core.length >= 4) ? "충분" : "보완 필요";
+  }
+  const fieldMap = { 배경: "context", 문제: "discoveredProblem", 기여도: "contributionEvidence",
+    목표: "goal", 어려움: "difficulty", "배운 점": "learning" };
+  const minLen = { 배경: 8, 문제: 8, 기여도: 8, 목표: 4, 어려움: 8, "배운 점": 8 };
+  const val = (e[fieldMap[name]] || "").trim();
+  if (val.length === 0) return "미입력";
+  return val.length >= (minLen[name] || 1) ? "충분" : "보완 필요";
+}
+// 왜 '충분'이 아닌지 사용자에게 보여줄 맞춤 메시지 (해당 단계가 충분하면 null)
+function stepIssueMessage(name, e, metrics = []) {
+  const st = evalStepStatus(name, e, metrics);
+  if (st === "충분") return null;
+  if (name === "성과") {
+    const myMetrics = metrics.filter(m => m.experienceId === e.id);
+    if (st === "보완 필요") return "성과에 숫자가 없어요. 몇 %·몇 건·몇 시간처럼 정량 근거를 넣으면 완성돼요.";
+    return "결과가 이전과 어떻게 달라졌는지 적어주세요.";
+  }
+  if (name === "직무 연결") return "직무 연결과 핵심 메시지를 모두 채워야 완성돼요.";
+  if (st === "미입력") return "아직 비어 있어요. 이대로 넘어가면 나중에 다시 채워야 합니다.";
+  return "내용이 조금 짧아요. 한두 문장 더 구체적으로 적어보세요.";
+}
+// 저장 시 9단계 충족도를 한 번에 재계산 (표시가 실제 내용과 어긋나지 않게)
+function recomputeCompletion(e, metrics = []) {
+  const comp = {};
+  [...CORE_STEPS, ...DEPTH_STEPS].forEach(s => { comp[s] = evalStepStatus(s, e, metrics); });
+  return comp;
+}
+const coreAllFilled = (e, metrics = []) => CORE_STEPS.every(s => evalStepStatus(s, e, metrics) === "충분");
+// 심화 4단계까지 모두 충분해야 '분석 완료(complete)'로 본다
+function isFullyComplete(e, metrics = []) {
+  return [...CORE_STEPS, ...DEPTH_STEPS].every(s => evalStepStatus(s, e, metrics) === "충분");
+}
+// 내용에서 status를 유도한다 (심화까지 완료해야 complete)
+function deriveStatus(e, metrics = []) {
+  const anyFilled = [...CORE_STEPS, ...DEPTH_STEPS].some(s => evalStepStatus(s, e, metrics) !== "미입력");
+  if (!anyFilled) return "draft";
+  if (isFullyComplete(e, metrics)) return "complete";
+  if (coreAllFilled(e, metrics)) return e.depthDone ? "needs_revision" : "analyzing";
+  return "needs_revision";
+}
+// API 없이 즉시 도는 개연성 규칙 점검 (앞뒤 단계가 서로 안 맞는 곳)
+function localConsistencyIssues(e, metrics = []) {
+  const issues = [];
+  const acts = e.actions || [];
+  const hasCollab = acts.some(a => a.actionType === "collaboration");
+  const soloClaim = e.contributionLevel === "full_ownership" || /혼자|단독|나 혼자|스스로 전부/.test(e.contributionEvidence || "");
+  if (soloClaim && hasCollab)
+    issues.push({ step: "기여도", issue: "기여도는 단독·전체 책임에 가까운데 행동에는 협업이 들어 있어요. 표현이 서로 맞는지 확인하세요." });
+  const myMetrics = metrics.filter(m => m.experienceId === e.id);
+  const perf = `${e.oneLineSummary || ""} ${e.qualitative || ""}`;
+  if ((e.oneLineSummary || e.qualitative) && myMetrics.length === 0 && !hasNumber(perf))
+    issues.push({ step: "성과", issue: "성과에 숫자가 없어요. 정량 근거(%·건·시간·금액)를 넣으면 설득력이 올라갑니다." });
+  if ((e.difficulty || "").trim() && !(e.learning || "").trim())
+    issues.push({ step: "배운 점", issue: "어려움은 적었는데 배운 점이 비어 있어요. 그 경험에서 무엇이 바뀌었는지 이어서 적어보세요." });
+  if ((e.goal || "").trim() && !coreAllFilled(e, metrics) && evalStepStatus("성과", e, metrics) === "충분")
+    issues.push({ step: "행동", issue: "목표·성과는 있는데 그 사이 행동이 덜 정리됐어요. 목표를 이루려고 한 행동을 채워보세요." });
+  return issues;
+}
+
 const STATUS_LABEL = { draft: "초기 메모", analyzing: "분석 중", needs_revision: "보완 필요", complete: "분석 완료" };
 const STATUS_COLOR = { draft: [C.sub, C.lineSoft], analyzing: [C.blue, C.blueBg], needs_revision: [C.orange, C.orangeBg], complete: [C.green, C.greenBg] };
 const CONTRIB_LABEL = { participated: "참여", responsible: "담당", led: "주도", proposed_and_executed: "제안 후 실행", full_ownership: "전체 책임" };
@@ -696,7 +778,8 @@ export default function App() {
 
   const isBlankSlate = experiences.length === 0 && applications.length === 0 && skills.length === 0 && certs.length === 0;
   const loadDemoData = () => {
-    setExperiences(seedExperiences);
+    // 데모 데이터의 완성도·상태를 현재 규칙으로 재계산해 표시가 실제 내용과 일치하도록
+    setExperiences(seedExperiences.map(e => ({ ...e, completion: recomputeCompletion(e, seedMetrics), status: deriveStatus(e, seedMetrics) })));
     setMetrics(seedMetrics);
     setOutputs(seedOutputs);
     setApplications(seedApplications);
@@ -875,7 +958,7 @@ export default function App() {
         {nav === "timeline" && <Timeline experiences={experiences} setExperiences={setExperiences} activities={timelineActivities} setActivities={setTimelineActivities} addTrash={addTrash} onOpenExp={openDetail} onAnalyze={openAnalyze} onGoArchive={() => go("archive")} />}
         {nav === "import" && <ImportFlow setExperiences={setExperiences} setSkills={setSkills} setCerts={setCerts} setResumeProfile={setResumeProfile} onDone={openDetail} experiences={experiences} />}
         {nav === "skills" && <Skills skills={skills} setSkills={setSkills} experiences={experiences} onOpenExp={openDetail} addTrash={addTrash} />}
-        {nav === "branding" && <BrandingHub />}
+        {nav === "branding" && <BrandingHub experiences={experiences} metrics={metrics} applications={applications} />}
         {nav === "apply" && !appDetailId && <Applications applications={applications} setApplications={setApplications} onOpen={setAppDetailId} addTrash={addTrash} />}
         {nav === "apply" && appDetailId && <ApplicationDetail app={applications.find(a => a.id === appDetailId)} setApplications={setApplications} experiences={experiences} outputs={outputs} metrics={metrics} onBack={() => setAppDetailId(null)} onOpenExp={openDetail} addTrash={addTrash} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
         {nav === "master" && <MasterPrep essays={masterEssays} setEssays={setMasterEssays} interviews={masterInterviews} setInterviews={setMasterInterviews} experiences={experiences} metrics={metrics} resumeProfile={resumeProfile} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
@@ -1475,8 +1558,8 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
       acts.push({ text: `「${e.title}」 부족한 부분 보완하기`, act: () => onOpenDetail(e.id) }));
     experiences.filter(e => e.status === "draft").forEach(e =>
       acts.push({ text: `「${e.title}」 경험 분석 시작하기`, act: () => onOpenDetail(e.id) }));
-    experiences.filter(e => e.status === "complete" && !e.depthDone).forEach(e =>
-      acts.push({ text: `「${e.title}」 심화 단계(어려움·배운 점) 입력하기`, act: () => onOpenDetail(e.id) }));
+    experiences.filter(e => e.status === "analyzing" && !e.depthDone).forEach(e =>
+      acts.push({ text: `「${e.title}」 심화 단계(목표·어려움·배운 점·직무 연결) 채워 완성하기`, act: () => onOpenDetail(e.id) }));
     applications.forEach(a => {
       if ((a.interviews || []).some(iq => !iq.selectedExperienceId)) {
         acts.push({ text: `${a.company} 면접 질문에 사용할 경험 선택하기`, act: () => onOpenApp(a.id) });
@@ -1641,43 +1724,84 @@ function AnalyzeFlow({ exp, setExperiences, metrics, setMetrics, onExit, onDone 
   const autosave = useAutosave(JSON.stringify(local));
 
   const patch = (k, v) => setLocal(p => ({ ...p, [k]: v }));
-  const commit = (extra = {}) => setExperiences(prev => prev.map(e => e.id === exp.id ? { ...e, ...local, ...extra, updatedAt: new Date().toISOString().slice(0, 10) } : e));
+  // 저장: 편집 내용 병합 + 9단계 충족도/상태를 실제 내용으로 재계산 (표시와 데이터가 항상 일치)
+  const commit = (extra = {}) => setExperiences(prev => prev.map(e => {
+    if (e.id !== exp.id) return e;
+    const merged = { ...e, ...local, ...extra, updatedAt: new Date().toISOString().slice(0, 10) };
+    merged.completion = recomputeCompletion(merged, metrics);
+    if (!("status" in extra)) merged.status = deriveStatus(merged, metrics);
+    return merged;
+  }));
 
-  const STEP_MIN_LENGTH = { 배경: 8, 문제: 8, 기여도: 8, 목표: 4, 어려움: 8, "배운 점": 8, "직무 연결": 4 };
-  const isStepFilled = (name) => {
-    if (name === "행동") return (local.actions || []).length > 0;
-    if (name === "성과") return !!(local.oneLineSummary || "").trim() || !!(local.qualitative || "").trim()
-      || metrics.some(m => m.experienceId === exp.id);
-    const fieldMap = { 배경: "context", 문제: "discoveredProblem", 기여도: "contributionEvidence",
-      목표: "goal", 어려움: "difficulty", "배운 점": "learning", "직무 연결": "coreMessage" };
-    const val = (local[fieldMap[name]] || "").trim();
-    return val.length >= (STEP_MIN_LENGTH[name] || 1);
-  };
+  // 실제 자동 저장: local이 바뀌면 잠시 뒤 저장한다 (status·depthDone은 commit이 관리하므로 보존)
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setExperiences(prev => prev.map(e => {
+        if (e.id !== exp.id) return e;
+        const merged = { ...e, ...local, status: e.status, depthDone: e.depthDone, updatedAt: new Date().toISOString().slice(0, 10) };
+        merged.completion = recomputeCompletion(merged, metrics);
+        return merged;
+      }));
+    }, 900);
+    return () => clearTimeout(t);
+  }, [local]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const markStep = (name) => {
-    const status = isStepFilled(name) ? "충분" : "보완 필요";
-    const comp = { ...local.completion, [name]: status };
-    setLocal(p => ({ ...p, completion: comp }));
-    return comp;
-  };
+  const isStepFilled = (name) => evalStepStatus(name, local, metrics) === "충분";
 
   const next = () => {
-    const comp = markStep(step);
-    if (stepIdx < steps.length - 1) { setStepIdx(stepIdx + 1); commit({ completion: comp, status: "analyzing" }); }
+    if (stepIdx < steps.length - 1) { setStepIdx(stepIdx + 1); commit(); }
     else if (!showDepth) {
-      commit({ completion: comp, status: "complete" });
-      setShowDepth(true); setStepIdx(0);
+      // 핵심 5단계를 끝내도 아직 '완료'가 아니다 — 심화까지 채워야 완성으로 본다
+      commit(); setShowDepth(true); setStepIdx(0);
     } else {
-      commit({ completion: comp, status: "complete", depthDone: true });
+      const finalLocal = { ...local, depthDone: true };
+      commit({ depthDone: true, status: isFullyComplete(finalLocal, metrics) ? "complete" : "needs_revision" });
       onDone(exp.id);
     }
   };
-  const finishCore = () => { commit({ completion: markStep(step), status: "complete" }); onDone(exp.id); };
+  // 핵심만 저장하고 심화는 나중에 (아직 '완료'로 표시하지 않음)
+  const finishCore = () => { commit(); onDone(exp.id); };
 
   const [reviewIssues, setReviewIssues] = useState(null);
   const [reviewOverall, setReviewOverall] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState("");
+
+  // ── 실제 AI 꼬리질문 (단계 내용 기반) — 기존의 고정 문구를 대체 ──
+  const [aiQ, setAiQ] = useState({});             // step -> 생성된 질문
+  const [aiQState, setAiQState] = useState("idle"); // idle | loading | error
+  const stepContentText = (name) => {
+    if (name === "행동") return (local.actions || []).map(a => `(${ACTION_LABEL[a.actionType] || a.actionType}) ${a.description}`).join("; ");
+    if (name === "기여도") return `${CONTRIB_LABEL[local.contributionLevel] || ""} ${local.contributionEvidence || ""}`.trim();
+    if (name === "성과") return `${local.oneLineSummary || ""} ${local.qualitative || ""}`.trim();
+    const map = { 배경: "context", 문제: "discoveredProblem", 목표: "goal", 어려움: "difficulty", "배운 점": "learning", "직무 연결": "jobRelevance" };
+    return (local[map[name]] || "").trim();
+  };
+  const genAiQuestion = async (name) => {
+    const content = stepContentText(name);
+    if (content.replace(/\s/g, "").length < 4) { setAiQState("idle"); return; }
+    setAiQState("loading");
+    try {
+      const sys = `너는 취업 면접 코치다. 지원자가 경험의 '${name}' 단계에 아래 내용을 적었다. 이 내용에서 면접관이 더 파고들, 아직 안 드러난 지점 딱 하나를 골라 한국어 꼬리질문 한 문장만 만들어라. 이미 적힌 내용을 그대로 되묻지 마라. 다른 말 없이 질문 한 문장만 출력.`;
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ systemPrompt: sys, context: `[${name}]\n${content}`, messages: [{ role: "user", content: "꼬리질문 한 문장만 주세요." }] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(typeof data?.error === "string" ? data.error : "");
+      const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join(" ").trim().replace(/^["“']|["”']$/g, "");
+      if (text) { setAiQ(p => ({ ...p, [name]: text })); setAiQState("idle"); } else setAiQState("error");
+    } catch { setAiQState("error"); }
+  };
+  // 단계 진입 시 내용이 있으면 자동으로 한 번 생성 (없으면 정적 예시 질문으로 대체)
+  useEffect(() => {
+    if (aiQ[step]) { setAiQState("idle"); return; }
+    setAiQState("idle");
+    const t = setTimeout(() => genAiQuestion(step), 700);
+    return () => clearTimeout(t);
+  }, [step, showDepth]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const localIssues = localConsistencyIssues(local, metrics);
 
   const runConsistencyReview = async () => {
     setReviewLoading(true); setReviewError(""); setReviewIssues(null);
@@ -1706,9 +1830,9 @@ ${depthFilled ? `[목표] ${local.goal || "(없음)"}
 JSON만 응답 (마크다운 백틱 없이):
 {"issues":[{"step":"성과","issue":"..."}],"overall":"전체적으로 한 줄 총평"}`;
 
-      const res = await fetch("/api/consistency-check", {
+      const res = await fetch("/api/chat", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ systemPrompt: prompt, messages: [{ role: "user", content: "위 기준으로 검토해 JSON으로만 답해줘." }] }),
       });
       let data;
       try { data = await res.json(); }
@@ -1789,10 +1913,19 @@ JSON만 응답 (마크다운 백틱 없이):
           ))}
         </div>
 
-        {/* AI 질문 힌트 */}
+        {/* AI 꼬리질문 (내용을 읽고 실제 생성 · 없으면 예시 질문) */}
         <div style={{ display: "flex", gap: 8, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14, marginBottom: 16, alignItems: "flex-start" }}>
-          <Badge label="AI 질문" color={C.ai} bg="#fff" />
-          <span style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>{aiHints[step]}</span>
+          <Badge label={aiQ[step] ? "AI 꼬리질문" : "질문 도우미"} color={C.ai} bg="#fff" />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {aiQ[step]
+              ? <span style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>{aiQ[step]}</span>
+              : aiQState === "loading"
+                ? <span style={{ fontSize: 13, color: C.faint }}>적은 내용을 읽고 질문을 만드는 중…</span>
+                : <span style={{ fontSize: 13, color: C.sub, lineHeight: 1.55 }}>{aiHints[step]} <span style={{ color: C.faint }}>· 예시 질문</span></span>}
+          </div>
+          <span onClick={() => aiQState !== "loading" && genAiQuestion(step)} style={{ cursor: aiQState === "loading" ? "default" : "pointer", fontSize: 12, color: C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>
+            {aiQState === "loading" ? "…" : (aiQ[step] ? "다시 질문" : "AI 질문 받기")}
+          </span>
         </div>
 
         {/* 입력 영역 */}
@@ -1816,7 +1949,23 @@ JSON만 응답 (마크다운 백틱 없이):
 
       {!isStepFilled(step) && (
         <div style={{ fontSize: 12, color: C.orange, marginTop: 10, background: C.orangeBg, padding: "8px 12px", borderRadius: 14 }}>
-          이 단계 입력이 비어있거나 짧습니다. 이대로 넘어가면 "보완 필요"로 표시됩니다 — 나중에 다시 채워도 됩니다.
+          {stepIssueMessage(step, local, metrics) || "이 단계 입력이 비어있거나 짧습니다."} 이대로 넘어가면 "보완 필요"로 표시돼요.
+        </div>
+      )}
+
+      {/* 규칙 점검 — API 없이 즉시 확인되는 앞뒤 단계 개연성 */}
+      {localIssues.length > 0 && (
+        <div style={{ marginTop: 10, background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14, padding: "10px 12px" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 6 }}>빠른 점검</div>
+          <div style={{ display: "grid", gap: 6 }}>
+            {localIssues.map((iss, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+                <Badge label={iss.step} color={C.orange} bg={C.orangeBg} />
+                <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5, flex: 1 }}>{iss.issue}</span>
+                <span onClick={() => jumpToStep(iss.step)} style={{ cursor: "pointer", fontSize: 12, color: C.blue, whiteSpace: "nowrap" }}>가기</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1826,7 +1975,7 @@ JSON만 응답 (마크다운 백틱 없이):
           {!showDepth && stepIdx === CORE_STEPS.length - 1 && (
             <>
               <Btn onClick={runConsistencyReview} disabled={reviewLoading}>{reviewLoading ? "검토 중…" : "AI로 검토받기"}</Btn>
-              <Btn onClick={finishCore}>핵심 5단계로 완료</Btn>
+              <Btn onClick={finishCore}>핵심만 저장 · 심화는 나중에</Btn>
             </>
           )}
           {showDepth && stepIdx === DEPTH_STEPS.length - 1 && (
@@ -1874,7 +2023,7 @@ JSON만 응답 (마크다운 백틱 없이):
       )}
       {!showDepth && (
         <div style={{ fontSize: 12, color: C.faint, marginTop: 10, textAlign: "right" }}>
-          핵심 5단계만으로 경험 카드가 생성됩니다. 심화 4단계(목표·어려움·배운 점·직무 연결)는 나중에 추가할 수 있습니다.
+          핵심 5단계로 경험 카드가 생성돼요. 다만 <b>심화 4단계(목표·어려움·배운 점·직무 연결)까지 채워야 '분석 완료'</b>가 됩니다 — 자소서·면접에서 실제로 쓰이는 부분이에요.
         </div>
       )}
     </div>
@@ -3292,6 +3441,62 @@ function buildReviewContext(experiences, metrics) {
 ${lines || "등록된 경험이 없습니다."}`;
 }
 
+// 경험의 '정리된 모든 내용'을 읽기 전용으로 보여주는 재사용 뷰 (자소서·면접 등 연동되는 곳 어디서나)
+function ExperienceContentView({ exp: e, metrics = [] }) {
+  if (!e) return null;
+  const myMetrics = (metrics || []).filter(m => m.experienceId === e.id);
+  const Row = ({ k, v }) => v ? (
+    <div style={{ marginBottom: 6 }}>
+      <span style={{ fontSize: 11, color: C.faint }}>{k}</span>
+      <div style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{v}</div>
+    </div>
+  ) : null;
+  return (
+    <div style={{ background: C.bg, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px", marginTop: 6 }}>
+      <Row k="배경" v={e.context} />
+      <Row k="문제" v={e.discoveredProblem} />
+      {(e.actions || []).length > 0 && (
+        <div style={{ marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: C.faint }}>행동</span>
+          {e.actions.map((a, i) => <div key={i} style={{ fontSize: 12.5, color: C.text, lineHeight: 1.5 }}>· ({ACTION_LABEL[a.actionType] || a.actionType}) {a.description}</div>)}
+        </div>
+      )}
+      <Row k="기여 근거" v={e.contributionEvidence} />
+      <Row k="성과 요약" v={e.oneLineSummary} />
+      <Row k="정성 성과" v={e.qualitative} />
+      {myMetrics.length > 0 && (
+        <div style={{ marginBottom: 6 }}>
+          <span style={{ fontSize: 11, color: C.faint }}>성과 수치</span>
+          {myMetrics.map(m => <div key={m.id} style={{ fontSize: 12.5, color: C.text }}>· {m.metricName}: {formatMetric(m, "exact")} <span style={{ color: (CERTAINTY[m.certainty]?.[1]) || C.faint }}>({CERTAINTY[m.certainty]?.[0] || m.certainty})</span></div>)}
+        </div>
+      )}
+      <Row k="목표" v={e.goal} />
+      <Row k="어려움" v={e.difficulty} />
+      <Row k="배운 점" v={e.learning} />
+      <Row k="직무 연결" v={e.jobRelevance} />
+      <Row k="핵심 메시지" v={e.coreMessage} />
+      {(e.competencies || []).length > 0 && (
+        <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
+          {e.competencies.map(c => <Badge key={c} label={"#" + c} color={C.sub} bg={C.lineSoft} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+// 접었다 폈다 하는 래퍼
+function ExperiencePeek({ exp, metrics, label = "정리 내용 보기" }) {
+  const [open, setOpen] = useState(false);
+  if (!exp) return null;
+  return (
+    <div style={{ marginTop: 6 }}>
+      <span onClick={() => setOpen(o => !o)} style={{ cursor: "pointer", fontSize: 11.5, color: C.blue }}>
+        {open ? "▴ 접기" : `▾ ${label}`}
+      </span>
+      {open && <ExperienceContentView exp={exp} metrics={metrics} />}
+    </div>
+  );
+}
+
 function buildEssayContext(app, essay, experiences, metrics) {
   const describeExp = (e) => {
     const parts = [`- [${e.title}] ${e.organization || ""} · ${e.role || ""} (${e.startDate}~${e.endDate})`];
@@ -3555,6 +3760,7 @@ function ApplicationReview({ app, experiences, metrics }) {
                     예상 꼬리질문: {iq.followUps.join(" / ")}
                   </div>
                 )}
+                <ExperiencePeek exp={exp} metrics={metrics} label="이 경험 정리 내용 전체 보기" />
               </>
             ) : (
               <div style={{ fontSize: 12.5, color: C.faint }}>사용할 경험이 아직 선택되지 않았습니다.</div>
@@ -3767,6 +3973,10 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                     {experiences.filter(e => !q.selectedExperienceIds.includes(e.id)).map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
                   </select>
                 </div>
+                {q.selectedExperienceIds.map(id => {
+                  const e = experiences.find(x => x.id === id);
+                  return e ? <ExperiencePeek key={id} exp={e} metrics={metrics} label={`「${e.title}」 정리 내용 전체 보기`} /> : null;
+                })}
                 <div style={{ marginTop: 10 }}>
                   <Textarea value={q.draft || ""} placeholder="여기에 직접 작성해도 되고, 아래 'AI와 함께 작성'으로 도움받아도 됩니다."
                     onChange={e => patchQ("draft", e.target.value)}
@@ -4216,7 +4426,7 @@ function BrandingSetupNotice() {
   );
 }
 
-function BrandingHub() {
+function BrandingHub({ experiences = [], metrics = [], applications = [] }) {
   const [supabase, setSupabase] = useState(undefined); // undefined=로딩중, null=미설정
   const [user, setUser] = useState(null);
   const [authError, setAuthError] = useState(null);
@@ -4329,7 +4539,7 @@ function BrandingHub() {
         </Card>
       )}
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 16 }}>
-        질문에 답하면 AI가 꼬리질문으로 더 캐묻고, 답변에서 프로필 항목을 뽑아 누적합니다. 충분히 쌓이면 나만의 포지셔닝·슬로건을 만듭니다.
+        질문에 답하면 AI가 꼬리질문으로 더 캐묻고, 답변에서 프로필 항목을 뽑아 누적합니다. 몇 개만 답해도 홈의 <b>전략 브리핑</b>이 경험·지원과 묶어 방향을 잡아주고, 충분히 쌓이면 나만의 포지셔닝·슬로건까지 만듭니다.
       </div>
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {tabs.map(([k, l]) => (
@@ -4340,6 +4550,7 @@ function BrandingHub() {
 
       {tab === "home" && (
         <BrandingHome progress={answersProgress} profileItems={profileItems}
+          experiences={experiences} metrics={metrics} applications={applications}
           onGoWorkbook={(qid) => { setJumpTo(qid || null); setTab("workbook"); }} onGoResult={() => setTab("result")} />
       )}
       {tab === "workbook" && (
@@ -4358,7 +4569,127 @@ function BrandingHub() {
   );
 }
 
-function BrandingHome({ progress, profileItems, onGoWorkbook, onGoResult }) {
+// 지금까지의 브랜딩 답변 + 실제 경험/지원을 종합해 '나는 어떤 사람이고 어떤 전략을 취해야 하는지'를 바로 뽑아준다.
+// (12개 확정 게이트 없이 조기부터 쓸모 있게 — 브랜딩이 경험·지원과 따로 놀지 않도록 연결)
+function BrandingStrategyBriefing({ profileItems = [], experiences = [], metrics = [], applications = [] }) {
+  const KEY = "careeros:brandingBriefing";
+  const [data, setData] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem(KEY) || "null"); } catch { return null; }
+  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const usableItems = profileItems.filter(i => i.status === "확정" || i.status === "제안");
+  const analyzed = experiences.filter(e => e.status !== "draft");
+  const canRun = usableItems.length >= 2 || analyzed.length >= 1;
+
+  const run = async () => {
+    setLoading(true); setError("");
+    try {
+      const itemLines = usableItems.map(i =>
+        `- (${PROFILE_TYPE_LABEL[i.type] || i.type}${i.status === "확정" ? "·확정" : "·제안"}) ${i.content}${i.evidence ? ` — 근거: ${i.evidence}` : ""}`).join("\n") || "(아직 정리된 자기이해 항목이 적음)";
+      const expLines = analyzed.map(e => {
+        const ms = metrics.filter(m => m.experienceId === e.id).map(m => `${m.metricName} ${formatMetric(m, "exact")}`).join(", ");
+        return `- ${e.title} (${e.organization || ""}): 역량 [${(e.competencies || []).join(", ")}]${e.coreMessage ? ` / 핵심: ${e.coreMessage}` : ""}${ms ? ` / 성과: ${ms}` : ""}`;
+      }).join("\n") || "(분석된 경험 없음)";
+      const appLines = applications.map(a => `- ${a.company} · ${a.position}${(a.requirements || []).length ? ` (요구역량: ${(a.requirements || []).map(r => r.requirement).join(", ")})` : ""}`).join("\n") || "(등록된 지원 없음)";
+
+      const sys = `너는 취업 준비생을 돕는 커리어 전략가다. 아래 세 가지 자료를 종합해서, 이 사람이 "자기가 어떤 사람인지"와 "어떤 취업 전략을 취해야 하는지"를 구체적으로 짚어줘라. 두루뭉술한 미사여구(예: "열정적인 인재") 금지. 반드시 자료에 있는 근거로만 말하고, 없는 사실은 지어내지 마라.
+
+응답은 아래 JSON만 (마크다운 백틱 없이):
+{
+ "strengths": [{"title":"핵심 강점 한 줄","why":"자료 어디서 반복적으로 드러나는지 근거"}],  // 2~3개
+ "persona": "이 사람이 일할 때 어떻게 작동하는지(기질·패턴) 2~3문장",
+ "strategy": "유리한 직무·회사 유형과, 지원에서 취해야 할 구체적 전략 3~4문장",
+ "pitch": "자소서·면접에서 자신을 한 문장으로 내세운다면 (실제 문장)",
+ "nextQuestions": [{"q":"지금 답하면 전략이 가장 선명해질 질문","why":"왜 도움되는지"}]  // 1~2개
+}`;
+      const context = `[지금까지 정리한 자기이해 (브랜딩 답변에서 추출)]\n${itemLines}\n\n[실제로 분석해 둔 경험]\n${expLines}\n\n[현재 지원 중인 곳]\n${appLines}`;
+      const res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ systemPrompt: sys, context, messages: [{ role: "user", content: "위 자료로 전략 브리핑을 JSON으로 작성해줘." }] }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출 실패");
+      const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      parsed._at = new Date().toISOString().slice(0, 10);
+      setData(parsed);
+      try { window.localStorage.setItem(KEY, JSON.stringify(parsed)); } catch {}
+    } catch (e) {
+      setError(e.message || String(e));
+    } finally { setLoading(false); }
+  };
+
+  return (
+    <Card style={{ marginBottom: 16, background: C.accent, border: `1px solid ${C.line}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 800 }}>전략 브리핑</div>
+          <div style={{ fontSize: 12.5, color: C.sub, marginTop: 2, lineHeight: 1.5 }}>
+            끝까지 안 채워도 됩니다. 지금까지의 답변 + 분석한 경험 + 지원 목록을 묶어 <b>나는 어떤 사람이고 어떻게 지원해야 하는지</b>를 바로 정리해줘요.
+          </div>
+        </div>
+        <Btn small primary onClick={run} disabled={loading || !canRun} style={{ flexShrink: 0 }}>
+          {loading ? "분석 중…" : data ? "다시 만들기" : "브리핑 받기"}
+        </Btn>
+      </div>
+      {!canRun && <div style={{ fontSize: 12, color: C.faint, marginTop: 8 }}>자기이해 항목이나 분석된 경험이 조금 쌓이면 만들 수 있어요.</div>}
+      {error && <div style={{ fontSize: 12, color: C.red, marginTop: 8, whiteSpace: "pre-wrap" }}>{error}</div>}
+      {data && (
+        <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+          {data.persona && (
+            <div>
+              <Label>어떤 사람인가</Label>
+              <div style={{ fontSize: 13, lineHeight: 1.6 }}>{data.persona}</div>
+            </div>
+          )}
+          {(data.strengths || []).length > 0 && (
+            <div>
+              <Label>핵심 강점</Label>
+              <div style={{ display: "grid", gap: 6 }}>
+                {data.strengths.map((s, i) => (
+                  <div key={i} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "8px 12px" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700 }}>{s.title}</div>
+                    {s.why && <div style={{ fontSize: 12, color: C.sub, marginTop: 2, lineHeight: 1.5 }}>{s.why}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {data.strategy && (
+            <div>
+              <Label>취해야 할 전략</Label>
+              <div style={{ fontSize: 13, lineHeight: 1.6 }}>{data.strategy}</div>
+            </div>
+          )}
+          {data.pitch && (
+            <div>
+              <Label>한 문장 피치</Label>
+              <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.6, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px" }}>“{data.pitch}”</div>
+            </div>
+          )}
+          {(data.nextQuestions || []).length > 0 && (
+            <div>
+              <Label>지금 채우면 좋은 질문</Label>
+              <div style={{ display: "grid", gap: 6 }}>
+                {data.nextQuestions.map((n, i) => (
+                  <div key={i} style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+                    <span style={{ fontWeight: 600 }}>· {n.q}</span>
+                    {n.why && <span style={{ color: C.faint }}> — {n.why}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {data._at && <div style={{ fontSize: 11, color: C.faint, textAlign: "right" }}>{data._at} 기준</div>}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function BrandingHome({ progress, profileItems, experiences = [], metrics = [], applications = [], onGoWorkbook, onGoResult }) {
   const totalQuestions = BRANDING_QUESTIONS.length;
   const answeredIds = new Set(progress.filter(a => (a.branding_answer_entries || []).some(e => e.state === "active")).map(a => a.question_id));
   const answeredCount = answeredIds.size;
@@ -4376,6 +4707,8 @@ function BrandingHome({ progress, profileItems, onGoWorkbook, onGoResult }) {
 
   return (
     <div>
+      <BrandingStrategyBriefing profileItems={profileItems} experiences={experiences} metrics={metrics} applications={applications} />
+
       {staleItems.length > 0 && (
         <Card style={{ marginBottom: 14, background: C.accent }}>
           <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>⚠ 출처가 바뀐 항목 {staleItems.length}개</div>
@@ -4392,7 +4725,7 @@ function BrandingHome({ progress, profileItems, onGoWorkbook, onGoResult }) {
         <Card>
           <Label>프로필 항목</Label>
           <div style={{ fontSize: 22, fontWeight: 800 }}>{confirmed.length}<span style={{ fontSize: 13, color: C.faint, fontWeight: 500 }}> 확정 · {proposed.length} 제안</span></div>
-          <div style={{ fontSize: 12, color: C.faint }}>확정 12개 이상 & 강점 3개+ & 가치관 2개+ 부터 산출물 생성 가능</div>
+          <div style={{ fontSize: 12, color: C.faint }}>위 <b>전략 브리핑</b>은 지금 바로 쓸 수 있어요. 확정 12개+·강점 3개+·가치관 2개+ 부터는 최종 포지셔닝·슬로건까지 만들 수 있습니다.</div>
         </Card>
       </div>
 
