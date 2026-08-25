@@ -4259,6 +4259,9 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
   // ── 자료 수집 ──
   const [draft, setDraft] = useState({ category: "vision", source: "", summary: "", purpose: "both" });
   const [extracting, setExtracting] = useState(false);
+  const [openRaw, setOpenRaw] = useState({}); // 자료 카드별 원문 펼침 여부
+  const isUrl = (s) => /^https?:\/\//.test((s || "").trim());
+  const shortUrl = (s) => (s || "").replace(/^https?:\/\/(www\.)?/, "").slice(0, 42);
   const aiExtract = (summary, category) => callAI(
     `너는 유통·기업분석 코치다. '${app.company}'(${app.position || ""}) 지원자가 '${CA_CAT_LABEL[category]}' 자료를 조사했다.\n${CA_RULES[category] || ""}\n【사실만】 오직 아래 [내용]에 실제로 적힌 것만 근거로 삼아라. [내용]에 없는 회사 사실을 추측해 만들어 넣지 마라. 키워드도 [내용]에 나온 표현·개념에서 뽑아라.\n공통 원칙: 매출 숫자 나열 금지, '왜'에 초점.\nJSON만: {"keywords":["자소서·면접에 쓸 핵심 키워드 3~6개"],"whyQuestions":["'왜?'로 파고들 면접 대비 질문 2~4개"],"suggestions":["다음에 더 찾아볼 검색어·자료 1~3개"]}`,
     `[내용]\n${summary}`
@@ -4364,45 +4367,69 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
             <div key={g.id}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${C.lineSoft}` }}>{g.label} <span style={{ color: C.faint, fontWeight: 500 }}>· {g.items.length}</span></div>
               <div style={{ display: "grid", gap: 16 }}>
-                {g.items.map(r => (
-                  <div key={r.id}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                {g.items.map(r => {
+                  const open = !!openRaw[r.id];
+                  const longRaw = (r.summary || "").length > 80;
+                  return (
+                  <div key={r.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, boxShadow: "0 1px 2px rgba(43,42,40,.04)" }}>
+                    {/* 헤더: 용도 + 출처 링크 + 삭제 */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
                       <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
                         <Badge label={CA_PURPOSE[r.purpose] || "둘 다"} color={C.sub} bg={C.lineSoft} />
-                        {r.source && <span style={{ fontSize: 11.5, color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.source}</span>}
+                        {r.source && (isUrl(r.source)
+                          ? <a href={r.source} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: C.blue, textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{shortUrl(r.source)}</a>
+                          : <span style={{ fontSize: 11.5, color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.source}</span>)}
                       </div>
                       <span onClick={() => removeItem(r.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12, flexShrink: 0 }}>✕</span>
                     </div>
-                    <div style={{ fontSize: 13.5, lineHeight: 1.65, marginBottom: 8, whiteSpace: "pre-wrap" }}>{r.summary}</div>
+
+                    {/* 추출 결과가 주인공 */}
                     {(r.keywords || []).length > 0 && (
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                        {r.keywords.map((k, i) => <span key={i} onClick={() => dig(k)} title="이 키워드로 파고들기 →" style={{ fontSize: 12, fontWeight: 600, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}>#{k}</span>)}
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>키워드 · 눌러서 파고들기</div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {r.keywords.map((k, i) => <span key={i} onClick={() => dig(k)} title="이 키워드로 파고들기 →" style={{ fontSize: 12, fontWeight: 600, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}>#{k}</span>)}
+                        </div>
                       </div>
                     )}
                     {(r.whyQuestions || []).length > 0 && (
-                      <div style={{ display: "grid", gap: 3, marginBottom: 6 }}>
-                        {r.whyQuestions.map((q, i) => (
-                          <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                            <span style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.55 }}>· {q}</span>
-                            <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11.5, color: C.blue, whiteSpace: "nowrap" }}>면접에 추가</span>
-                          </div>
-                        ))}
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>예상 질문 (면접 대비)</div>
+                        <div style={{ display: "grid", gap: 4 }}>
+                          {r.whyQuestions.map((q, i) => (
+                            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                              <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>· {q}</span>
+                              <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11.5, color: C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>면접에 추가</span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {(r.suggestions || []).length > 0 && (
-                      <div style={{ fontSize: 11.5, color: C.faint, lineHeight: 1.7 }}>
-                        <span>다음 조사(눌러서 검색): </span>
+                      <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>
+                        <span style={{ color: C.faint }}>다음 조사(눌러서 검색): </span>
                         {r.suggestions.map((s, i) => (
                           <span key={i}>{i > 0 && " · "}<a href={searchUrl(`${app.company} ${s}`, "google")} target="_blank" rel="noopener noreferrer" style={{ color: C.text, textDecoration: "underline", textDecorationColor: C.line }}>{s}</a></span>
                         ))}
                       </div>
                     )}
-                    <div style={{ marginTop: 6, display: "flex", gap: 12, alignItems: "center" }}>
+
+                    {/* 원문: 기본 접힘 (2줄), 필요할 때만 펼침 */}
+                    {r.summary && (
+                      <div style={{ borderTop: `1px solid ${C.lineSoft}`, paddingTop: 8, marginTop: 2 }}>
+                        <div style={{ fontSize: 12.5, lineHeight: 1.6, color: C.sub, whiteSpace: "pre-wrap",
+                          ...(open ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{r.summary}</div>
+                        {longRaw && <span onClick={() => setOpenRaw(p => ({ ...p, [r.id]: !open }))} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer", display: "inline-block", marginTop: 4 }}>{open ? "원문 접기 ▴" : "원문 더보기 ▾"}</span>}
+                      </div>
+                    )}
+
+                    <div style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                       <span onClick={() => reExtract(r)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{reExtractId === r.id ? "다시 뽑는 중…" : "AI로 다시 뽑기"}</span>
-                      <SearchLinks q={`${app.company} ${(r.keywords || [])[0] || r.summary.slice(0, 20)}`} />
+                      <SearchLinks q={`${app.company} ${(r.keywords || [])[0] || (r.summary || "").slice(0, 20)}`} />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}
