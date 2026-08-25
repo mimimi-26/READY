@@ -4267,14 +4267,18 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
             <Label>채용공고 원문</Label>
             <Textarea rows={20} placeholder="채용공고 원문을 여기에 붙여넣으세요" value={app.jobPostingRaw || ""}
               onChange={e => setApplications(prev => prev.map(a => a.id === app.id ? { ...a, jobPostingRaw: e.target.value } : a))}
-              style={{ fontSize: 13, lineHeight: 1.6 }} />
+              style={{ fontSize: 13, lineHeight: 1.75, background: C.bg }} />
             <JobPostingExtractor experiences={experiences} raw={app.jobPostingRaw || ""}
               onExtracted={(newReqs) => setApplications(prev => prev.map(a => a.id === app.id
                 ? { ...a, requirements: [...a.requirements, ...newReqs] } : a))} />
           </Card>
 
           <Card>
-            <Label>요구 역량 ↔ 경험 매칭 (추천 이유와 부족한 점 필수)</Label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+              <Label>요구 역량 ↔ 내 경험</Label>
+              {app.requirements.length > 0 && <span style={{ fontSize: 11.5, color: C.faint }}>{app.requirements.filter(r => r.matchedExp).length} / {app.requirements.length} 연결됨</span>}
+            </div>
+            <div style={{ fontSize: 12, color: C.faint, marginBottom: 6 }}>각 역량에 맞는 경험을 연결하고, 왜 맞는지·부족한 점을 한 줄로 적으세요.</div>
             {app.requirements.map(r => {
               const exp = experiences.find(e => e.id === r.matchedExp);
               const patchReq = (k, v) => setApplications(prev => prev.map(a => a.id === app.id
@@ -4285,29 +4289,36 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                 addTrash("requirement", r.requirement || "요구 역량 항목", { appId: app.id, item: r });
               };
               return (
-                <div key={r.id} style={{ padding: "11px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <Input value={r.requirement} onChange={e => patchReq("requirement", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0", flex: 1 }} />
-                    <span onClick={removeReq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12, flexShrink: 0, marginTop: 4 }}>✕</span>
+                <div key={r.id} style={{ padding: "12px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
+                  {/* 1행: 요구 역량(주인공) + 중요도 + 삭제 */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Input value={r.requirement} placeholder="요구 역량" onChange={e => patchReq("requirement", e.target.value)} style={{ fontWeight: 600, fontSize: 14, border: "none", padding: "1px 0", flex: 1 }} />
+                    <span title={`중요도 ${r.importance}/5`} style={{ fontSize: 9, letterSpacing: 1.5, flexShrink: 0, whiteSpace: "nowrap", color: C.sub }}>
+                      {"●".repeat(r.importance)}<span style={{ color: C.line }}>{"●".repeat(5 - r.importance)}</span>
+                    </span>
+                    <span onClick={removeReq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12, flexShrink: 0 }}>✕</span>
                   </div>
-                  <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 6 }}>중요도 {"●".repeat(r.importance)}{"○".repeat(5 - r.importance)}</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {/* 2행: 매칭(보조) — 상태 점 + 컴팩트 셀렉트 + 밑줄 입력 */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 7 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: 99, flexShrink: 0, background: exp ? C.green : "transparent", border: exp ? "none" : `1px solid ${C.line}` }} />
                     <select value={r.matchedExp || ""} onChange={e => patchReq("matchedExp", e.target.value || null)}
-                      style={{ fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blue : C.text }}>
-                      <option value="">매칭 없음</option>
+                      style={{ fontFamily: font, fontSize: 12.5, padding: "4px 6px", borderRadius: 8, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.text : C.faint, maxWidth: 170, flexShrink: 0 }}>
+                      <option value="">경험 연결…</option>
                       {experiences.map(e2 => <option key={e2.id} value={e2.id}>{e2.title}</option>)}
                     </select>
-                    <Input value={r.matchReason || ""} placeholder="매칭 이유 / 부족한 점" onChange={e => patchReq("matchReason", e.target.value)}
-                      style={{ fontSize: 12.5, color: C.sub, flex: 1, minWidth: 140 }} />
+                    <Input value={r.matchReason || ""} placeholder={exp ? "왜 맞는지 · 부족한 점" : "메모 (선택)"} onChange={e => patchReq("matchReason", e.target.value)}
+                      style={{ fontSize: 12.5, color: C.sub, flex: 1, minWidth: 100, border: "none", borderBottom: `1px solid ${C.lineSoft}`, borderRadius: 0, padding: "3px 0" }} />
                   </div>
                 </div>
               );
             })}
-            {app.requirements.length === 0 && <div style={{ fontSize: 13, color: C.faint, marginBottom: 10 }}>왼쪽에 채용공고를 붙여넣고 "AI로 요구 역량 추출"을 누르거나, 아래에서 직접 추가하세요.</div>}
-            <Btn small onClick={() => setApplications(prev => prev.map(a => a.id === app.id
-              ? { ...a, requirements: [...a.requirements, { id: "r_" + Date.now(), requirement: "", category: "required_competency", importance: 3, matchedExp: null, matchReason: "", gap: "" }] } : a))}>
-              + 요구 역량 추가
-            </Btn>
+            {app.requirements.length === 0 && <div style={{ fontSize: 13, color: C.faint, margin: "6px 0 10px" }}>왼쪽에 채용공고를 붙여넣고 "AI로 요구 역량 추출"을 누르거나, 아래에서 직접 추가하세요.</div>}
+            <div style={{ marginTop: 12 }}>
+              <Btn small onClick={() => setApplications(prev => prev.map(a => a.id === app.id
+                ? { ...a, requirements: [...a.requirements, { id: "r_" + Date.now(), requirement: "", category: "required_competency", importance: 3, matchedExp: null, matchReason: "", gap: "" }] } : a))}>
+                + 요구 역량 추가
+              </Btn>
+            </div>
           </Card>
         </div>
       )}
