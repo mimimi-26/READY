@@ -4046,6 +4046,39 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
     const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
     return parseAIJson(text);
   };
+  // 웹 검색 그라운딩 호출 — 실제 최신 정보 + 출처. (JSON 깨져도 원문 반환)
+  const callResearch = async (systemPrompt, context) => {
+    let res;
+    try {
+      res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ systemPrompt, context, useSearch: true, messages: [{ role: "user", content: "검색으로 확인해 JSON으로만 답해줘." }] }),
+      });
+    } catch { throw new Error("AI 서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요."); }
+    let json;
+    try { json = await res.json(); } catch { throw new Error("AI 응답을 읽지 못했어요. 다시 시도해주세요."); }
+    if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출에 실패했어요.");
+    const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+    let parsed; try { parsed = parseAIJson(text); } catch { parsed = { _raw: text }; }
+    return { parsed, sources: json._sources || [] };
+  };
+  // B) 직접 리서치 링크 (구글·네이버·DART)
+  const searchUrl = (q, engine) => {
+    const e = encodeURIComponent(q);
+    if (engine === "naver") return `https://search.naver.com/search.naver?query=${e}`;
+    if (engine === "dart") return `https://www.google.com/search?q=${encodeURIComponent("site:dart.fss.or.kr " + q)}`;
+    return `https://www.google.com/search?q=${e}`;
+  };
+  const SearchLinks = ({ q }) => (
+    <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>
+      {[["구글", "google"], ["네이버", "naver"], ["DART", "dart"]].map(([label, eng], i) => (
+        <span key={eng}>
+          {i > 0 && <span style={{ color: C.line }}> · </span>}
+          <a href={searchUrl(q, eng)} target="_blank" rel="noopener noreferrer" style={{ color: C.blue, textDecoration: "none" }}>{label}</a>
+        </span>
+      ))}
+    </span>
+  );
 
   // ── 자료 수집 ──
   const [draft, setDraft] = useState({ category: "vision", source: "", summary: "", purpose: "both" });
@@ -4086,11 +4119,11 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
     if (!kw || digging) return;
     setDigging(kw); setDigErr("");
     try {
-      const r = await callAI(
-        `너는 기업분석 코치다. '${app.company}' 지원자가 '${kw}' 키워드를 더 파고들려 한다. 이 회사·산업 맥락에서 (1) 이 키워드가 왜 중요한지 2~3문장, (2) '왜/어떻게'로 파고들 면접 대비 질문 3~5개, (3) 다음에 검색·조사해볼 구체적 방향·검색어 2~4개. 모르는 건 지어내지 말고 '확인 필요'로. JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
-        `[참고 자료]\n${researchContext() || "(수집한 자료 없음)"}`
+      const { parsed, sources } = await callResearch(
+        `너는 기업분석 코치다. '${app.company}'의 '${kw}'를 Google 검색으로 실제 조사해서 정리하라. (1) 이 키워드가 이 회사·산업에서 왜 중요한지 2~3문장 (검색으로 확인한 사실 기반), (2) '왜/어떻게'로 파고들 면접 대비 질문 3~5개, (3) 다음에 검색·조사해볼 구체적 방향·검색어 2~4개. 확인 안 되면 '확인 필요'로. JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
+        `[사용자가 이미 정리한 자료]\n${researchContext() || "(없음)"}`
       );
-      const digItem = { id: "dig_" + Date.now(), keyword: kw, why: r.why || "", questions: r.questions || [], searches: r.searches || [], at: new Date().toISOString().slice(0, 10) };
+      const digItem = { id: "dig_" + Date.now(), keyword: kw, why: parsed.why || "", questions: parsed.questions || [], searches: parsed.searches || [], raw: parsed._raw || "", sources: sources || [], at: new Date().toISOString().slice(0, 10) };
       setCA(cur => ({ ...cur, digs: [digItem, ...(cur.digs || []).filter(d => d.keyword !== kw)] }));
       setDigInput("");
     } catch (e) { setDigErr(e.message || String(e)); }
@@ -4176,9 +4209,17 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
                       </div>
                     )}
                     {(r.suggestions || []).length > 0 && (
-                      <div style={{ fontSize: 11.5, color: C.faint, lineHeight: 1.6 }}>다음 조사: {r.suggestions.join(" · ")}</div>
+                      <div style={{ fontSize: 11.5, color: C.faint, lineHeight: 1.7 }}>
+                        <span>다음 조사(눌러서 검색): </span>
+                        {r.suggestions.map((s, i) => (
+                          <span key={i}>{i > 0 && " · "}<a href={searchUrl(`${app.company} ${s}`, "google")} target="_blank" rel="noopener noreferrer" style={{ color: C.text, textDecoration: "underline", textDecorationColor: C.line }}>{s}</a></span>
+                        ))}
+                      </div>
                     )}
-                    <div style={{ marginTop: 6 }}><span onClick={() => reExtract(r)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{reExtractId === r.id ? "다시 뽑는 중…" : "AI로 다시 뽑기"}</span></div>
+                    <div style={{ marginTop: 6, display: "flex", gap: 12, alignItems: "center" }}>
+                      <span onClick={() => reExtract(r)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{reExtractId === r.id ? "다시 뽑는 중…" : "AI로 다시 뽑기"}</span>
+                      <SearchLinks q={`${app.company} ${(r.keywords || [])[0] || r.summary.slice(0, 20)}`} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -4207,10 +4248,15 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
           {digs.map(d => (
             <div key={d.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, boxShadow: "0 1px 2px rgba(43,42,40,.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontSize: 14, fontWeight: 800, color: C.green }}>#{d.keyword}</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: C.green }}>#{d.keyword}</span>
+                  <SearchLinks q={`${app.company} ${d.keyword}`} />
+                </div>
                 <span onClick={() => removeDig(d.id)} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
               </div>
-              {d.why && <div style={{ fontSize: 13, lineHeight: 1.65, marginBottom: 10 }}>{d.why}</div>}
+              {d.raw
+                ? <div style={{ fontSize: 13, lineHeight: 1.65, marginBottom: 10, whiteSpace: "pre-wrap" }}>{d.raw}</div>
+                : (d.why && <div style={{ fontSize: 13, lineHeight: 1.65, marginBottom: 10 }}>{d.why}</div>)}
               {(d.questions || []).length > 0 && (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>파고들 질문</div>
@@ -4225,7 +4271,20 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
                 </div>
               )}
               {(d.searches || []).length > 0 && (
-                <div style={{ fontSize: 12, color: C.sub }}><span style={{ color: C.faint }}>다음 조사 방향: </span>{d.searches.join(" · ")}</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: (d.sources || []).length ? 8 : 0 }}>
+                  <span style={{ color: C.faint }}>다음 조사 방향: </span>
+                  {d.searches.map((s, i) => (
+                    <span key={i}>{i > 0 && " · "}<a href={searchUrl(`${app.company} ${s}`, "google")} target="_blank" rel="noopener noreferrer" style={{ color: C.text, textDecoration: "underline", textDecorationColor: C.line }}>{s}</a></span>
+                  ))}
+                </div>
+              )}
+              {(d.sources || []).length > 0 && (
+                <div style={{ fontSize: 11.5, color: C.faint, borderTop: `1px solid ${C.lineSoft}`, paddingTop: 8 }}>
+                  <span>출처: </span>
+                  {d.sources.slice(0, 5).map((s, i) => (
+                    <span key={i}>{i > 0 && " · "}<a href={s.uri} target="_blank" rel="noopener noreferrer" style={{ color: C.blue, textDecoration: "none" }}>{(s.title || s.uri).slice(0, 30)}</a></span>
+                  ))}
+                </div>
               )}
             </div>
           ))}
