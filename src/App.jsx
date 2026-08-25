@@ -15,7 +15,7 @@ import * as XLSX from "xlsx";
 /* ---------- 디자인 토큰 ---------- */
 const C = {
   bg: "#F7F7F5", panel: "#FFFFFF", line: "#E6E4DF", lineSoft: "#EFEDE8",
-  text: "#2B2A28", sub: "#6E6B65", faint: "#9C988F",
+  text: "#26251F", sub: "#63605A", faint: "#8A867D",
   // 약한 강조 — 톤 다운된 그레이 (블루 끼 제거)
   blue: "#6E6B65", blueBg: "#EFEDE8",
   // 강한 강조 — 유일한 포인트 컬러: 채도 낮춘 파스텔 그린
@@ -454,36 +454,52 @@ function TokenText({ text, metrics }) {
 }
 
 /* ---------- 공통 UI (와이어프레임 킷 톤 — 각진 박스, 아웃라인 태그) ---------- */
+// 태그는 채우지 않고 얇은 아웃라인만 — 문서처럼 조용하게
 const Badge = ({ label, color, bg }) => (
-  <span style={{ fontSize: 11, fontWeight: 600, color, background: "transparent", border: `1px solid ${color}55`,
-    padding: "1px 7px", borderRadius: 14, whiteSpace: "nowrap", display: "inline-block", lineHeight: 1.6 }}>{label}</span>
+  <span style={{ fontSize: 11, fontWeight: 600, color, background: "transparent", border: `1px solid ${color}40`,
+    padding: "1px 7px", borderRadius: 6, whiteSpace: "nowrap", display: "inline-block", lineHeight: 1.6 }}>{label}</span>
 );
+// 카드: 은은한 그림자로 층위를 주되 과하지 않게. 클릭 카드만 테두리·그림자로 반응.
 const Card = ({ children, style, onClick }) => (
-  <div onClick={onClick} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18,
-    cursor: onClick ? "pointer" : "default", transition: "border-color .15s", ...style }}
-    onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = C.faint)}
-    onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = C.line)}>
+  <div onClick={onClick} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: 18,
+    boxShadow: "0 1px 2px rgba(43,42,40,.04)",
+    cursor: onClick ? "pointer" : "default", transition: "border-color .15s, box-shadow .15s", ...style }}
+    onMouseEnter={e => { if (onClick) { e.currentTarget.style.borderColor = C.sub; e.currentTarget.style.boxShadow = "0 2px 8px rgba(43,42,40,.07)"; } }}
+    onMouseLeave={e => { if (onClick) { e.currentTarget.style.borderColor = C.line; e.currentTarget.style.boxShadow = "0 1px 2px rgba(43,42,40,.04)"; } }}>
     {children}
   </div>
 );
-const H2 = ({ children }) => <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 14px", color: C.text }}>{children}</h2>;
-const Label = ({ children }) => <div style={{ fontSize: 12, fontWeight: 600, color: C.faint, marginBottom: 4, letterSpacing: ".02em" }}>{children}</div>;
+const H2 = ({ children }) => <h2 style={{ fontSize: 20, fontWeight: 800, margin: "0 0 16px", color: C.text, letterSpacing: "-.01em", lineHeight: 1.3 }}>{children}</h2>;
+const Label = ({ children }) => <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 6 }}>{children}</div>;
+// 주요 버튼 = 진한 잉크(무채색) 솔리드. 초록은 CTA 채움색이 아니라 '진행·현재' 표시로만 쓴다.
 const Btn = ({ children, primary, small, onClick, disabled, style, title }) => (
-  <button onClick={onClick} disabled={disabled} title={title} style={{
-    fontFamily: font, fontSize: small ? 12 : 13.5, fontWeight: 600, padding: small ? "5px 11px" : "9px 16px",
-    borderRadius: 12, border: primary ? `1px solid ${C.blue}` : `1px solid ${C.line}`, cursor: disabled ? "default" : "pointer",
-    background: disabled ? C.lineSoft : primary ? C.blue : C.panel, color: disabled ? C.faint : primary ? "#fff" : C.text, ...style }}>
+  <button onClick={onClick} disabled={disabled} title={title}
+    onMouseEnter={e => { if (!disabled) e.currentTarget.style.background = primary ? "#3A3832" : C.accent; }}
+    onMouseLeave={e => { if (!disabled) e.currentTarget.style.background = primary ? C.text : C.panel; }}
+    style={{
+      fontFamily: font, fontSize: small ? 12 : 13.5, fontWeight: 600, padding: small ? "6px 12px" : "9px 16px",
+      borderRadius: 8, border: primary ? `1px solid ${C.text}` : `1px solid ${C.line}`, cursor: disabled ? "not-allowed" : "pointer",
+      background: disabled ? C.lineSoft : primary ? C.text : C.panel, color: disabled ? C.faint : primary ? "#fff" : C.text,
+      transition: "background .12s, border-color .12s", ...style }}>
     {children}
   </button>
 );
-const Input = props => (
-  <input {...props} style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`,
-    width: "100%", boxSizing: "border-box", background: C.panel, color: C.text, outline: "none", ...props.style }} />
+// 입력 포커스는 은은하게 — 테두리만 진하게, 발광 링 없음
+const Input = ({ style, onFocus, onBlur, ...props }) => (
+  <input {...props}
+    onFocus={e => { e.currentTarget.style.borderColor = C.sub; onFocus && onFocus(e); }}
+    onBlur={e => { e.currentTarget.style.borderColor = C.line; onBlur && onBlur(e); }}
+    style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 10, border: `1px solid ${C.line}`,
+      width: "100%", boxSizing: "border-box", background: C.panel, color: C.text, outline: "none",
+      transition: "border-color .15s", ...style }} />
 );
-const Textarea = props => (
-  <textarea {...props} style={{ fontFamily: font, fontSize: 13.5, lineHeight: 1.6, padding: "10px 12px", borderRadius: 14,
-    border: `1px solid ${C.line}`, width: "100%", boxSizing: "border-box", background: C.panel, color: C.text, outline: "none",
-    resize: "vertical", minHeight: 84, ...props.style }} />
+const Textarea = ({ style, onFocus, onBlur, ...props }) => (
+  <textarea {...props}
+    onFocus={e => { e.currentTarget.style.borderColor = C.sub; onFocus && onFocus(e); }}
+    onBlur={e => { e.currentTarget.style.borderColor = C.line; onBlur && onBlur(e); }}
+    style={{ fontFamily: font, fontSize: 13.5, lineHeight: 1.7, padding: "10px 12px", borderRadius: 10,
+      border: `1px solid ${C.line}`, width: "100%", boxSizing: "border-box", background: C.panel, color: C.text, outline: "none",
+      resize: "vertical", minHeight: 84, transition: "border-color .15s", ...style }} />
 );
 
 /* ---------- 자동 저장 표시 ---------- */
@@ -925,9 +941,12 @@ export default function App() {
                   <span style={{ fontSize: 9, color: C.faint, transform: openGroups[g.label] ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .1s" }}>▾</span>
                 </div>
                 {openGroups[g.label] && g.items.map(([k, l]) => (
-                  <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }} style={{
+                  <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }}
+                    onMouseEnter={e => { if (nav !== k) e.currentTarget.style.background = C.accent; }}
+                    onMouseLeave={e => { if (nav !== k) e.currentTarget.style.background = "transparent"; }}
+                    style={{
                     position: "relative", padding: "8px 10px 8px 16px", fontSize: 13.5, fontWeight: nav === k ? 700 : 500, cursor: "pointer",
-                    color: nav === k ? C.text : C.sub, marginBottom: 1, borderRadius: 10,
+                    color: nav === k ? C.text : C.sub, marginBottom: 1, borderRadius: 10, transition: "background .12s, color .12s",
                     background: nav === k ? C.lineSoft : "transparent" }}>
                     {nav === k && <span style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", width: 3, height: 14, borderRadius: 99, background: C.green }} />}
                     {l}
