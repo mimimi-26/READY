@@ -100,8 +100,8 @@ export default async function handler(req, res) {
 
   // 웹 검색 모드일 땐 검색 결과를 적극 활용하도록, 아니면 참고 데이터 밖 사실은 지어내지 않도록.
   const suffix = useSearch
-    ? "\n\n---\nGoogle 검색으로 실제 최신 정보를 찾아 근거로 삼아라. 확인되지 않은 건 '확인 필요'로 표시하라. 참고로 아래는 사용자가 이미 정리한 데이터다:\n\n"
-    : "\n\n---\n다음은 참고할 실제 데이터다. 이 정보 밖의 사실은 만들어내지 마라.\n\n";
+    ? "\n\n---\nGoogle 검색으로 확인 가능한 사실만 근거로 삼아라. 확인되지 않은 구체 사실(수치·연도·M&A·제품명·인물)은 절대 단정하지 말고 '확인 필요'로 표시하라. 지어내는 것보다 '확인 필요'가 낫다. 아래는 사용자가 이미 정리한 데이터다:\n\n"
+    : "\n\n---\n다음은 참고할 실제 데이터다. 이 정보 밖의 사실은 만들어내지 마라. 확실하지 않으면 '확인 필요'로 표시하라.\n\n";
   const systemPrompt = clientSystemPrompt + suffix + (context || "");
   let result = null;
   let lastError = null;

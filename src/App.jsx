@@ -4089,7 +4089,7 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
   const [draft, setDraft] = useState({ category: "vision", source: "", summary: "", purpose: "both" });
   const [extracting, setExtracting] = useState(false);
   const aiExtract = (summary, category) => callAI(
-    `너는 유통·기업분석 코치다. '${app.company}'(${app.position || ""}) 지원자가 '${CA_CAT_LABEL[category]}' 자료를 조사했다.\n${CA_RULES[category] || ""}\n공통 원칙: 매출 숫자 나열 금지, '왜'에 초점, 없는 사실 지어내지 말 것.\nJSON만: {"keywords":["자소서·면접에 쓸 핵심 키워드 3~6개"],"whyQuestions":["'왜?'로 파고들 면접 대비 질문 2~4개"],"suggestions":["다음에 더 찾아볼 검색어·자료 1~3개"]}`,
+    `너는 유통·기업분석 코치다. '${app.company}'(${app.position || ""}) 지원자가 '${CA_CAT_LABEL[category]}' 자료를 조사했다.\n${CA_RULES[category] || ""}\n【사실만】 오직 아래 [내용]에 실제로 적힌 것만 근거로 삼아라. [내용]에 없는 회사 사실을 추측해 만들어 넣지 마라. 키워드도 [내용]에 나온 표현·개념에서 뽑아라.\n공통 원칙: 매출 숫자 나열 금지, '왜'에 초점.\nJSON만: {"keywords":["자소서·면접에 쓸 핵심 키워드 3~6개"],"whyQuestions":["'왜?'로 파고들 면접 대비 질문 2~4개"],"suggestions":["다음에 더 찾아볼 검색어·자료 1~3개"]}`,
     `[내용]\n${summary}`
   );
   const addResearch = async () => {
@@ -4125,7 +4125,12 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
     setDigging(kw); setDigErr("");
     try {
       const { parsed, sources } = await callResearch(
-        `너는 기업분석 코치다. '${app.company}'의 '${kw}'를 Google 검색으로 실제 조사해서 정리하라. (1) 이 키워드가 이 회사·산업에서 왜 중요한지 2~3문장 (검색으로 확인한 사실 기반), (2) '왜/어떻게'로 파고들 면접 대비 질문 3~5개, (3) 다음에 검색·조사해볼 구체적 방향·검색어 2~4개. 확인 안 되면 '확인 필요'로. JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
+        `너는 기업분석 코치다. '${app.company}'의 '${kw}'를 정리하라.
+【절대 규칙 — 사실만】 확실하지 않은 회사 고유 사실(구체 수치·연도·M&A·제품명·인물·실적)은 절대 단정하지 마라. 확신이 없으면 사실처럼 쓰지 말고 (3)의 '확인할 것'으로 돌려라. 널리 알려진 산업 상식 수준만 단정해도 된다. 지어내는 것보다 "확인 필요"가 낫다.
+(1) why: 이 키워드가 이 회사·산업에서 왜 중요한지 2~3문장 — 확실한 것만. 애매하면 "~로 알려져 있으나 확인 필요" 식으로.
+(2) questions: '왜/어떻게'로 파고들 면접 대비 질문 3~5개.
+(3) searches: 사실 확인을 위해 검색·조사할 구체적 방향·검색어 3~5개 (확인이 필요한 구체 사실을 여기 넣어라).
+JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
         `[사용자가 이미 정리한 자료]\n${researchContext() || "(없음)"}`
       );
       const digItem = { id: "dig_" + Date.now(), keyword: kw, why: parsed.why || "", questions: parsed.questions || [], searches: parsed.searches || [], raw: parsed._raw || "", sources: sources || [], at: new Date().toISOString().slice(0, 10) };
@@ -4148,7 +4153,7 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
       let r;
       try {
         r = await callAI(
-          `너는 유통·기업 취업 컨설턴트다. 아래 자료(기업분석)+지원자 경험·역량+공고 요구역량을 종합해 자소서·면접 전략을 짜라. 원칙: 매출 숫자 나열 금지·'왜' 중심, 키워드 중심, 반드시 '이 사람 실제 경험'과 연결, 없는 사실 금지. JSON만: {"coreKeywords":["핵심 키워드 4~6"],"microStrategy":"미시 전략 2~3문장","macroStrategy":"거시 전략 2~3문장","essayFrame":{"현황":"","분석":"","나의역량경험":"","기여포부":""},"cautions":"쓰면 안 되는 것 한 줄"}`,
+          `너는 유통·기업 취업 컨설턴트다. 아래 자료(기업분석)+지원자 경험·역량+공고 요구역량을 종합해 자소서·면접 전략을 짜라. 원칙: 매출 숫자 나열 금지·'왜' 중심, 키워드 중심, 반드시 '이 사람 실제 경험'과 연결. 【사실만】 회사 관련 사실·수치·사업 내용은 위 '기업분석 자료'에 있는 것만 사용하고, 자료에 없는 회사 사실을 지어내지 마라. essayFrame의 '현황'도 자료에 근거해야 한다. JSON만: {"coreKeywords":["핵심 키워드 4~6"],"microStrategy":"미시 전략 2~3문장","macroStrategy":"거시 전략 2~3문장","essayFrame":{"현황":"","분석":"","나의역량경험":"","기여포부":""},"cautions":"쓰면 안 되는 것 한 줄"}`,
           `[기업분석 자료]\n${researchText}\n\n[내 경험·역량]\n${expText}\n\n[공고 요구역량]\n${reqText}`
         );
       } catch (e) { setStratErr(e.message || String(e)); setStratLoading(false); return; }
@@ -4234,7 +4239,7 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
       </CASection>
 
       {/* 2. 키워드 파고들기 */}
-      <CASection n="2" title="키워드 파고들기" desc="중요하다고 느낀 키워드를 눌러(또는 직접 입력해) 더 깊이 파세요. '왜 중요한지 + 파고들 질문 + 다음 조사 방향'을 만들어줍니다.">
+      <CASection n="2" title="키워드 파고들기" desc="중요하다고 느낀 키워드를 눌러(또는 직접 입력해) 더 깊이 파세요. AI는 확실하지 않은 구체 사실은 단정하지 않고 '확인 필요'로 돌립니다 — 옆 구글·네이버·DART 링크로 교차 확인하세요.">
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <Input placeholder="파고들 키워드 입력 (예: O2O, 옴니채널, 상생)" value={digInput} onChange={e => setDigInput(e.target.value)} onKeyDown={e => e.key === "Enter" && dig(digInput)} />
           <Btn primary small onClick={() => dig(digInput)} disabled={!!digging || !digInput.trim()} style={{ flexShrink: 0 }}>{digging ? "파고드는 중…" : "파고들기"}</Btn>
