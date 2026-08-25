@@ -4297,6 +4297,27 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
   const sendToInterview = (q) => setApplications(prev => prev.map(a => a.id === app.id
     ? { ...a, interviews: [...(a.interviews || []), { id: "iq_" + Date.now() + Math.random().toString(36).slice(2, 4), question: q, category: "기업분석", selectedExperienceId: null, practiceCount: 0, confidence: null, followUps: [] }] } : a));
 
+  // ── 자료 편집: 키워드·질문 CRUD ──
+  const [editingRaw, setEditingRaw] = useState(null); // 원문 편집 중인 자료 id
+  const setKeywords = (rid, arr) => patchItem(rid, "keywords", arr);
+  const setWhy = (rid, arr) => patchItem(rid, "whyQuestions", arr);
+
+  // ── 문답 (혼자 기업 Q&A) ──
+  const qna = ca.qna || [];
+  const [qInput, setQInput] = useState("");
+  const addQna = (question) => {
+    const q = (question || "").trim();
+    if (!q) return;
+    setCA(cur => {
+      const list = cur.qna || [];
+      if (list.some(x => x.question === q)) return cur; // 중복 방지
+      return { ...cur, qna: [...list, { id: "qa_" + Date.now() + Math.random().toString(36).slice(2, 4), question: q, answer: "" }] };
+    });
+  };
+  const patchQna = (id, k, v) => setCA(cur => ({ ...cur, qna: (cur.qna || []).map(x => x.id === id ? { ...x, [k]: v } : x) }));
+  const removeQna = (id) => setCA(cur => ({ ...cur, qna: (cur.qna || []).filter(x => x.id !== id) }));
+  const inQna = (q) => qna.some(x => x.question === q);
+
   // ── 키워드 파고들기 ──
   const [digInput, setDigInput] = useState("");
   const [digging, setDigging] = useState("");
@@ -4367,7 +4388,7 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
   const grouped = CA_CATEGORIES.map(c => ({ ...c, items: (ca.research || []).filter(r => r.category === c.id) })).filter(g => g.items.length);
 
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 1040 }}>
       <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 12px", marginBottom: 24, lineHeight: 1.6 }}>
         숫자 나열은 분석이 아니에요. <b>키워드를 잡고 '왜?'로 파고드는 것</b>이 핵심 — 자료를 모으면 AI가 키워드·질문을 뽑고, 원하는 키워드를 눌러 더 깊이 팔 수 있어요.
       </div>
@@ -4391,9 +4412,10 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
           {grouped.map(g => (
             <div key={g.id}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${C.lineSoft}` }}>{g.label} <span style={{ color: C.faint, fontWeight: 500 }}>· {g.items.length}</span></div>
-              <div style={{ display: "grid", gap: 16 }}>
+              <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
                 {g.items.map(r => {
                   const open = !!openRaw[r.id];
+                  const editing = editingRaw === r.id;
                   const longRaw = (r.summary || "").length > 80;
                   return (
                   <div key={r.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, boxShadow: "0 1px 2px rgba(43,42,40,.04)" }}>
@@ -4408,28 +4430,36 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
                       <span onClick={() => removeItem(r.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12, flexShrink: 0 }}>✕</span>
                     </div>
 
-                    {/* 추출 결과가 주인공 */}
-                    {(r.keywords || []).length > 0 && (
-                      <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>키워드 · 눌러서 파고들기</div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {r.keywords.map((k, i) => <span key={i} onClick={() => dig(k)} title="이 키워드로 파고들기 →" style={{ fontSize: 12, fontWeight: 600, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}>#{k}</span>)}
-                        </div>
+                    {/* 추출 결과가 주인공 — 편집 가능 */}
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>키워드 · 눌러서 파고들기 (칩 옆 ×로 삭제)</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                        {(r.keywords || []).map((k, i) => (
+                          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "2px 6px 2px 8px" }}>
+                            <span onClick={() => dig(k)} title="이 키워드로 파고들기 →" style={{ cursor: "pointer" }}>#{k}</span>
+                            <span onClick={() => setKeywords(r.id, r.keywords.filter((_, j) => j !== i))} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 11 }}>×</span>
+                          </span>
+                        ))}
+                        <input placeholder="+ 키워드" onKeyDown={e => { const v = e.target.value.trim(); if (e.key === "Enter" && v) { setKeywords(r.id, [...(r.keywords || []), v]); e.target.value = ""; } }}
+                          style={{ fontFamily: font, fontSize: 12, border: "none", outline: "none", width: 70, background: "transparent", color: C.sub }} />
                       </div>
-                    )}
-                    {(r.whyQuestions || []).length > 0 && (
-                      <div style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>예상 질문 (면접 대비)</div>
-                        <div style={{ display: "grid", gap: 4 }}>
-                          {r.whyQuestions.map((q, i) => (
-                            <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                              <span style={{ fontSize: 12.5, color: C.text, lineHeight: 1.55 }}>· {q}</span>
-                              <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11.5, color: C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>면접에 추가</span>
-                            </div>
-                          ))}
-                        </div>
+                    </div>
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 11, color: C.faint, marginBottom: 4 }}>예상 질문 (수정 가능)</div>
+                      <div style={{ display: "grid", gap: 4 }}>
+                        {(r.whyQuestions || []).map((q, i) => (
+                          <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <span style={{ color: C.faint, fontSize: 12, flexShrink: 0 }}>·</span>
+                            <input value={q} onChange={e => setWhy(r.id, r.whyQuestions.map((x, j) => j === i ? e.target.value : x))}
+                              style={{ fontFamily: font, flex: 1, minWidth: 0, fontSize: 12.5, border: "none", outline: "none", background: "transparent", color: C.text }} />
+                            <span onClick={() => addQna(q)} title="내가 답할 문답으로" style={{ cursor: "pointer", fontSize: 11, color: inQna(q) ? C.green : C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>{inQna(q) ? "문답✓" : "문답에 추가"}</span>
+                            <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11, color: C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>면접에</span>
+                            <span onClick={() => setWhy(r.id, r.whyQuestions.filter((_, j) => j !== i))} title="삭제" style={{ cursor: "pointer", fontSize: 11, color: C.faint, flexShrink: 0 }}>✕</span>
+                          </div>
+                        ))}
+                        <span onClick={() => setWhy(r.id, [...(r.whyQuestions || []), "새 질문"])} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer", marginTop: 2 }}>+ 질문 추가</span>
                       </div>
-                    )}
+                    </div>
                     {(r.suggestions || []).length > 0 && (
                       <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.7, marginBottom: 10 }}>
                         <span style={{ color: C.faint }}>다음 조사(눌러서 검색): </span>
@@ -4439,14 +4469,19 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
                       </div>
                     )}
 
-                    {/* 원문: 기본 접힘 (2줄), 필요할 때만 펼침 */}
-                    {r.summary && (
-                      <div style={{ borderTop: `1px solid ${C.lineSoft}`, paddingTop: 8, marginTop: 2 }}>
+                    {/* 원문: 기본 접힘 (2줄) · 수정 가능 */}
+                    <div style={{ borderTop: `1px solid ${C.lineSoft}`, paddingTop: 8, marginTop: 2 }}>
+                      {editing ? (
+                        <Textarea value={r.summary} onChange={e => patchItem(r.id, "summary", e.target.value)} rows={5} style={{ fontSize: 12.5 }} />
+                      ) : (
                         <div style={{ fontSize: 12.5, lineHeight: 1.6, color: C.sub, whiteSpace: "pre-wrap",
-                          ...(open ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{r.summary}</div>
-                        {longRaw && <span onClick={() => setOpenRaw(p => ({ ...p, [r.id]: !open }))} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer", display: "inline-block", marginTop: 4 }}>{open ? "원문 접기 ▴" : "원문 더보기 ▾"}</span>}
+                          ...(open ? {} : { display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{r.summary || "(원문 없음)"}</div>
+                      )}
+                      <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                        {!editing && longRaw && <span onClick={() => setOpenRaw(p => ({ ...p, [r.id]: !open }))} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{open ? "원문 접기 ▴" : "원문 더보기 ▾"}</span>}
+                        <span onClick={() => setEditingRaw(editing ? null : r.id)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{editing ? "수정 완료" : "원문 수정"}</span>
                       </div>
-                    )}
+                    </div>
 
                     <div style={{ marginTop: 10, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
                       <span onClick={() => reExtract(r)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{reExtractId === r.id ? "다시 뽑는 중…" : "AI로 다시 뽑기"}</span>
@@ -4477,7 +4512,7 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
         )}
         {digErr && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{digErr}</div>}
         {digs.length === 0 && <div style={{ fontSize: 12.5, color: C.faint }}>아직 파고든 키워드가 없어요.</div>}
-        <div style={{ display: "grid", gap: 10 }}>
+        <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
           {digs.map(d => (
             <div key={d.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, boxShadow: "0 1px 2px rgba(43,42,40,.04)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
@@ -4495,9 +4530,10 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
                   <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>파고들 질문</div>
                   <div style={{ display: "grid", gap: 3 }}>
                     {d.questions.map((q, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                        <span style={{ fontSize: 12.5, lineHeight: 1.55 }}>· {q}</span>
-                        <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11.5, color: C.blue, whiteSpace: "nowrap" }}>면접에 추가</span>
+                      <div key={i} style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+                        <span style={{ fontSize: 12.5, lineHeight: 1.55, flex: 1 }}>· {q}</span>
+                        <span onClick={() => addQna(q)} title="내가 답할 문답으로" style={{ cursor: "pointer", fontSize: 11, color: inQna(q) ? C.green : C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>{inQna(q) ? "문답✓" : "문답에 추가"}</span>
+                        <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11, color: C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>면접에</span>
                       </div>
                     ))}
                   </div>
@@ -4524,11 +4560,36 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
         </div>
       </CASection>
 
-      {/* 3. 자소서 전 필수 체크 */}
-      <CASection n="3" title="자소서 전 필수 체크" desc="이 5가지에 답할 수 있으면 그 회사는 충분히 이해한 거예요. 수집한 자료로 AI가 초안을 잡아주면, 부족한 건 위 검색으로 채우세요.">
+      {/* 3. 문답 (혼자 기업 Q&A) */}
+      <CASection n="3" title="문답 (혼자 기업 Q&A)" desc="예상 질문을 '문답에 추가'하거나 직접 질문을 만들어, 내 말로 답변을 써보며 기업을 이해하세요.">
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <Input placeholder="직접 질문 만들기 (예: 이 회사가 경쟁사와 다른 점은?)" value={qInput} onChange={e => setQInput(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && qInput.trim()) { addQna(qInput); setQInput(""); } }} />
+          <Btn small onClick={() => { if (qInput.trim()) { addQna(qInput); setQInput(""); } }} disabled={!qInput.trim()} style={{ flexShrink: 0 }}>질문 추가</Btn>
+        </div>
+        {qna.length === 0
+          ? <div style={{ fontSize: 12.5, color: C.faint }}>아직 문답이 없어요. 위 예상 질문의 "문답에 추가"를 누르거나 직접 질문을 만들어보세요.</div>
+          : <div style={{ display: "grid", gap: 10, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
+              {qna.map(x => (
+                <div key={x.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, boxShadow: "0 1px 2px rgba(43,42,40,.04)" }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", marginBottom: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: C.green, flexShrink: 0 }}>Q</span>
+                    <input value={x.question} onChange={e => patchQna(x.id, "question", e.target.value)}
+                      style={{ fontFamily: font, flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700, border: "none", outline: "none", background: "transparent", color: C.text }} />
+                    <span onClick={() => sendToInterview(x.question)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11, color: C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>면접에</span>
+                    <span onClick={() => removeQna(x.id)} title="삭제" style={{ cursor: "pointer", fontSize: 11, color: C.faint, flexShrink: 0 }}>✕</span>
+                  </div>
+                  <Textarea rows={3} placeholder="내 답변을 써보세요…" value={x.answer} onChange={e => patchQna(x.id, "answer", e.target.value)} style={{ fontSize: 12.5 }} />
+                  <div style={{ fontSize: 11, color: C.faint, textAlign: "right", marginTop: 4 }}>{(x.answer || "").length}자</div>
+                </div>
+              ))}
+            </div>}
+      </CASection>
+
+      {/* 4. 자소서 전 필수 체크 */}
+      <CASection n="4" title="자소서 전 필수 체크" desc="이 5가지에 답할 수 있으면 그 회사는 충분히 이해한 거예요. 수집한 자료로 AI가 초안을 잡아주면, 부족한 건 위 검색으로 채우세요.">
         <Btn primary small onClick={runEssentials} disabled={essLoading}>{essLoading ? "정리 중…" : ca.essentials ? "다시 정리" : "5가지 답 정리해보기"}</Btn>
         {essErr && <div style={{ fontSize: 12, color: C.red, marginTop: 8 }}>{essErr}</div>}
-        <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+        <div style={{ marginTop: 12, display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
           {CA_ESSENTIAL_QS.map((q, i) => {
             const ans = ca.essentials?.answers?.[i];
             return (
@@ -4544,8 +4605,8 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
         {ca.essentials?.at && <div style={{ fontSize: 11, color: C.faint, textAlign: "right", marginTop: 6 }}>{ca.essentials.at} 기준 · 구체 사실은 교차 확인</div>}
       </CASection>
 
-      {/* 4. 전략 브리핑 */}
-      <CASection n="4" title="전략 브리핑" desc="모은 자료 + 내 경험을 묶어 핵심 키워드·적용 흐름·자소서 골격을 만들어요.">
+      {/* 5. 전략 브리핑 */}
+      <CASection n="5" title="전략 브리핑" desc="모은 자료 + 내 경험을 묶어 핵심 키워드·적용 흐름·자소서 골격을 만들어요.">
         <Btn primary small onClick={runStrategy} disabled={stratLoading}>{stratLoading ? "전략 짜는 중…" : st ? "다시 만들기" : "AI 전략·자소서 골격 만들기"}</Btn>
         {stratErr && <div style={{ fontSize: 12, color: C.red, marginTop: 8 }}>{stratErr}</div>}
         {st && (
