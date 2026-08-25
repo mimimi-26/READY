@@ -4412,7 +4412,7 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
           {grouped.map(g => (
             <div key={g.id}>
               <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${C.lineSoft}` }}>{g.label} <span style={{ color: C.faint, fontWeight: 500 }}>· {g.items.length}</span></div>
-              <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
+              <div style={{ display: "grid", gap: 16 }}>
                 {g.items.map(r => {
                   const open = !!openRaw[r.id];
                   const editing = editingRaw === r.id;
@@ -4642,6 +4642,108 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
   );
 }
 
+/* ---------- 면접 질문 카드: 답변 키워드·스크립트 정리 + 연습 ---------- */
+function InterviewCard({ iq, patchIq, removeIq, experiences, interviewCategories, addInterviewCategory }) {
+  const exp = experiences.find(e => e.id === iq.selectedExperienceId);
+  const keywords = iq.answerKeywords || [];
+  const followUps = iq.followUps || [];
+  const [practice, setPractice] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [secs, setSecs] = useState(0);
+  const [peek, setPeek] = useState(false);
+  useEffect(() => {
+    if (!practice || !running) return;
+    const t = setInterval(() => setSecs(s => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [practice, running]);
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  const startPractice = () => { setPractice(true); setRunning(true); setSecs(0); setPeek(false); };
+  const endPractice = () => { patchIq("practiceCount", (iq.practiceCount || 0) + 1); setPractice(false); setRunning(false); setSecs(0); };
+
+  return (
+    <Card>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 10 }}>
+        <Input value={iq.question} placeholder="면접 질문" onChange={e => patchIq("question", e.target.value)} style={{ fontWeight: 700, fontSize: 14, border: "none", padding: "2px 0", flex: 1 }} />
+        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+          <CategorySelect value={iq.category} options={interviewCategories} placeholder="카테고리 없음" onAddOption={addInterviewCategory} onChange={(v) => patchIq("category", v)} />
+          <span onClick={removeIq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+        </div>
+      </div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12.5, color: C.sub }}>사용 경험</span>
+        <select value={iq.selectedExperienceId || ""} onChange={e => patchIq("selectedExperienceId", e.target.value || null)}
+          style={{ fontFamily: font, fontSize: 12.5, padding: "5px 8px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.text : C.faint }}>
+          <option value="">선택 안 함</option>
+          {experiences.map(e2 => <option key={e2.id} value={e2.id}>{e2.title}</option>)}
+        </select>
+        <span style={{ fontSize: 12, color: C.faint }}>연습 {iq.practiceCount || 0}회</span>
+      </div>
+
+      {/* 답변 키워드 */}
+      <Label>답변 키워드 <span style={{ color: C.faint, fontWeight: 400 }}>· 연습 땐 이것만 보고 말하기</span></Label>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 12 }}>
+        {keywords.map((k, i) => (
+          <span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, fontWeight: 600, color: C.text, background: C.lineSoft, borderRadius: 6, padding: "3px 8px" }}>
+            {k}
+            <span onClick={() => patchIq("answerKeywords", keywords.filter((_, j) => j !== i))} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 11 }}>×</span>
+          </span>
+        ))}
+        <input placeholder="+ 키워드 (엔터)" onKeyDown={e => { const v = e.target.value.trim(); if (e.key === "Enter" && v) { patchIq("answerKeywords", [...keywords, v]); e.target.value = ""; } }}
+          style={{ fontFamily: font, fontSize: 12.5, border: "none", outline: "none", width: 110, background: "transparent", color: C.sub }} />
+      </div>
+
+      {/* 답변 스크립트 / 연습 모드 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Label>답변 스크립트</Label>
+        {!practice
+          ? <span onClick={startPractice} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>키워드로 연습 시작 →</span>
+          : <span onClick={endPractice} style={{ fontSize: 11.5, color: C.green, cursor: "pointer", fontWeight: 700 }}>연습 종료 · 1회 기록</span>}
+      </div>
+      {!practice ? (
+        <Textarea rows={5} placeholder="예상 답변 스크립트를 정리해두세요. STAR(상황·과제·행동·결과) 순으로." value={iq.script || ""} onChange={e => patchIq("script", e.target.value)} style={{ fontSize: 13 }} />
+      ) : (
+        <div style={{ border: `1px solid ${C.green}55`, background: C.greenBg, borderRadius: 12, padding: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <span style={{ fontSize: 20, fontWeight: 800, fontVariantNumeric: "tabular-nums", color: C.text }}>{fmt(secs)}</span>
+            <span onClick={() => setRunning(r => !r)} style={{ fontSize: 12, color: C.sub, cursor: "pointer" }}>{running ? "⏸ 일시정지" : "▶ 계속"}</span>
+          </div>
+          <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}>아래 키워드만 보고 소리 내어 답해보세요.</div>
+          {keywords.length > 0
+            ? <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{keywords.map((k, i) => <span key={i} style={{ fontSize: 13, fontWeight: 700, color: C.text, background: C.panel, borderRadius: 6, padding: "4px 10px" }}>{k}</span>)}</div>
+            : <div style={{ fontSize: 12.5, color: C.faint }}>먼저 답변 키워드를 정리해두면 좋아요.</div>}
+          <div style={{ marginTop: 10 }}>
+            <span onClick={() => setPeek(p => !p)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{peek ? "스크립트 가리기" : "막히면 스크립트 살짝 보기"}</span>
+            {peek && <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6, whiteSpace: "pre-wrap", marginTop: 6 }}>{iq.script || "(스크립트 없음)"}</div>}
+          </div>
+        </div>
+      )}
+
+      {/* 자신감 */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+        <span style={{ fontSize: 12, color: C.sub }}>자신감</span>
+        {[1, 2, 3, 4, 5].map(n => (
+          <span key={n} onClick={() => patchIq("confidence", n)} title={`${n}/5`} style={{ cursor: "pointer", width: 20, height: 20, borderRadius: 99, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700,
+            background: (iq.confidence || 0) >= n ? C.green : C.lineSoft, color: (iq.confidence || 0) >= n ? "#fff" : C.faint }}>{n}</span>
+        ))}
+      </div>
+
+      {/* 예상 꼬리질문 */}
+      <div style={{ marginTop: 12 }}>
+        <Label>예상 꼬리질문</Label>
+        {followUps.map((f, i) => (
+          <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", padding: "2px 0" }}>
+            <span style={{ color: C.faint, fontSize: 12 }}>·</span>
+            <input value={f} onChange={e => patchIq("followUps", followUps.map((x, j) => j === i ? e.target.value : x))}
+              style={{ fontFamily: font, flex: 1, minWidth: 0, fontSize: 12.5, border: "none", outline: "none", background: "transparent", color: C.text }} />
+            <span onClick={() => patchIq("followUps", followUps.filter((_, fi) => fi !== i))} style={{ cursor: "pointer", color: C.faint, fontSize: 11 }}>✕</span>
+          </div>
+        ))}
+        <span onClick={() => patchIq("followUps", [...followUps, "새 꼬리질문"])} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>+ 꼬리질문 추가</span>
+      </div>
+    </Card>
+  );
+}
+
 function ApplicationDetail({ app, setApplications, experiences, outputs, metrics, onBack, onOpenExp, addTrash, interviewCategories, addInterviewCategory }) {
   const [tab, setTab] = useState("공고 분석");
   const [chatEssayId, setChatEssayId] = useState(null);
@@ -4851,7 +4953,6 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
       {tab === "면접" && (
         <div style={{ display: "grid", gap: 12 }}>
           {app.interviews.map(iq => {
-            const exp = experiences.find(e => e.id === iq.selectedExperienceId);
             const patchIq = (k, v) => setApplications(prev => prev.map(a => a.id === app.id
               ? { ...a, interviews: a.interviews.map(x => x.id === iq.id ? { ...x, [k]: v } : x) } : a));
             const removeIq = () => {
@@ -4859,47 +4960,11 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                 ? { ...a, interviews: a.interviews.filter(x => x.id !== iq.id) } : a));
               addTrash("interview", iq.question || "면접 질문", { appId: app.id, item: iq });
             };
-            return (
-              <Card key={iq.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 10 }}>
-                  <Input value={iq.question} onChange={e => patchIq("question", e.target.value)} style={{ fontWeight: 700, fontSize: 14, border: "none", padding: "2px 0", flex: 1 }} />
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                    <CategorySelect value={iq.category} options={interviewCategories} placeholder="카테고리 없음" onAddOption={addInterviewCategory} onChange={(v) => patchIq("category", v)} />
-                    <span onClick={removeIq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, color: C.sub }}>사용 경험:</span>
-                  <select value={iq.selectedExperienceId || ""} onChange={e => patchIq("selectedExperienceId", e.target.value || null)}
-                    style={{ fontFamily: font, fontSize: 13, padding: "5px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blue : C.text }}>
-                    <option value="">선택 안 함</option>
-                    {experiences.map(e2 => <option key={e2.id} value={e2.id}>{e2.title}</option>)}
-                  </select>
-                  {exp && <span style={{ fontSize: 12.5, color: C.sub }}>연습 {iq.practiceCount}회 · 자신감 {iq.confidence ?? "—"}/5</span>}
-                </div>
-                {exp ? (
-                  <>
-                    <Label>예상 꼬리질문</Label>
-                    {iq.followUps.map((f, i) => (
-                      <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", padding: "3px 0" }}>
-                        <span style={{ fontSize: 13, color: C.sub, flex: 1 }}>· {f}</span>
-                        <span onClick={() => patchIq("followUps", iq.followUps.filter((_, fi) => fi !== i))} style={{ cursor: "pointer", color: C.faint, fontSize: 11 }}>✕</span>
-                      </div>
-                    ))}
-                    <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
-                      <Btn small primary disabled title="준비 중인 기능입니다">60초 연습 시작</Btn><Btn small disabled title="준비 중인 기능입니다">키워드 가리기</Btn>
-                    </div>
-                  </>
-                ) : (
-                  <div style={{ fontSize: 13, color: C.orange, background: C.accent, border: `1px solid ${C.line}`, padding: "10px 12px", borderRadius: 14 }}>
-                    사용할 경험이 선택되지 않았습니다.
-                  </div>
-                )}
-              </Card>
-            );
+            return <InterviewCard key={iq.id} iq={iq} patchIq={patchIq} removeIq={removeIq} experiences={experiences} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />;
           })}
+          {app.interviews.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>등록된 면접 질문이 없습니다. 아래에서 추가하거나, 기업분석 탭의 질문을 "면접에 추가"하세요.</div>}
           <Btn small onClick={() => setApplications(prev => prev.map(a => a.id === app.id
-            ? { ...a, interviews: [...a.interviews, { id: "iq_" + Date.now(), question: "", category: "achievement", selectedExperienceId: null, practiceCount: 0, confidence: null, followUps: [] }] } : a))}>
+            ? { ...a, interviews: [...a.interviews, { id: "iq_" + Date.now(), question: "", category: "achievement", selectedExperienceId: null, practiceCount: 0, confidence: null, followUps: [], answerKeywords: [], script: "" }] } : a))}>
             + 질문 추가
           </Btn>
         </div>
