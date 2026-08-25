@@ -4046,21 +4046,26 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
     const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
     return parseAIJson(text);
   };
-  // 웹 검색 그라운딩 호출 — 실제 최신 정보 + 출처. (JSON 깨져도 원문 반환)
+  // 웹 검색 그라운딩 호출 — 실제 정보 + 출처. 빈 응답(간헐적)이면 1회 재시도해 항상 답이 나오게.
   const callResearch = async (systemPrompt, context) => {
-    let res;
-    try {
-      res = await fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ systemPrompt, context, useSearch: true, messages: [{ role: "user", content: "검색으로 확인해 JSON으로만 답해줘." }] }),
-      });
-    } catch { throw new Error("AI 서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요."); }
-    let json;
-    try { json = await res.json(); } catch { throw new Error("AI 응답을 읽지 못했어요. 다시 시도해주세요."); }
-    if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출에 실패했어요.");
-    const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-    let parsed; try { parsed = parseAIJson(text); } catch { parsed = { _raw: text }; }
-    return { parsed, sources: json._sources || [] };
+    const once = async () => {
+      let res;
+      try {
+        res = await fetch("/api/chat", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ systemPrompt, context, useSearch: true, messages: [{ role: "user", content: "검색으로 확인해 JSON으로만 답해줘." }] }),
+        });
+      } catch { throw new Error("연결 실패"); }
+      let json;
+      try { json = await res.json(); } catch { throw new Error("응답 파싱 실패"); }
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출 실패");
+      const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+      if (!text.trim()) throw new Error("빈 응답");
+      let parsed; try { parsed = parseAIJson(text); } catch { parsed = { _raw: text }; }
+      return { parsed, sources: json._sources || [] };
+    };
+    try { return await once(); }
+    catch { await new Promise(r => setTimeout(r, 600)); return once(); }  // 간헐적 빈 응답 대비 1회 재시도
   };
   // B) 직접 리서치 링크 (구글·네이버·DART)
   const searchUrl = (q, engine) => {
