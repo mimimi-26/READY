@@ -337,6 +337,30 @@ function localConsistencyIssues(e, metrics = []) {
   return issues;
 }
 
+// AI가 돌려준 텍스트에서 JSON을 최대한 견고하게 파싱 (코드펜스·앞뒤 잡텍스트·트레일링 콤마·객체 사이 누락 콤마·스마트따옴표 보정)
+function parseAIJson(text) {
+  if (!text || !text.trim()) throw new Error("AI 응답이 비어 있습니다.");
+  let t = text.replace(/```json|```/gi, "").trim();
+  const objStart = t.indexOf("{");
+  const arrStart = t.indexOf("[");
+  let start = objStart;
+  if (arrStart >= 0 && (objStart < 0 || arrStart < objStart)) start = arrStart;
+  const end = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
+  if (start >= 0 && end > start) t = t.slice(start, end + 1);
+  const repairs = [
+    (x) => x,
+    (x) => x.replace(/,\s*([}\]])/g, "$1"),                         // 트레일링 콤마 제거
+    (x) => x.replace(/}\s*{/g, "},{").replace(/]\s*\[/g, "],["),    // 객체·배열 사이 누락 콤마
+    (x) => x.replace(/[“”]/g, '"').replace(/[‘’]/g, "'"), // 스마트 따옴표 정규화
+  ];
+  let cur = t, lastErr;
+  for (const fix of repairs) {
+    cur = fix(cur);
+    try { return JSON.parse(cur); } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error("JSON 파싱 실패");
+}
+
 const STATUS_LABEL = { draft: "초기 메모", analyzing: "분석 중", needs_revision: "보완 필요", complete: "분석 완료" };
 const STATUS_COLOR = { draft: [C.sub, C.lineSoft], analyzing: [C.blue, C.blueBg], needs_revision: [C.orange, C.orangeBg], complete: [C.green, C.greenBg] };
 const CONTRIB_LABEL = { participated: "참여", responsible: "담당", led: "주도", proposed_and_executed: "제안 후 실행", full_ownership: "전체 책임" };
@@ -665,7 +689,7 @@ async function baCallAI(endpoint, body) {
   }
   const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
   if (!text) throw new Error("응답에 내용이 없습니다.");
-  return JSON.parse(text.replace(/```json|```/g, "").trim());
+  return parseAIJson(text);
 }
 
 function usePersisted(key, initialValue) {
@@ -1841,7 +1865,7 @@ JSON만 응답 (마크다운 백틱 없이):
         throw new Error(data?.error?.message || (typeof data?.error === "string" ? data.error : null) || `API 오류 (HTTP ${res.status}) — 응답 원문: ${JSON.stringify(data).slice(0, 300)}`);
       }
       const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      const parsed = parseAIJson(text);
       setReviewIssues(parsed.issues || []);
       setReviewOverall(parsed.overall || "");
     } catch (e) {
@@ -2906,7 +2930,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
 
       let parsed;
       try {
-        parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+        parsed = parseAIJson(text);
       } catch (e) {
         throw new Error("AI 응답을 JSON으로 해석하지 못했습니다: " + e.message + "\n\n응답 원문 일부: " + text.slice(0, 300));
       }
@@ -3682,7 +3706,7 @@ function JobPostingExtractor({ experiences, raw, onExtracted }) {
           || `API 오류 (HTTP ${res.status}) — 응답 원문: ${JSON.stringify(data).slice(0, 300)}`);
       }
       const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      const parsed = parseAIJson(text);
       const newReqs = (parsed.requirements || []).map(r => {
         // 역량 키워드 겹침으로 매칭 경험 자동 제안 — 최종 확인은 사람이
         const match = experiences.find(e => (e.competencies || []).some(c => r.requirement.includes(c) || c.includes(r.requirement)));
@@ -4612,7 +4636,9 @@ function BrandingStrategyBriefing({ profileItems = [], experiences = [], metrics
       const json = await res.json();
       if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출 실패");
       const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      let parsed;
+      try { parsed = parseAIJson(text); }
+      catch { parsed = { _raw: text }; }   // JSON이 깨져도 원문이라도 보여준다
       parsed._at = new Date().toISOString().slice(0, 10);
       setData(parsed);
       try { window.localStorage.setItem(KEY, JSON.stringify(parsed)); } catch {}
@@ -4638,6 +4664,9 @@ function BrandingStrategyBriefing({ profileItems = [], experiences = [], metrics
       {error && <div style={{ fontSize: 12, color: C.red, marginTop: 8, whiteSpace: "pre-wrap" }}>{error}</div>}
       {data && (
         <div style={{ marginTop: 12, display: "grid", gap: 12 }}>
+          {data._raw && (
+            <div style={{ fontSize: 13, lineHeight: 1.65, whiteSpace: "pre-wrap", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px" }}>{data._raw}</div>
+          )}
           {data.persona && (
             <div>
               <Label>어떤 사람인가</Label>

@@ -57,6 +57,7 @@ async function callGemini(apiKey, systemPrompt, messages) {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemPrompt }] },
         contents,
+        generationConfig: { maxOutputTokens: 2048 },
       }),
     }
   );
