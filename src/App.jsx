@@ -3516,10 +3516,43 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
 }
 
 /* ============================================================ 지원 관리 */
+/* ---------- 지원 진행 단계 ---------- */
+const APP_STAGES = [
+  { id: "planned", label: "지원예정", kind: "todo" },
+  { id: "essay", label: "자소서 작성 중", kind: "todo" },
+  { id: "submitted", label: "서류 제출", kind: "todo" },
+  { id: "doc_pass", label: "서류 합격", kind: "pass" },
+  { id: "doc_fail", label: "서류 탈락", kind: "fail" },
+  { id: "ai_pass", label: "AI역검 합격", kind: "pass" },
+  { id: "ai_fail", label: "AI역검 탈락", kind: "fail" },
+  { id: "apt_prep", label: "인적성 준비", kind: "todo" },
+  { id: "apt_pass", label: "인적성 합격", kind: "pass" },
+  { id: "apt_fail", label: "인적성 탈락", kind: "fail" },
+  { id: "int1_prep", label: "1차면접 준비", kind: "todo" },
+  { id: "int1_pass", label: "1차면접 합격", kind: "pass" },
+  { id: "int1_fail", label: "1차면접 탈락", kind: "fail" },
+  { id: "int2_prep", label: "2차면접 준비", kind: "todo" },
+  { id: "int2_pass", label: "2차면접 합격", kind: "pass" },
+  { id: "int2_fail", label: "2차면접 탈락", kind: "fail" },
+  { id: "final_pass", label: "최종 합격", kind: "pass" },
+  { id: "final_fail", label: "최종면접 탈락", kind: "fail" },
+  { id: "closed", label: "지원불가", kind: "dead" },
+];
+const APP_STAGE_BY_ID = Object.fromEntries(APP_STAGES.map(s => [s.id, s]));
+const STATUS_TO_STAGE = { interested: "planned", analyzing: "planned", writing: "essay", submitted: "submitted", interview: "int1_prep", result: "doc_pass" };
+const stageOf = (a) => a.stage || STATUS_TO_STAGE[a.status] || "planned";
+const stageColorOf = (kind) => kind === "pass" ? [C.green, C.greenBg] : kind === "fail" ? [C.red, C.redBg] : kind === "dead" ? [C.faint, C.lineSoft] : [C.sub, C.lineSoft];
+const PRIORITY_RANK = { high: 0, medium: 1, low: 2 };
+const PRIORITY_LABEL = { high: "높음", medium: "보통", low: "낮음" };
+const cmpDeadline = (a, b) => { const da = a.deadline || "9999-99-99", db = b.deadline || "9999-99-99"; return da < db ? -1 : da > db ? 1 : 0; };
+
 function Applications({ applications, setApplications, onOpen, addTrash }) {
+  const [sort, setSort] = useState("deadline"); // deadline | priority | added
+  const [stageFilter, setStageFilter] = useState("all"); // all | todo | pass | fail | dead | <stageId>
+
   const addApp = () => {
     const id = "ap_" + Date.now();
-    setApplications(prev => [...prev, { id, company: "새 지원처", position: "", deadline: "", status: "interested", priority: "medium",
+    setApplications(prev => [...prev, { id, company: "새 지원처", position: "", deadline: "", status: "interested", stage: "planned", priority: "medium",
       essayProgress: 0, interviewProgress: 0, requirements: [], essays: [], interviews: [] }]);
     onOpen(id);
   };
@@ -3528,6 +3561,19 @@ function Applications({ applications, setApplications, onOpen, addTrash }) {
     setApplications(prev => prev.filter(a => a.id !== id));
     addTrash("application", `${app.company} ${app.position}`.trim(), app);
   };
+  const setStage = (id, stageId) => setApplications(prev => prev.map(a => a.id === id ? { ...a, stage: stageId } : a));
+
+  const matchesFilter = (a) => {
+    if (stageFilter === "all") return true;
+    const st = APP_STAGE_BY_ID[stageOf(a)];
+    if (["todo", "pass", "fail", "dead"].includes(stageFilter)) return st?.kind === stageFilter;
+    return stageOf(a) === stageFilter;
+  };
+  const shown = [...applications].filter(matchesFilter).sort((a, b) => {
+    if (sort === "priority") return ((PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1)) || cmpDeadline(a, b);
+    if (sort === "deadline") return cmpDeadline(a, b);
+    return 0;
+  });
 
   return (
     <div>
@@ -3535,18 +3581,57 @@ function Applications({ applications, setApplications, onOpen, addTrash }) {
         <H2>지원 관리</H2>
         <Btn primary onClick={addApp}>+ 지원 등록</Btn>
       </div>
-      {applications.map(a => (
-        <Card key={a.id} onClick={() => onOpen(a.id)} style={{ marginBottom: 10, display: "grid", gridTemplateColumns: "1.5fr 1fr 100px 130px 130px 20px", alignItems: "center", gap: 10 }}>
-          <div><span style={{ fontWeight: 700, fontSize: 14.5 }}>{a.company}</span><span style={{ color: C.sub, fontSize: 13, marginLeft: 8 }}>{a.position}</span></div>
-          <div style={{ fontSize: 13, color: C.sub }}>마감 {a.deadline || "미정"}</div>
-          <Badge label={{ interested: "관심", analyzing: "분석 중", writing: "작성 중", submitted: "제출", interview: "면접", result: "결과" }[a.status]} color={C.blue} bg={C.blueBg} />
-          <div style={{ fontSize: 12.5, color: C.sub }}>자소서 {a.essayProgress}%</div>
-          <div style={{ fontSize: 12.5, color: C.sub }}>면접 준비 {a.interviewProgress}%</div>
-          <span onClick={ev => { ev.stopPropagation(); deleteApp(a.id); }}
-            title="삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
-        </Card>
-      ))}
+
+      {/* 정렬 + 상태 필터 */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 11.5, color: C.faint }}>정렬</span>
+        {[["deadline", "마감 임박순"], ["priority", "우선순위순"], ["added", "등록순"]].map(([v, l]) => (
+          <button key={v} onClick={() => setSort(v)} style={{ fontFamily: font, fontSize: 12, padding: "5px 11px", borderRadius: 10, cursor: "pointer",
+            border: `1px solid ${sort === v ? C.text : C.line}`, background: sort === v ? C.text : C.panel, color: sort === v ? "#fff" : C.sub }}>{l}</button>
+        ))}
+        <span style={{ width: 1, height: 16, background: C.line, margin: "0 2px" }} />
+        <span style={{ fontSize: 11.5, color: C.faint }}>상태</span>
+        <select value={stageFilter} onChange={e => setStageFilter(e.target.value)}
+          style={{ fontFamily: font, fontSize: 12.5, padding: "6px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.text }}>
+          <option value="all">전체</option>
+          <option value="todo">진행 중 (준비·작성·제출)</option>
+          <option value="pass">합격만</option>
+          <option value="fail">탈락만</option>
+          <option value="dead">지원불가</option>
+          <optgroup label="단계별">
+            {APP_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </optgroup>
+        </select>
+        <span style={{ fontSize: 11.5, color: C.faint, marginLeft: "auto" }}>{shown.length}개</span>
+      </div>
+
+      {shown.map(a => {
+        const stg = APP_STAGE_BY_ID[stageOf(a)];
+        const [col, bg] = stageColorOf(stg?.kind);
+        return (
+          <Card key={a.id} onClick={() => onOpen(a.id)} style={{ marginBottom: 10, display: "grid", gridTemplateColumns: "1.5fr 0.95fr 150px 96px 110px 20px", alignItems: "center", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+              <span title={`우선순위 ${PRIORITY_LABEL[a.priority] || "보통"}`} style={{ width: 7, height: 7, borderRadius: 99, flexShrink: 0,
+                background: a.priority === "high" ? C.text : a.priority === "low" ? C.lineSoft : C.faint }} />
+              <span style={{ fontWeight: 700, fontSize: 14.5, whiteSpace: "nowrap" }}>{a.company}</span>
+              <span style={{ color: C.sub, fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{a.position}</span>
+            </div>
+            <div style={{ fontSize: 13, color: C.sub }}>마감 {a.deadline || "미정"}</div>
+            {/* 상태: 클릭해서 변경 */}
+            <select value={stageOf(a)} onClick={ev => ev.stopPropagation()} onChange={ev => { ev.stopPropagation(); setStage(a.id, ev.target.value); }}
+              style={{ fontFamily: font, fontSize: 12, fontWeight: 700, padding: "5px 8px", borderRadius: 999, cursor: "pointer",
+                border: `1px solid ${col}55`, background: bg, color: col, appearance: "none", textAlign: "center" }}>
+              {APP_STAGES.map(s => <option key={s.id} value={s.id} style={{ color: C.text, background: C.panel, fontWeight: 500 }}>{s.label}</option>)}
+            </select>
+            <div style={{ fontSize: 12.5, color: C.sub }}>자소서 {a.essayProgress}%</div>
+            <div style={{ fontSize: 12.5, color: C.sub }}>면접 준비 {a.interviewProgress}%</div>
+            <span onClick={ev => { ev.stopPropagation(); deleteApp(a.id); }}
+              title="삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+          </Card>
+        );
+      })}
       {applications.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>등록된 지원처가 없습니다. "+ 지원 등록"으로 추가하세요.</div>}
+      {applications.length > 0 && shown.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>이 상태에 해당하는 지원처가 없습니다.</div>}
     </div>
   );
 }
@@ -4438,6 +4523,14 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
           <option value="medium">보통</option>
           <option value="low">낮음</option>
         </select>
+        <span>·</span>
+        상태
+        {(() => { const st = APP_STAGE_BY_ID[stageOf(app)]; const [col, bg] = stageColorOf(st?.kind); return (
+          <select value={stageOf(app)} onChange={e => patch("stage", e.target.value)}
+            style={{ fontFamily: font, fontSize: 12.5, fontWeight: 700, padding: "3px 8px", borderRadius: 999, cursor: "pointer", border: `1px solid ${col}55`, background: bg, color: col }}>
+            {APP_STAGES.map(s => <option key={s.id} value={s.id} style={{ color: C.text, background: C.panel, fontWeight: 500 }}>{s.label}</option>)}
+          </select>
+        ); })()}
       </div>
 
       <AppLinks app={app} setApplications={setApplications} />
