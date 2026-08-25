@@ -1123,7 +1123,7 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main style={{ flex: 1, padding: isMobile ? "16px" : "28px 40px", maxWidth: 1600, minWidth: 0 }}>
+      <main style={{ flex: 1, padding: isMobile ? "16px" : "28px 40px", maxWidth: 1440, minWidth: 0 }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => go("guide")} />}
         {nav === "guide" && <Guide onGo={go} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
@@ -2907,7 +2907,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
   if (!exp.difficulty) missing.push("실패·아쉬움 정보가 없어 실패 경험 문항에 활용할 수 없습니다.");
 
   return (
-    <div style={{ maxWidth: 820 }}>
+    <div style={{ maxWidth: 1200 }}>
       <div onClick={onBack} style={{ fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 경험 보관함</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{exp.title}</h2>
@@ -3485,7 +3485,7 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
   };
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div style={{ maxWidth: 1440 }}>
       <H2>역량·스킬</H2>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 6, lineHeight: 1.6 }}>
         "상·중·하" 자기 평가 대신 <b>실제로 할 수 있는 작업</b>을 적고, 경험 근거를 연결합니다.
@@ -4403,7 +4403,7 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
   const grouped = CA_CATEGORIES.map(c => ({ ...c, items: (ca.research || []).filter(r => r.category === c.id) })).filter(g => g.items.length);
 
   return (
-    <div style={{ maxWidth: 1040 }}>
+    <div style={{ maxWidth: 1440 }}>
       <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 12px", marginBottom: 24, lineHeight: 1.6 }}>
         숫자 나열은 분석이 아니에요. <b>키워드를 잡고 '왜?'로 파고드는 것</b>이 핵심 — 자료를 모으면 AI가 키워드·질문을 뽑고, 원하는 키워드를 눌러 더 깊이 팔 수 있어요.
       </div>
@@ -4988,7 +4988,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
   };
 
   return (
-    <div style={{ maxWidth: 880 }}>
+    <div style={{ maxWidth: 1440 }}>
       <div onClick={onBack} style={{ fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 지원 관리</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
