@@ -3924,12 +3924,16 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
   const started = useRef(false);
 
   const updateMessages = (updater) => {
-    setMessages(prev => {
-      const next = typeof updater === "function" ? updater(prev) : updater;
-      onHistoryChange && onHistoryChange(next);
-      return next;
-    });
+    setMessages(prev => typeof updater === "function" ? updater(prev) : updater);
   };
+
+  // 부모로의 동기화는 렌더 중이 아니라 effect에서 (setState-in-render 방지)
+  const firstSync = useRef(true);
+  useEffect(() => {
+    if (firstSync.current) { firstSync.current = false; return; }
+    onHistoryChange && onHistoryChange(messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages]);
 
   useEffect(() => {
     if (!started.current) {
@@ -6577,8 +6581,7 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
             ))}
           </div>
         ))}
-        <div style={{ marginTop: 12 }}><Btn small disabled title="준비 중인 기능입니다">+ 경험 보관함에서 문장 불러오기</Btn></div>
-        <div style={{ fontSize: 12, color: C.faint, marginTop: 10 }}>미승인(AI 초안) 문장은 여기에 표시되지 않습니다.</div>
+        <div style={{ fontSize: 12, color: C.faint, marginTop: 12 }}>경험 상세의 「활용 문장」 탭에서 문장을 <b>승인</b>하면 여기에 자동으로 모입니다. (미승인 AI 초안은 표시되지 않아요)</div>
       </Card>
       <Card style={{ marginTop: 12 }}>
         <Label>역량</Label>
