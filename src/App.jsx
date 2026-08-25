@@ -1212,14 +1212,29 @@ function makeDraftExperience(title, ym, endYm) {
 
 const TIMELINE_ROW_H = 30;
 const TIMELINE_START_YM = "2021-01";
+const TIMELINE_MONTH_W = 34;   // 간트 뷰에서 1개월당 가로 폭(px)
+const EXP_TYPE_LABEL = { internship: "인턴", full_time: "정규직", part_time: "아르바이트", school_project: "학교 프로젝트", external_activity: "대외활동", club: "동아리", competition: "공모전", personal_project: "개인 프로젝트", other: "기타" };
+// 기간(개월) 계산 · 시기 라벨
+const monthsBetween = (startIdx, endIdx) => Math.max(1, endIdx - startIdx + 1);
+function periodLabel(startIdx, endIdx) {
+  const s = indexToYM(startIdx), e = indexToYM(endIdx);
+  const sStr = `${s.y}.${String(s.m).padStart(2, "0")}`;
+  if (startIdx === endIdx) return sStr;
+  if (s.y === e.y) return `${sStr}–${String(e.m).padStart(2, "0")}`;
+  return `${sStr}–${e.y}.${String(e.m).padStart(2, "0")}`;
+}
 
 function Timeline({ experiences, setExperiences, activities, setActivities, addTrash, onOpenExp, onAnalyze, onGoArchive }) {
   const [title, setTitle] = useState("");
   const [date, setDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [actType, setActType] = useState("");
   const [filter, setFilter] = useState("all"); // all | unorganized
+  const [view, setView] = useState("list"); // list | gantt
   const [selected, setSelected] = useState(new Set());
   const laneScrollRef = useRef(null);
+  const ganttScrollRef = useRef(null);
+  const dragScroll = useRef({ down: false, moved: false, startX: 0, startLeft: 0 });
   const scrollLanes = (dir) => { if (laneScrollRef.current) laneScrollRef.current.scrollBy({ left: dir * 320, behavior: "smooth" }); };
 
   const startIdx = ymToIndex(TIMELINE_START_YM);
@@ -1229,8 +1244,8 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
   const addActivity = () => {
     if (!title.trim() || !date) return;
     const finalEnd = endDate && endDate >= date ? endDate : date;
-    setActivities(prev => [...prev, { id: "act_" + Date.now(), title: title.trim(), date, endDate: finalEnd, organized: false, linkedExpId: null }]);
-    setTitle(""); setDate(""); setEndDate("");
+    setActivities(prev => [...prev, { id: "act_" + Date.now(), title: title.trim(), date, endDate: finalEnd, type: actType || null, organized: false, linkedExpId: null }]);
+    setTitle(""); setDate(""); setEndDate(""); setActType("");
   };
 
   const toggleSelect = (key) => setSelected(prev => {
@@ -1319,13 +1334,13 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
   const expItems = experiences.filter(e => e.startDate).map(e => {
     const s = ymToIndex(e.startDate.slice(0, 7));
     const en = ymToIndex((e.endDate || e.startDate).slice(0, 7)) || s;
-    return { key: "e_" + e.id, kind: "experience", title: e.title, startIdx: Math.max(s, startIdx), endIdx: Math.min(Math.max(en, s), endIdx), raw: e };
+    return { key: "e_" + e.id, kind: "experience", title: e.title, type: e.experienceType, startIdx: Math.max(s, startIdx), endIdx: Math.min(Math.max(en, s), endIdx), raw: e };
   }).filter(it => it.startIdx <= endIdx && it.endIdx >= startIdx);
 
   const actItems = activities.filter(a => !a.organized).map(a => {
     const s = ymToIndex(a.date.slice(0, 7));
     const en = Math.max(ymToIndex((a.endDate || a.date).slice(0, 7)) || s, s);
-    return { key: "a_" + a.id, kind: "activity", title: a.title, startIdx: Math.max(s, startIdx), endIdx: Math.min(en, endIdx), raw: a };
+    return { key: "a_" + a.id, kind: "activity", title: a.title, type: a.type || null, startIdx: Math.max(s, startIdx), endIdx: Math.min(en, endIdx), raw: a };
   }).filter(it => it.startIdx <= endIdx);
 
   const allItems = filter === "unorganized" ? actItems : [...expItems, ...actItems];
@@ -1353,90 +1368,161 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
               onChange={e => setEndDate(e.target.value ? e.target.value + "-01" : "")}
               style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
           </div>
+          <select value={actType} onChange={e => setActType(e.target.value)}
+            style={{ fontFamily: font, fontSize: 13, padding: "9px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: actType ? C.text : C.faint }}>
+            <option value="">유형(선택)</option>
+            {Object.entries(EXP_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
           <Btn primary disabled={!title.trim() || !date} onClick={addActivity}>추가</Btn>
         </div>
         <div style={{ fontSize: 11.5, color: C.faint, marginTop: 6 }}>종료 년월은 선택 사항입니다 — 비워두면 하루·한 달짜리 활동(점)으로, 채우면 기간이 있는 활동(막대)으로 표시됩니다.</div>
       </Card>
 
-      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        {[["all", "전체"], ["unorganized", "미정리만"]].map(([v, l]) => (
-          <button key={v} onClick={() => setFilter(v)} style={{ fontFamily: font, fontSize: 12.5, padding: "6px 12px", borderRadius: 14, cursor: "pointer",
-            border: `1px solid ${filter === v ? C.text : C.line}`, background: filter === v ? C.text : C.panel, color: filter === v ? "#fff" : C.sub }}>{l}</button>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 16, marginBottom: 6 }}>
-        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, background: C.panel, border: `2px solid ${C.sub}`, marginRight: 5 }} />미정리 (점선/테두리만)</span>
-        <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 12, height: 8, borderRadius: 3, background: C.greenBg, border: `1px solid ${C.green}`, marginRight: 5 }} />정리된 경험 (채움)</span>
-      </div>
-
-      <div style={{ display: "flex" }}>
-        <div style={{ width: 52, flexShrink: 0 }}>
-          {rows.map((idx, i) => {
-            const { y, m } = indexToYM(idx);
-            const isJan = m === 1;
-            const isTop = i === 0;
-            return (
-              <div key={idx} style={{ height: TIMELINE_ROW_H, display: "flex", alignItems: "center", fontSize: 11, color: C.faint,
-                borderTop: i === 0 ? "none" : `1px solid ${C.lineSoft}` }}>
-                {(isJan || isTop) ? <span style={{ fontWeight: 700, color: C.text, fontSize: 11.5 }}>{y}·{m}월</span> : `${m}월`}
-              </div>
-            );
-          })}
+      {/* 필터 + 뷰 토글 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          {[["all", "전체"], ["unorganized", "미정리만"]].map(([v, l]) => (
+            <button key={v} onClick={() => setFilter(v)} style={{ fontFamily: font, fontSize: 12.5, padding: "6px 12px", borderRadius: 10, cursor: "pointer",
+              border: `1px solid ${filter === v ? C.text : C.line}`, background: filter === v ? C.text : C.panel, color: filter === v ? "#fff" : C.sub }}>{l}</button>
+          ))}
         </div>
+        <div style={{ display: "inline-flex", border: `1px solid ${C.line}`, borderRadius: 10, overflow: "hidden" }}>
+          {[["list", "리스트 뷰"], ["gantt", "타임라인 뷰"]].map(([v, l]) => (
+            <button key={v} onClick={() => setView(v)} style={{ fontFamily: font, fontSize: 12.5, padding: "6px 14px", cursor: "pointer", border: "none",
+              background: view === v ? C.text : C.panel, color: view === v ? "#fff" : C.sub, fontWeight: view === v ? 700 : 500 }}>{l}</button>
+          ))}
+        </div>
+      </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {laneCount > 1 && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <span style={{ fontSize: 11.5, color: C.faint }}>동시에 진행된 활동이 많아서 옆으로 넘어갑니다 ({laneCount}칸)</span>
-              <div style={{ display: "flex", gap: 4 }}>
-                <button onClick={() => scrollLanes(-1)} style={{ fontFamily: font, fontSize: 12, padding: "3px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>◀</button>
-                <button onClick={() => scrollLanes(1)} style={{ fontFamily: font, fontSize: 12, padding: "3px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>▶</button>
-              </div>
-            </div>
-          )}
-          <div ref={laneScrollRef} style={{ overflowX: "auto", scrollbarWidth: "thin" }}>
-          <div style={{ position: "relative", height: totalRows * TIMELINE_ROW_H, display: "flex", gap: 12, paddingLeft: 12, borderLeft: `1px solid ${C.line}`, minWidth: laneCount * 162 }}>
-            {Array.from({ length: laneCount }).map((_, laneIdx) => (
-              <div key={laneIdx} style={{ position: "relative", width: 150, flexShrink: 0 }}>
-                {rows.map((idx, i) => (
-                  <div key={idx} style={{ position: "absolute", top: i * TIMELINE_ROW_H, left: 0, right: 0, height: 1, background: i === 0 ? "transparent" : C.lineSoft }} />
-                ))}
-                {lanedItems.filter(it => it.lane === laneIdx).map(it => {
-                  const topRow = endIdx - it.endIdx;
-                  const bottomRow = endIdx - it.startIdx;
-                  const top = topRow * TIMELINE_ROW_H + 3;
-                  const height = (bottomRow - topRow + 1) * TIMELINE_ROW_H - 6;
-                  const isDot = it.startIdx === it.endIdx && it.kind === "activity";
-                  const isSelected = selected.has(it.key);
-                  const isOrganized = it.kind === "experience";
-                  if (isDot) {
+      {allItems.length === 0 && <div style={{ fontSize: 13, color: C.faint, padding: "20px 0" }}>아직 기록된 활동이 없어요. 위에서 활동을 추가해보세요.</div>}
+
+      {/* ── 리스트 뷰 ── */}
+      {view === "list" && allItems.length > 0 && (() => {
+        const byYear = {};
+        allItems.forEach(it => { const y = indexToYM(it.startIdx).y; (byYear[y] = byYear[y] || []).push(it); });
+        const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+        return (
+          <div>
+            {years.map(y => {
+              const items = byYear[y].sort((a, b) => b.startIdx - a.startIdx || (b.endIdx - b.startIdx) - (a.endIdx - a.startIdx));
+              return (
+                <div key={y}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 4px" }}>
+                    <span style={{ fontSize: 16, fontWeight: 800 }}>{y}</span>
+                    <span style={{ fontSize: 12, color: C.faint }}>{items.length}개</span>
+                    <span style={{ flex: 1, height: 1, background: C.lineSoft }} />
+                  </div>
+                  {items.map(it => {
+                    const mo = monthsBetween(it.startIdx, it.endIdx);
+                    const isPoint = it.startIdx === it.endIdx && it.kind === "activity";
+                    const isOrg = it.kind === "experience";
+                    const sel = selected.has(it.key);
                     return (
-                      <div key={it.key} onMouseDown={startDrag(it)} onClick={() => handleBlockClick(it)} title={it.title + " (드래그해서 시기 이동)"}
-                        style={{ position: "absolute", top: top + 6, left: 2, right: 2, display: "flex", alignItems: "flex-start", gap: 7, cursor: "grab" }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 99, background: isSelected ? C.text : C.panel, border: `2px solid ${isSelected ? C.text : C.sub}`, flexShrink: 0, marginTop: 2 }} />
-                        <span style={{ fontSize: 12, fontWeight: isSelected ? 700 : 500, color: C.text, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.title}</span>
+                      <div key={it.key} onClick={() => toggleSelect(it.key)} style={{ display: "flex", gap: 14, padding: "12px 10px", borderRadius: 10, cursor: "pointer",
+                        background: sel ? C.accent : "transparent", borderBottom: `1px solid ${C.lineSoft}`, alignItems: "flex-start" }}>
+                        <div style={{ width: 112, flexShrink: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 700 }}>{periodLabel(it.startIdx, it.endIdx)}</div>
+                          <div style={{ fontSize: 11, color: C.faint, marginTop: 2 }}>{isPoint ? "단기" : `${mo}개월`}</div>
+                          {!isPoint && (
+                            <div style={{ height: 5, borderRadius: 3, background: C.lineSoft, marginTop: 7, width: Math.min(100, mo * 9) }}>
+                              <div style={{ height: "100%", borderRadius: 3, width: "100%", background: isOrg ? C.green : C.faint }} />
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, lineHeight: 1.4 }}>{it.title}</div>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 5 }}>
+                            <Badge label={isOrg ? "정리됨" : "미정리"} color={isOrg ? C.green : C.faint} bg={isOrg ? C.greenBg : "transparent"} />
+                            {it.type && EXP_TYPE_LABEL[it.type] && <Badge label={EXP_TYPE_LABEL[it.type]} color={C.sub} bg={C.lineSoft} />}
+                          </div>
+                        </div>
                       </div>
                     );
-                  }
-                  return (
-                    <div key={it.key} onMouseDown={startDrag(it)} onClick={() => handleBlockClick(it)} title={it.title + " (드래그해서 시기 이동)"} style={{
-                      position: "absolute", top, left: 3, right: 3, height: Math.max(height, 24), borderRadius: 8, cursor: "grab", boxSizing: "border-box",
-                      background: isOrganized ? C.greenBg : C.panel,
-                      border: isOrganized ? `1px solid ${C.green}` : `1.5px dashed ${isSelected ? C.text : C.sub}`,
-                      outline: isSelected ? `2px solid ${C.text}` : "none", outlineOffset: 1,
-                      padding: "6px 8px", fontSize: 12, fontWeight: isSelected ? 700 : 500, color: isOrganized ? C.green : C.text, lineHeight: 1.35,
-                      display: "-webkit-box", WebkitLineClamp: Math.max(1, Math.floor((Math.max(height, 24) - 12) / 16)), WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {it.title}
-                    </div>
-                  );
-                })}
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+      {/* ── 타임라인 뷰 (가로 간트) ── */}
+      {view === "gantt" && allItems.length > 0 && (() => {
+        const items = [...allItems].sort((a, b) => b.startIdx - a.startIdx);
+        const minIdx = Math.min(...items.map(it => it.startIdx));
+        const maxIdx = Math.max(endIdx, ...items.map(it => it.endIdx));
+        const monthCount = maxIdx - minIdx + 1;
+        const totalW = monthCount * TIMELINE_MONTH_W;
+        const monthArr = [];
+        for (let i = minIdx; i <= maxIdx; i++) monthArr.push(i);
+        const ROW = 40;
+        const onDown = (e) => {
+          const el = ganttScrollRef.current; if (!el) return;
+          dragScroll.current = { down: true, moved: false, startX: e.clientX, startLeft: el.scrollLeft };
+        };
+        const onMove = (e) => {
+          if (!dragScroll.current.down) return;
+          const dx = e.clientX - dragScroll.current.startX;
+          if (Math.abs(dx) > 4) dragScroll.current.moved = true;
+          if (ganttScrollRef.current) ganttScrollRef.current.scrollLeft = dragScroll.current.startLeft - dx;
+        };
+        const onUp = () => { dragScroll.current.down = false; };
+        return (
+          <div>
+            <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 6 }}>좌우로 드래그하거나 스크롤해서 시기를 이동하세요. 막대를 누르면 상세가 열립니다.</div>
+            <div ref={ganttScrollRef} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
+              style={{ overflowX: "auto", cursor: "grab", border: `1px solid ${C.line}`, borderRadius: 12, background: C.panel, userSelect: "none" }}>
+              <div style={{ position: "relative", width: totalW + 240, minWidth: "100%", paddingBottom: 8 }}>
+                {/* 헤더: 월 눈금 */}
+                <div style={{ position: "relative", height: 26, borderBottom: `1px solid ${C.line}` }}>
+                  {monthArr.map((idx) => {
+                    const { y, m } = indexToYM(idx);
+                    const left = (idx - minIdx) * TIMELINE_MONTH_W;
+                    return (
+                      <div key={idx} style={{ position: "absolute", left, top: 0, width: TIMELINE_MONTH_W, height: "100%", borderLeft: `1px solid ${m === 1 ? C.line : C.lineSoft}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9.5, color: m === 1 ? C.text : C.faint, fontWeight: m === 1 ? 700 : 400 }}>
+                        {m === 1 ? y : m}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* 세로 연도 라인 */}
+                {monthArr.filter(idx => indexToYM(idx).m === 1).map(idx => (
+                  <div key={"vl" + idx} style={{ position: "absolute", left: (idx - minIdx) * TIMELINE_MONTH_W, top: 26, bottom: 8, width: 1, background: C.lineSoft }} />
+                ))}
+                {/* 막대들 (한 활동당 한 줄) */}
+                <div style={{ position: "relative", paddingTop: 6 }}>
+                  {items.map(it => {
+                    const left = (it.startIdx - minIdx) * TIMELINE_MONTH_W;
+                    const isOrg = it.kind === "experience";
+                    const isPoint = it.startIdx === it.endIdx && it.kind === "activity";
+                    const mo = monthsBetween(it.startIdx, it.endIdx);
+                    const w = mo * TIMELINE_MONTH_W;
+                    const sel = selected.has(it.key);
+                    const onBar = () => { if (!dragScroll.current.moved) toggleSelect(it.key); };
+                    return (
+                      <div key={it.key} style={{ position: "relative", height: ROW }}>
+                        <div onClick={onBar} title={it.title}
+                          style={{ position: "absolute", left: left + 4, top: 4, whiteSpace: "nowrap", fontSize: 12, fontWeight: sel ? 800 : 600, color: C.text, cursor: "pointer", zIndex: 1 }}>
+                          <span style={{ color: C.faint, fontWeight: 500 }}>{isPoint ? "점" : `${mo}개월`}</span> · {it.title}
+                        </div>
+                        <div onClick={onBar}
+                          style={{ position: "absolute", left, top: 23, width: isPoint ? 10 : Math.max(w, 10), height: isPoint ? 10 : 8, borderRadius: isPoint ? 99 : 4, cursor: "pointer",
+                            background: isOrg ? C.green : (isPoint ? C.panel : C.lineSoft),
+                            border: isOrg ? "none" : (isPoint ? `2px solid ${C.sub}` : `1px solid ${C.faint}`),
+                            outline: sel ? `2px solid ${C.text}` : "none", outlineOffset: 1 }} />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
+            </div>
+            <div style={{ display: "flex", gap: 16, marginTop: 8 }}>
+              <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 14, height: 8, borderRadius: 3, background: C.green, marginRight: 5, verticalAlign: "middle" }} />정리된 경험</span>
+              <span style={{ fontSize: 11.5, color: C.sub }}><span style={{ display: "inline-block", width: 14, height: 8, borderRadius: 3, background: C.lineSoft, border: `1px solid ${C.faint}`, marginRight: 5, verticalAlign: "middle" }} />미정리 활동</span>
+            </div>
           </div>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {selected.size === 1 && (() => {
         const key = [...selected][0];
