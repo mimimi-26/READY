@@ -3988,230 +3988,267 @@ function AppLinks({ app, setApplications }) {
   );
 }
 
-/* ---------- 기업분석 (컨설턴트 방법론 기반: 키워드·'왜' 질문·자소서 골격) ---------- */
+/* ---------- 기업분석 (컨설턴트 방법론: 키워드 → '왜' 질문 → 파고들기 → 전략) ---------- */
 const CA_CATEGORIES = [
-  { id: "vision", label: "신년사·CEO 메시지", hint: "회장·CEO 공식 발언에서 눈에 띄는 키워드를 뽑기" },
-  { id: "performance", label: "실적의 '왜'", hint: "매출 숫자 나열이 아니라 증감의 '왜'에 초점" },
-  { id: "business", label: "사업 현황·정의", hint: "이 회사가 산업을 어떻게 정의하는지 (DART 사업의 내용·뉴스)" },
-  { id: "newbiz", label: "신사업·M&A", hint: "새로 벌인 사업/인수. 미시(내 역량 연결) vs 거시(공통분모 요약)" },
-  { id: "talent", label: "인재상·핵심가치", hint: "회사가 원하는 사람·가치. 내 경험과 연결" },
-  { id: "issue", label: "기타 이슈", hint: "최근 뉴스·논란·트렌드 등" },
+  { id: "vision", label: "신년사·CEO 메시지", hint: "회장·CEO 공식 발언에서 눈에 띄는 키워드" },
+  { id: "performance", label: "실적의 '왜'", hint: "숫자 나열 말고, 증감의 '왜'" },
+  { id: "business", label: "사업 현황·정의", hint: "이 회사가 산업을 어떻게 정의하는지 (DART·뉴스)" },
+  { id: "newbiz", label: "신사업·M&A", hint: "새 사업/인수. 미시(내 역량) vs 거시(공통분모)" },
+  { id: "talent", label: "인재상·핵심가치", hint: "원하는 사람·가치, 내 경험과 연결" },
+  { id: "issue", label: "기타 이슈", hint: "최근 뉴스·트렌드·논란" },
 ];
 const CA_CAT_LABEL = Object.fromEntries(CA_CATEGORIES.map(c => [c.id, c.label]));
 const CA_PURPOSE = { essay: "자소서용", interview: "면접용", both: "둘 다" };
+// 카테고리별 추출 규칙 (컨설턴트 문서 방법론)
+const CA_RULES = {
+  vision: "CEO·회장 발언에서 방향을 드러내는 키워드를 뽑고, 그 키워드로 '더 찾아볼 검색어'를 제안하라.",
+  performance: "매출·실적 숫자를 나열하지 말고, 증감의 '원인(왜)'을 묻는 질문을 만들어라. 키워드도 원인·배경 중심으로.",
+  business: "이 회사가 자기 산업을 '어떻게 정의'하는지 드러내는 키워드와, 경쟁사 대비 차별 키워드를 뽑아라.",
+  newbiz: "신사업을 '미시(내 역량·경험과 연결할 구체 지점)'와 '거시(여러 사업을 하나로 묶는 공통분모)' 두 관점으로 나눠 키워드·질문을 만들어라.",
+  talent: "회사가 원하는 인재상·가치와, 그것을 내 경험으로 증명할 연결 키워드를 뽑아라.",
+  issue: "이슈의 배경과 회사에 미칠 영향을 묻는 '왜/어떻게' 질문을 만들어라.",
+};
+
+// 섹션 헤더 (가독성 — 번호 + 제목 + 부제)
+function CASection({ n, title, desc, children }) {
+  return (
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: C.green }}>{n}</span>
+        <span style={{ fontSize: 15.5, fontWeight: 800, letterSpacing: "-.01em" }}>{title}</span>
+      </div>
+      {desc && <div style={{ fontSize: 12.5, color: C.faint, margin: "3px 0 14px", lineHeight: 1.55 }}>{desc}</div>}
+      {children}
+    </div>
+  );
+}
 
 function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
-  const ca = app.companyAnalysis || { research: [], strategy: null };
+  const ca = app.companyAnalysis || { research: [], digs: [], strategy: null };
   const setCA = (updater) => setApplications(prev => prev.map(a => {
     if (a.id !== app.id) return a;
-    const cur = a.companyAnalysis || { research: [], strategy: null };
+    const cur = a.companyAnalysis || { research: [], digs: [], strategy: null };
     return { ...a, companyAnalysis: typeof updater === "function" ? updater(cur) : updater };
   }));
+  const selStyle = { fontFamily: font, fontSize: 13, padding: "8px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.text };
 
-  const [draft, setDraft] = useState({ category: "vision", source: "", summary: "", purpose: "both" });
-  const [extracting, setExtracting] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
-
-  const aiExtract = async (summary, category) => {
-    const sys = `너는 유통·기업분석 코치다. 아래는 '${app.company}'에 지원하려는 사람이 조사한 자료다. 여기서 (1) 자소서·면접에 쓸 핵심 키워드 3~6개, (2) 이 자료에 '왜?'를 붙여 면접 대비용으로 더 파고들 질문 2~4개를 뽑아라. 매출 숫자 나열이 아니라 '왜 그런가'에 초점. 없는 사실은 지어내지 마라. JSON만: {"keywords":["..."],"whyQuestions":["..."]}`;
-    const res = await fetch("/api/chat", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ systemPrompt: sys, context: `[카테고리] ${CA_CAT_LABEL[category]}\n[내용]\n${summary}`, messages: [{ role: "user", content: "키워드와 '왜' 질문을 JSON으로." }] }),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출 실패");
+  const callAI = async (systemPrompt, context) => {
+    let res;
+    try {
+      res = await fetch("/api/chat", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ systemPrompt, context, messages: [{ role: "user", content: "위 지시대로 JSON으로만 답해줘." }] }),
+      });
+    } catch { throw new Error("AI 서버에 연결하지 못했어요. 잠시 후 다시 시도해주세요."); }
+    let json;
+    try { json = await res.json(); } catch { throw new Error("AI 응답을 읽지 못했어요. 다시 시도해주세요."); }
+    if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출에 실패했어요.");
     const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
     return parseAIJson(text);
   };
 
+  // ── 자료 수집 ──
+  const [draft, setDraft] = useState({ category: "vision", source: "", summary: "", purpose: "both" });
+  const [extracting, setExtracting] = useState(false);
+  const aiExtract = (summary, category) => callAI(
+    `너는 유통·기업분석 코치다. '${app.company}'(${app.position || ""}) 지원자가 '${CA_CAT_LABEL[category]}' 자료를 조사했다.\n${CA_RULES[category] || ""}\n공통 원칙: 매출 숫자 나열 금지, '왜'에 초점, 없는 사실 지어내지 말 것.\nJSON만: {"keywords":["자소서·면접에 쓸 핵심 키워드 3~6개"],"whyQuestions":["'왜?'로 파고들 면접 대비 질문 2~4개"],"suggestions":["다음에 더 찾아볼 검색어·자료 1~3개"]}`,
+    `[내용]\n${summary}`
+  );
   const addResearch = async () => {
     if (!draft.summary.trim()) return;
     setExtracting(true);
-    let keywords = [], whyQuestions = [];
-    try { const r = await aiExtract(draft.summary, draft.category); keywords = r.keywords || []; whyQuestions = r.whyQuestions || []; }
+    let ext = { keywords: [], whyQuestions: [], suggestions: [] };
+    try { const r = await aiExtract(draft.summary, draft.category); ext = { keywords: r.keywords || [], whyQuestions: r.whyQuestions || [], suggestions: r.suggestions || [] }; }
     catch { /* AI 실패해도 카드는 저장 */ }
-    setCA(cur => ({ ...cur, research: [...(cur.research || []), { id: "ca_" + Date.now(), ...draft, keywords, whyQuestions }] }));
+    setCA(cur => ({ ...cur, research: [...(cur.research || []), { id: "ca_" + Date.now(), ...draft, ...ext }] }));
     setDraft({ category: draft.category, source: "", summary: "", purpose: "both" });
     setExtracting(false);
   };
   const patchItem = (id, k, v) => setCA(cur => ({ ...cur, research: cur.research.map(r => r.id === id ? { ...r, [k]: v } : r) }));
   const removeItem = (id) => setCA(cur => ({ ...cur, research: cur.research.filter(r => r.id !== id) }));
+  const [reExtractId, setReExtractId] = useState(null);
   const reExtract = async (item) => {
-    try { const r = await aiExtract(item.summary, item.category); patchItem(item.id, "keywords", r.keywords || []); patchItem(item.id, "whyQuestions", r.whyQuestions || []); } catch { /* 무시 */ }
+    setReExtractId(item.id);
+    try { const r = await aiExtract(item.summary, item.category); patchItem(item.id, "keywords", r.keywords || []); patchItem(item.id, "whyQuestions", r.whyQuestions || []); patchItem(item.id, "suggestions", r.suggestions || []); } catch { /* 무시 */ }
+    setReExtractId(null);
   };
 
   const sendToInterview = (q) => setApplications(prev => prev.map(a => a.id === app.id
     ? { ...a, interviews: [...(a.interviews || []), { id: "iq_" + Date.now() + Math.random().toString(36).slice(2, 4), question: q, category: "기업분석", selectedExperienceId: null, practiceCount: 0, confidence: null, followUps: [] }] } : a));
 
-  const allKeywords = [...new Set((ca.research || []).flatMap(r => r.keywords || []))];
-  const allWhy = (ca.research || []).flatMap(r => (r.whyQuestions || []).map(q => ({ q, from: r.id })));
+  // ── 키워드 파고들기 ──
+  const [digInput, setDigInput] = useState("");
+  const [digging, setDigging] = useState("");
+  const [digErr, setDigErr] = useState("");
+  const researchContext = () => (ca.research || []).map(r => `- [${CA_CAT_LABEL[r.category]}] ${r.summary}`).join("\n").slice(0, 1500);
+  const dig = async (keyword) => {
+    const kw = (keyword || "").trim();
+    if (!kw || digging) return;
+    setDigging(kw); setDigErr("");
+    try {
+      const r = await callAI(
+        `너는 기업분석 코치다. '${app.company}' 지원자가 '${kw}' 키워드를 더 파고들려 한다. 이 회사·산업 맥락에서 (1) 이 키워드가 왜 중요한지 2~3문장, (2) '왜/어떻게'로 파고들 면접 대비 질문 3~5개, (3) 다음에 검색·조사해볼 구체적 방향·검색어 2~4개. 모르는 건 지어내지 말고 '확인 필요'로. JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
+        `[참고 자료]\n${researchContext() || "(수집한 자료 없음)"}`
+      );
+      const digItem = { id: "dig_" + Date.now(), keyword: kw, why: r.why || "", questions: r.questions || [], searches: r.searches || [], at: new Date().toISOString().slice(0, 10) };
+      setCA(cur => ({ ...cur, digs: [digItem, ...(cur.digs || []).filter(d => d.keyword !== kw)] }));
+      setDigInput("");
+    } catch (e) { setDigErr(e.message || String(e)); }
+    finally { setDigging(""); }
+  };
+  const removeDig = (id) => setCA(cur => ({ ...cur, digs: (cur.digs || []).filter(d => d.id !== id) }));
 
-  // 전략 브리핑 (자료 + 내 경험/역량 종합)
+  // ── 전략 브리핑 ──
   const [stratLoading, setStratLoading] = useState(false);
   const [stratErr, setStratErr] = useState("");
   const runStrategy = async () => {
     setStratLoading(true); setStratErr("");
     try {
-      const researchText = (ca.research || []).map(r => `- [${CA_CAT_LABEL[r.category]}] ${r.source ? `(${r.source}) ` : ""}${r.summary} / 키워드: ${(r.keywords || []).join(", ")}`).join("\n") || "(수집한 자료 없음)";
+      const researchText = (ca.research || []).map(r => `- [${CA_CAT_LABEL[r.category]}] ${r.summary} / 키워드: ${(r.keywords || []).join(", ")}`).join("\n") || "(수집 자료 없음)";
       const expText = experiences.filter(e => e.status !== "draft").map(e => `- ${e.title}: 역량[${(e.competencies || []).join(", ")}]${e.coreMessage ? ` / ${e.coreMessage}` : ""}`).join("\n") || "(분석된 경험 없음)";
-      const reqText = (app.requirements || []).map(r => `- ${r.requirement}`).join("\n") || "(등록된 요구 역량 없음)";
-      const sys = `너는 유통·기업 취업 컨설턴트다. 아래는 '${app.company} ${app.position || ""}'에 지원하는 사람이 모은 기업분석 자료와, 그 사람 본인의 경험·역량, 그리고 공고 요구 역량이다. 이걸 종합해 자소서·면접 전략을 짜라.
-
-원칙: (1) 매출 숫자 나열 금지, '왜'에 초점 (2) 키워드 중심 (3) 반드시 '이 사람의 실제 경험'과 연결 (4) 없는 사실 지어내지 말 것.
-
-JSON만 출력:
-{
- "coreKeywords": ["이 회사 자소서에 넣을 핵심 키워드 4~6개"],
- "microStrategy": "구체적 역량·경험을 특정 신사업/현황에 연결하는 미시 전략 2~3문장",
- "macroStrategy": "여러 사업을 공통분모로 묶어 산업에 대한 이해·열정을 보이는 거시 전략 2~3문장",
- "essayFrame": {"현황":"회사 현황 한 문장", "분석":"그 현황을 '왜'로 해석한 한 문장", "나의역량경험":"연결할 내 경험/역량", "기여포부":"입사 후 기여·포부 한 문장"},
- "cautions": "이 회사에 쓰면 안 되는 것(엉뚱한 키워드 등) 한 줄"
-}`;
-      const res = await fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ systemPrompt: sys, context: `[기업분석 자료]\n${researchText}\n\n[내 경험·역량]\n${expText}\n\n[공고 요구 역량]\n${reqText}`, messages: [{ role: "user", content: "전략을 JSON으로 짜줘." }] }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출 실패");
-      const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-      let parsed; try { parsed = parseAIJson(text); } catch { parsed = { _raw: text }; }
-      parsed._at = new Date().toISOString().slice(0, 10);
-      setCA(cur => ({ ...cur, strategy: parsed }));
-    } catch (e) { setStratErr(e.message || String(e)); }
-    finally { setStratLoading(false); }
+      const reqText = (app.requirements || []).map(r => `- ${r.requirement}`).join("\n") || "(요구 역량 없음)";
+      let r;
+      try {
+        r = await callAI(
+          `너는 유통·기업 취업 컨설턴트다. 아래 자료(기업분석)+지원자 경험·역량+공고 요구역량을 종합해 자소서·면접 전략을 짜라. 원칙: 매출 숫자 나열 금지·'왜' 중심, 키워드 중심, 반드시 '이 사람 실제 경험'과 연결, 없는 사실 금지. JSON만: {"coreKeywords":["핵심 키워드 4~6"],"microStrategy":"미시 전략 2~3문장","macroStrategy":"거시 전략 2~3문장","essayFrame":{"현황":"","분석":"","나의역량경험":"","기여포부":""},"cautions":"쓰면 안 되는 것 한 줄"}`,
+          `[기업분석 자료]\n${researchText}\n\n[내 경험·역량]\n${expText}\n\n[공고 요구역량]\n${reqText}`
+        );
+      } catch (e) { setStratErr(e.message || String(e)); setStratLoading(false); return; }
+      r._at = new Date().toISOString().slice(0, 10);
+      setCA(cur => ({ ...cur, strategy: r }));
+    } finally { setStratLoading(false); }
   };
 
+  const allKeywords = [...new Set((ca.research || []).flatMap(r => r.keywords || []))];
+  const digs = ca.digs || [];
   const st = ca.strategy;
   const grouped = CA_CATEGORIES.map(c => ({ ...c, items: (ca.research || []).filter(r => r.category === c.id) })).filter(g => g.items.length);
 
   return (
-    <div>
-      {/* 방법 안내 */}
-      <div style={{ background: C.accent, border: `1px solid ${C.line}`, borderRadius: 12, padding: "12px 14px", marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setShowGuide(g => !g)}>
-          <div style={{ fontSize: 13, fontWeight: 700 }}>기업분석, 이렇게 하면 됩니다</div>
-          <span style={{ fontSize: 12, color: C.faint }}>{showGuide ? "접기 ▴" : "펼치기 ▾"}</span>
-        </div>
-        {showGuide && (
-          <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.7, marginTop: 8 }}>
-            · <b>숫자 나열은 분석이 아니에요.</b> 매출·실적엔 "왜?"를 붙여 원인을 찾으세요.<br />
-            · <b>키워드로 정리하세요.</b> 그래야 자소서에 어떤 단어·경험을 넣을지 보이고, 나중에 다시 볼 때도 빠릅니다.<br />
-            · <b>자소서 = 키워드, 면접 = '왜' 질문.</b> 조사하며 든 의문을 질문으로 남기면 면접 대비가 됩니다.<br />
-            · 자소서 문장 공식: <b>현황 → 분석 → 내 역량·경험 → 기여·포부</b>.
-          </div>
-        )}
+    <div style={{ maxWidth: 720 }}>
+      <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 12px", marginBottom: 24, lineHeight: 1.6 }}>
+        숫자 나열은 분석이 아니에요. <b>키워드를 잡고 '왜?'로 파고드는 것</b>이 핵심 — 자료를 모으면 AI가 키워드·질문을 뽑고, 원하는 키워드를 눌러 더 깊이 팔 수 있어요.
       </div>
 
-      {/* 자료 추가 */}
-      <Card style={{ marginBottom: 16 }}>
-        <Label>자료 추가</Label>
+      {/* 1. 자료 수집 */}
+      <CASection n="1" title="자료 수집" desc="신년사·실적·사업 현황·신사업 등을 카테고리별로. 저장하면 AI가 카테고리에 맞춰 키워드·'왜' 질문·다음 조사 방향을 뽑아줘요.">
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          <select value={draft.category} onChange={e => setDraft(d => ({ ...d, category: e.target.value }))}
-            style={{ fontFamily: font, fontSize: 13, padding: "8px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.text }}>
+          <select value={draft.category} onChange={e => setDraft(d => ({ ...d, category: e.target.value }))} style={selStyle}>
             {CA_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
           </select>
-          <select value={draft.purpose} onChange={e => setDraft(d => ({ ...d, purpose: e.target.value }))}
-            style={{ fontFamily: font, fontSize: 13, padding: "8px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.sub }}>
+          <select value={draft.purpose} onChange={e => setDraft(d => ({ ...d, purpose: e.target.value }))} style={{ ...selStyle, color: C.sub }}>
             {Object.entries(CA_PURPOSE).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
-          <Input placeholder="출처 (뉴스 제목·링크 등)" value={draft.source} onChange={e => setDraft(d => ({ ...d, source: e.target.value }))} style={{ flex: "1 1 200px" }} />
+          <Input placeholder="출처 (뉴스 제목·링크)" value={draft.source} onChange={e => setDraft(d => ({ ...d, source: e.target.value }))} style={{ flex: "1 1 180px" }} />
         </div>
         <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 6 }}>{CA_CATEGORIES.find(c => c.id === draft.category)?.hint}</div>
-        <Textarea rows={3} placeholder="조사한 핵심 내용을 적으세요. (기사 요약·사업보고서 내용 등) — 저장하면 AI가 키워드와 '왜' 질문을 뽑아줍니다." value={draft.summary} onChange={e => setDraft(d => ({ ...d, summary: e.target.value }))} />
+        <Textarea rows={3} placeholder="조사한 핵심 내용을 적으세요 (기사 요약·사업보고서 내용 등)" value={draft.summary} onChange={e => setDraft(d => ({ ...d, summary: e.target.value }))} />
         <div style={{ marginTop: 8 }}><Btn primary small onClick={addResearch} disabled={extracting || !draft.summary.trim()}>{extracting ? "키워드 뽑는 중…" : "자료 추가 + 키워드·질문 추출"}</Btn></div>
-      </Card>
 
-      {/* 수집한 자료 (카테고리별) */}
-      {grouped.length === 0 && <div style={{ fontSize: 13, color: C.faint, marginBottom: 16 }}>아직 수집한 자료가 없어요. 위에서 신년사·실적·사업 현황·신사업 등을 하나씩 정리해보세요.</div>}
-      {grouped.map(g => (
-        <div key={g.id} style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12.5, fontWeight: 700, color: C.sub, marginBottom: 6 }}>{g.label} <span style={{ color: C.faint, fontWeight: 500 }}>· {g.items.length}</span></div>
-          <div style={{ display: "grid", gap: 8 }}>
-            {g.items.map(r => (
-              <Card key={r.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
-                    <Badge label={CA_PURPOSE[r.purpose] || "둘 다"} color={C.sub} bg={C.lineSoft} />
-                    {r.source && <span style={{ fontSize: 11.5, color: C.faint }}>{r.source}</span>}
+        {grouped.length > 0 && <div style={{ marginTop: 18, display: "grid", gap: 18 }}>
+          {grouped.map(g => (
+            <div key={g.id}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 8, paddingBottom: 5, borderBottom: `1px solid ${C.lineSoft}` }}>{g.label} <span style={{ color: C.faint, fontWeight: 500 }}>· {g.items.length}</span></div>
+              <div style={{ display: "grid", gap: 16 }}>
+                {g.items.map(r => (
+                  <div key={r.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 0 }}>
+                        <Badge label={CA_PURPOSE[r.purpose] || "둘 다"} color={C.sub} bg={C.lineSoft} />
+                        {r.source && <span style={{ fontSize: 11.5, color: C.faint, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.source}</span>}
+                      </div>
+                      <span onClick={() => removeItem(r.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12, flexShrink: 0 }}>✕</span>
+                    </div>
+                    <div style={{ fontSize: 13.5, lineHeight: 1.65, marginBottom: 8, whiteSpace: "pre-wrap" }}>{r.summary}</div>
+                    {(r.keywords || []).length > 0 && (
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                        {r.keywords.map((k, i) => <span key={i} onClick={() => dig(k)} title="이 키워드로 파고들기 →" style={{ fontSize: 12, fontWeight: 600, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}>#{k}</span>)}
+                      </div>
+                    )}
+                    {(r.whyQuestions || []).length > 0 && (
+                      <div style={{ display: "grid", gap: 3, marginBottom: 6 }}>
+                        {r.whyQuestions.map((q, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                            <span style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.55 }}>· {q}</span>
+                            <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11.5, color: C.blue, whiteSpace: "nowrap" }}>면접에 추가</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(r.suggestions || []).length > 0 && (
+                      <div style={{ fontSize: 11.5, color: C.faint, lineHeight: 1.6 }}>다음 조사: {r.suggestions.join(" · ")}</div>
+                    )}
+                    <div style={{ marginTop: 6 }}><span onClick={() => reExtract(r)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>{reExtractId === r.id ? "다시 뽑는 중…" : "AI로 다시 뽑기"}</span></div>
                   </div>
-                  <span onClick={() => removeItem(r.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
-                </div>
-                <div style={{ fontSize: 13, lineHeight: 1.6, margin: "8px 0", whiteSpace: "pre-wrap" }}>{r.summary}</div>
-                {(r.keywords || []).length > 0 && (
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 }}>
-                    {r.keywords.map((k, i) => <Badge key={i} label={"#" + k} color={C.green} bg={C.greenBg} />)}
-                  </div>
-                )}
-                {(r.whyQuestions || []).length > 0 && (
-                  <div style={{ borderTop: `1px solid ${C.lineSoft}`, paddingTop: 8 }}>
-                    <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>'왜?' 질문 (면접 대비)</div>
-                    {r.whyQuestions.map((q, i) => (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", padding: "3px 0" }}>
-                        <span style={{ fontSize: 12.5, lineHeight: 1.5 }}>· {q}</span>
-                        <span onClick={() => sendToInterview(q)} title="면접 질문으로 보내기" style={{ cursor: "pointer", fontSize: 11.5, color: C.blue, whiteSpace: "nowrap", flexShrink: 0 }}>면접에 추가</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>}
+      </CASection>
+
+      {/* 2. 키워드 파고들기 */}
+      <CASection n="2" title="키워드 파고들기" desc="중요하다고 느낀 키워드를 눌러(또는 직접 입력해) 더 깊이 파세요. '왜 중요한지 + 파고들 질문 + 다음 조사 방향'을 만들어줍니다.">
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <Input placeholder="파고들 키워드 입력 (예: O2O, 옴니채널, 상생)" value={digInput} onChange={e => setDigInput(e.target.value)} onKeyDown={e => e.key === "Enter" && dig(digInput)} />
+          <Btn primary small onClick={() => dig(digInput)} disabled={!!digging || !digInput.trim()} style={{ flexShrink: 0 }}>{digging ? "파고드는 중…" : "파고들기"}</Btn>
+        </div>
+        {allKeywords.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 6 }}>모은 키워드 — 눌러서 파고들기</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {allKeywords.map((k, i) => <span key={i} onClick={() => dig(k)} style={{ fontSize: 12, fontWeight: 600, color: digging === k ? "#fff" : C.text, background: digging === k ? C.green : C.panel, border: `1px solid ${C.line}`, borderRadius: 999, padding: "4px 10px", cursor: "pointer" }}>#{k}</span>)}
+            </div>
+          </div>
+        )}
+        {digErr && <div style={{ fontSize: 12, color: C.red, marginBottom: 8 }}>{digErr}</div>}
+        {digs.length === 0 && <div style={{ fontSize: 12.5, color: C.faint }}>아직 파고든 키워드가 없어요.</div>}
+        <div style={{ display: "grid", gap: 10 }}>
+          {digs.map(d => (
+            <div key={d.id} style={{ border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, boxShadow: "0 1px 2px rgba(43,42,40,.04)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <span style={{ fontSize: 14, fontWeight: 800, color: C.green }}>#{d.keyword}</span>
+                <span onClick={() => removeDig(d.id)} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+              </div>
+              {d.why && <div style={{ fontSize: 13, lineHeight: 1.65, marginBottom: 10 }}>{d.why}</div>}
+              {(d.questions || []).length > 0 && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>파고들 질문</div>
+                  <div style={{ display: "grid", gap: 3 }}>
+                    {d.questions.map((q, i) => (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
+                        <span style={{ fontSize: 12.5, lineHeight: 1.55 }}>· {q}</span>
+                        <span onClick={() => sendToInterview(q)} title="면접 질문으로" style={{ cursor: "pointer", fontSize: 11.5, color: C.blue, whiteSpace: "nowrap" }}>면접에 추가</span>
                       </div>
                     ))}
                   </div>
-                )}
-                <div style={{ marginTop: 8 }}><span onClick={() => reExtract(r)} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>AI로 키워드·질문 다시 뽑기</span></div>
-              </Card>
-            ))}
-          </div>
-        </div>
-      ))}
-
-      {/* 키워드 종합 + 전략 */}
-      {allKeywords.length > 0 && (
-        <Card style={{ marginTop: 8 }}>
-          <Label>이 회사에 넣을 키워드 후보</Label>
-          <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 4 }}>
-            {allKeywords.map((k, i) => <Badge key={i} label={"#" + k} color={C.text} bg={C.lineSoft} />)}
-          </div>
-          <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 10 }}>
-            <Btn primary small onClick={runStrategy} disabled={stratLoading}>{stratLoading ? "전략 짜는 중…" : st ? "전략 다시 만들기" : "AI 전략·자소서 골격 만들기"}</Btn>
-            <span style={{ fontSize: 11.5, color: C.faint }}>수집 자료 + 내 경험을 묶어 미시·거시 전략과 자소서 골격을 만들어요.</span>
-          </div>
-          {stratErr && <div style={{ fontSize: 12, color: C.red, marginTop: 8 }}>{stratErr}</div>}
-        </Card>
-      )}
-
-      {st && (
-        <Card style={{ marginTop: 12, background: C.accent }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <Label>전략 브리핑</Label>
-            {st._at && <span style={{ fontSize: 11, color: C.faint }}>{st._at} 기준</span>}
-          </div>
-          {st._raw ? (
-            <div style={{ fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.65 }}>{st._raw}</div>
-          ) : (
-            <div style={{ display: "grid", gap: 12 }}>
-              {(st.coreKeywords || []).length > 0 && (
-                <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>핵심 키워드</div>
-                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{st.coreKeywords.map((k, i) => <Badge key={i} label={"#" + k} color={C.green} bg={C.greenBg} />)}</div></div>
-              )}
-              {st.microStrategy && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 2 }}>미시 전략 (내 역량·경험 연결)</div><div style={{ fontSize: 13, lineHeight: 1.65 }}>{st.microStrategy}</div></div>}
-              {st.macroStrategy && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 2 }}>거시 전략 (산업 이해·열정)</div><div style={{ fontSize: 13, lineHeight: 1.65 }}>{st.macroStrategy}</div></div>}
-              {st.essayFrame && (
-                <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>자소서 골격</div>
-                  <div style={{ display: "grid", gap: 6 }}>
-                    {[["현황", st.essayFrame.현황], ["분석", st.essayFrame.분석], ["내 역량·경험", st.essayFrame.나의역량경험], ["기여·포부", st.essayFrame.기여포부]].map(([k, v]) => v ? (
-                      <div key={k} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 10px" }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: C.green }}>{k}</span>
-                        <div style={{ fontSize: 13, lineHeight: 1.6, marginTop: 2 }}>{v}</div>
-                      </div>
-                    ) : null)}
-                  </div>
                 </div>
               )}
-              {st.cautions && <div style={{ fontSize: 12.5, color: C.sub, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 10px" }}>⚠ {st.cautions}</div>}
+              {(d.searches || []).length > 0 && (
+                <div style={{ fontSize: 12, color: C.sub }}><span style={{ color: C.faint }}>다음 조사 방향: </span>{d.searches.join(" · ")}</div>
+              )}
             </div>
-          )}
-        </Card>
-      )}
+          ))}
+        </div>
+      </CASection>
 
-      {allWhy.length > 0 && (
-        <div style={{ fontSize: 12, color: C.faint, marginTop: 14 }}>'왜?' 질문 {allWhy.length}개가 쌓였어요. 각 질문의 "면접에 추가"를 누르면 면접 탭에서 연습할 수 있어요.</div>
-      )}
+      {/* 3. 전략 브리핑 */}
+      <CASection n="3" title="전략 브리핑" desc="모은 자료 + 내 경험을 묶어 핵심 키워드·미시/거시 전략·자소서 골격을 만들어요.">
+        <Btn primary small onClick={runStrategy} disabled={stratLoading}>{stratLoading ? "전략 짜는 중…" : st ? "다시 만들기" : "AI 전략·자소서 골격 만들기"}</Btn>
+        {stratErr && <div style={{ fontSize: 12, color: C.red, marginTop: 8 }}>{stratErr}</div>}
+        {st && (
+          <div style={{ marginTop: 12, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, background: C.accent, display: "grid", gap: 12 }}>
+            {st._raw ? <div style={{ fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.65 }}>{st._raw}</div> : <>
+              {(st.coreKeywords || []).length > 0 && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>핵심 키워드</div><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{st.coreKeywords.map((k, i) => <Badge key={i} label={"#" + k} color={C.green} bg={C.greenBg} />)}</div></div>}
+              {st.microStrategy && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 2 }}>미시 전략 (내 역량·경험 연결)</div><div style={{ fontSize: 13, lineHeight: 1.65 }}>{st.microStrategy}</div></div>}
+              {st.macroStrategy && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 2 }}>거시 전략 (산업 이해·열정)</div><div style={{ fontSize: 13, lineHeight: 1.65 }}>{st.macroStrategy}</div></div>}
+              {st.essayFrame && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>자소서 골격</div><div style={{ display: "grid", gap: 6 }}>{[["현황", st.essayFrame.현황], ["분석", st.essayFrame.분석], ["내 역량·경험", st.essayFrame.나의역량경험], ["기여·포부", st.essayFrame.기여포부]].map(([k, v]) => v ? <div key={k} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 10px" }}><span style={{ fontSize: 11, fontWeight: 700, color: C.green }}>{k}</span><div style={{ fontSize: 13, lineHeight: 1.6, marginTop: 2 }}>{v}</div></div> : null)}</div></div>}
+              {st.cautions && <div style={{ fontSize: 12.5, color: C.sub }}>⚠ {st.cautions}</div>}
+            </>}
+            {st._at && <div style={{ fontSize: 11, color: C.faint, textAlign: "right" }}>{st._at} 기준</div>}
+          </div>
+        )}
+      </CASection>
     </div>
   );
 }
