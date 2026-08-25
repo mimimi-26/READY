@@ -4171,6 +4171,14 @@ const CA_CATEGORIES = [
 const CA_CAT_LABEL = Object.fromEntries(CA_CATEGORIES.map(c => [c.id, c.label]));
 const CA_PURPOSE = { essay: "자소서용", interview: "면접용", both: "둘 다" };
 // 카테고리별 추출 규칙 (컨설턴트 문서 방법론)
+// 자소서 쓰기 전 반드시 답할 수 있어야 하는 5가지 (인스타 @nurun__gi 프레임워크 참고)
+const CA_ESSENTIAL_QS = [
+  "정확히 뭘 하는 회사인가?",
+  "무엇으로 돈을 버는가? (핵심 수익원)",
+  "현재 시장에서 어떤 위치인가? (순위·경쟁)",
+  "가장 집중하고 있는 것은? (신사업·방향)",
+  "이 회사에 필요한 사람은? (인재상)",
+];
 const CA_RULES = {
   vision: "CEO·회장 발언에서 방향을 드러내는 키워드를 뽑고, 그 키워드로 '더 찾아볼 검색어'를 제안하라.",
   performance: "매출·실적 숫자를 나열하지 말고, 증감의 '원인(왜)'을 묻는 질문을 만들어라. 키워드도 원인·배경 중심으로.",
@@ -4243,11 +4251,12 @@ function CompanyAnalysis({ app, setApplications, experiences, metrics }) {
     const e = encodeURIComponent(q);
     if (engine === "naver") return `https://search.naver.com/search.naver?query=${e}`;
     if (engine === "dart") return `https://www.google.com/search?q=${encodeURIComponent("site:dart.fss.or.kr " + q)}`;
+    if (engine === "hankyung") return `https://www.google.com/search?q=${encodeURIComponent("site:consensus.hankyung.com " + q)}`;
     return `https://www.google.com/search?q=${e}`;
   };
   const SearchLinks = ({ q }) => (
     <span style={{ fontSize: 11, color: C.faint, whiteSpace: "nowrap" }}>
-      {[["구글", "google"], ["네이버", "naver"], ["DART", "dart"]].map(([label, eng], i) => (
+      {[["구글", "google"], ["네이버", "naver"], ["DART", "dart"], ["한경", "hankyung"]].map(([label, eng], i) => (
         <span key={eng}>
           {i > 0 && <span style={{ color: C.line }}> · </span>}
           <a href={searchUrl(q, eng)} target="_blank" rel="noopener noreferrer" style={{ color: C.blue, textDecoration: "none" }}>{label}</a>
@@ -4316,6 +4325,22 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
   const removeDig = (id) => setCA(cur => ({ ...cur, digs: (cur.digs || []).filter(d => d.id !== id) }));
 
   // ── 전략 브리핑 ──
+  // 자소서 전 필수 5문항 체크
+  const [essLoading, setEssLoading] = useState(false);
+  const [essErr, setEssErr] = useState("");
+  const runEssentials = async () => {
+    setEssLoading(true); setEssErr("");
+    try {
+      const ctx = (ca.research || []).map(r => `- ${r.summary}`).join("\n").slice(0, 1500);
+      const { parsed, sources } = await callResearch(
+        `너는 기업분석 코치다. '${app.company}'에 대해 아래 5가지에 각각 1~2문장으로 답하라. 순서대로 answers 배열에 담아라. 확실하지 않은 구체 사실(수치·순위·연도)은 단정하지 말고 '확인 필요'로 표시하라.\n${CA_ESSENTIAL_QS.map((q, i) => `${i + 1}) ${q}`).join("\n")}\nJSON만: {"answers":["...","...","...","...","..."]}`,
+        `[수집 자료]\n${ctx || "(없음)"}`
+      );
+      setCA(cur => ({ ...cur, essentials: { answers: parsed.answers || [], sources: sources || [], at: new Date().toISOString().slice(0, 10) } }));
+    } catch (e) { setEssErr(e.message || String(e)); }
+    finally { setEssLoading(false); }
+  };
+
   const [stratLoading, setStratLoading] = useState(false);
   const [stratErr, setStratErr] = useState("");
   const runStrategy = async () => {
@@ -4327,7 +4352,7 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
       let r;
       try {
         r = await callAI(
-          `너는 유통·기업 취업 컨설턴트다. 아래 자료(기업분석)+지원자 경험·역량+공고 요구역량을 종합해 자소서·면접 전략을 짜라. 원칙: 매출 숫자 나열 금지·'왜' 중심, 키워드 중심, 반드시 '이 사람 실제 경험'과 연결. 【사실만】 회사 관련 사실·수치·사업 내용은 위 '기업분석 자료'에 있는 것만 사용하고, 자료에 없는 회사 사실을 지어내지 마라. essayFrame의 '현황'도 자료에 근거해야 한다. JSON만: {"coreKeywords":["핵심 키워드 4~6"],"microStrategy":"미시 전략 2~3문장","macroStrategy":"거시 전략 2~3문장","essayFrame":{"현황":"","분석":"","나의역량경험":"","기여포부":""},"cautions":"쓰면 안 되는 것 한 줄"}`,
+          `너는 유통·기업 취업 컨설턴트다. 아래 자료(기업분석)+지원자 경험·역량+공고 요구역량을 종합해 자소서·면접 전략을 짜라. 원칙: 매출 숫자 나열 금지·'왜' 중심, 키워드 중심, 반드시 '이 사람 실제 경험'과 연결. 【사실만】 회사 관련 사실·수치·사업 내용은 위 '기업분석 자료'에 있는 것만 사용하고, 자료에 없는 회사 사실을 지어내지 마라. connectChain은 '기업이 원하는 것 → 직무에서 필요한 역량 → 내가 가진 경험'으로 자연스럽게 이어지게 하라. JSON만: {"coreKeywords":["핵심 키워드 4~6"],"connectChain":{"기업이원하는것":"","직무에필요한역량":"","내경험":""},"microStrategy":"미시 전략 2~3문장","macroStrategy":"거시 전략 2~3문장","essayFrame":{"현황":"","분석":"","나의역량경험":"","기여포부":""},"cautions":"쓰면 안 되는 것 한 줄"}`,
           `[기업분석 자료]\n${researchText}\n\n[내 경험·역량]\n${expText}\n\n[공고 요구역량]\n${reqText}`
         );
       } catch (e) { setStratErr(e.message || String(e)); setStratLoading(false); return; }
@@ -4499,14 +4524,50 @@ JSON만: {"why":"...","questions":["..."],"searches":["..."]}`,
         </div>
       </CASection>
 
-      {/* 3. 전략 브리핑 */}
-      <CASection n="3" title="전략 브리핑" desc="모은 자료 + 내 경험을 묶어 핵심 키워드·미시/거시 전략·자소서 골격을 만들어요.">
+      {/* 3. 자소서 전 필수 체크 */}
+      <CASection n="3" title="자소서 전 필수 체크" desc="이 5가지에 답할 수 있으면 그 회사는 충분히 이해한 거예요. 수집한 자료로 AI가 초안을 잡아주면, 부족한 건 위 검색으로 채우세요.">
+        <Btn primary small onClick={runEssentials} disabled={essLoading}>{essLoading ? "정리 중…" : ca.essentials ? "다시 정리" : "5가지 답 정리해보기"}</Btn>
+        {essErr && <div style={{ fontSize: 12, color: C.red, marginTop: 8 }}>{essErr}</div>}
+        <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+          {CA_ESSENTIAL_QS.map((q, i) => {
+            const ans = ca.essentials?.answers?.[i];
+            return (
+              <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>{i + 1}. {q}</div>
+                {ans
+                  ? <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6, marginTop: 4 }}>{ans}</div>
+                  : <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, display: "flex", gap: 10, alignItems: "center" }}>아직 미정리 <SearchLinks q={`${app.company} ${q.replace(/\?.*/, "")}`} /></div>}
+              </div>
+            );
+          })}
+        </div>
+        {ca.essentials?.at && <div style={{ fontSize: 11, color: C.faint, textAlign: "right", marginTop: 6 }}>{ca.essentials.at} 기준 · 구체 사실은 교차 확인</div>}
+      </CASection>
+
+      {/* 4. 전략 브리핑 */}
+      <CASection n="4" title="전략 브리핑" desc="모은 자료 + 내 경험을 묶어 핵심 키워드·적용 흐름·자소서 골격을 만들어요.">
         <Btn primary small onClick={runStrategy} disabled={stratLoading}>{stratLoading ? "전략 짜는 중…" : st ? "다시 만들기" : "AI 전략·자소서 골격 만들기"}</Btn>
         {stratErr && <div style={{ fontSize: 12, color: C.red, marginTop: 8 }}>{stratErr}</div>}
         {st && (
           <div style={{ marginTop: 12, border: `1px solid ${C.line}`, borderRadius: 12, padding: 16, background: C.accent, display: "grid", gap: 12 }}>
             {st._raw ? <div style={{ fontSize: 13, whiteSpace: "pre-wrap", lineHeight: 1.65 }}>{st._raw}</div> : <>
               {(st.coreKeywords || []).length > 0 && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>핵심 키워드</div><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>{st.coreKeywords.map((k, i) => <Badge key={i} label={"#" + k} color={C.green} bg={C.greenBg} />)}</div></div>}
+              {st.connectChain && (st.connectChain.기업이원하는것 || st.connectChain.직무에필요한역량 || st.connectChain.내경험) && (
+                <div>
+                  <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>적용 흐름</div>
+                  <div style={{ display: "flex", alignItems: "stretch", gap: 6, flexWrap: "wrap" }}>
+                    {[["기업이 원하는 것", st.connectChain.기업이원하는것], ["직무에 필요한 역량", st.connectChain.직무에필요한역량], ["내가 가진 경험", st.connectChain.내경험]].map(([k, v], i) => (
+                      <React.Fragment key={k}>
+                        {i > 0 && <span style={{ alignSelf: "center", color: C.faint }}>→</span>}
+                        <div style={{ flex: "1 1 150px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 10px" }}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.green }}>{k}</div>
+                          <div style={{ fontSize: 12.5, lineHeight: 1.5, marginTop: 2 }}>{v || "—"}</div>
+                        </div>
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              )}
               {st.microStrategy && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 2 }}>미시 전략 (내 역량·경험 연결)</div><div style={{ fontSize: 13, lineHeight: 1.65 }}>{st.microStrategy}</div></div>}
               {st.macroStrategy && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 2 }}>거시 전략 (산업 이해·열정)</div><div style={{ fontSize: 13, lineHeight: 1.65 }}>{st.macroStrategy}</div></div>}
               {st.essayFrame && <div><div style={{ fontSize: 11.5, color: C.faint, marginBottom: 4 }}>자소서 골격</div><div style={{ display: "grid", gap: 6 }}>{[["현황", st.essayFrame.현황], ["분석", st.essayFrame.분석], ["내 역량·경험", st.essayFrame.나의역량경험], ["기여·포부", st.essayFrame.기여포부]].map(([k, v]) => v ? <div key={k} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 10px" }}><span style={{ fontSize: 11, fontWeight: 700, color: C.green }}>{k}</span><div style={{ fontSize: 13, lineHeight: 1.6, marginTop: 2 }}>{v}</div></div> : null)}</div></div>}
