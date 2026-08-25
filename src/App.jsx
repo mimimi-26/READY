@@ -1123,7 +1123,7 @@ export default function App() {
       </aside>
 
       {/* Main */}
-      <main style={{ flex: 1, padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0 }}>
+      <main style={{ flex: 1, padding: isMobile ? "16px" : "28px 40px", maxWidth: 1600, minWidth: 0 }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => go("guide")} />}
         {nav === "guide" && <Guide onGo={go} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
@@ -3884,9 +3884,24 @@ function buildEssayContext(app, essay, experiences, metrics) {
 
   const reqLines = (app.requirements || []).map(r => `- ${r.requirement} (중요도 ${r.importance}/5)${r.matchReason ? ` — ${r.matchReason}` : ""}`).join("\n");
 
+  // 심층 리포트 (있으면) — 회사 방향·핵심 메시지·연결고리·이 문항 골격을 근거로
+  const rp = app.report || {};
+  const cn = rp.connect || {};
+  const fr = (rp.essayFrames || {})[essay.id] || {};
+  const reportLines = [
+    rp.oneLiner && `한 줄 정의: ${rp.oneLiner}`,
+    rp.direction && `회사 방향/CEO: ${rp.direction}`,
+    (rp.companyKeywords || []).length ? `기업 키워드: ${(rp.companyKeywords || []).join(", ")}` : "",
+    (cn.want || cn.skill || cn.exp) ? `연결 고리: ${cn.want || "?"} → ${cn.skill || "?"} → ${cn.exp || "?"}` : "",
+    rp.coreMessage && `핵심 메시지: ${rp.coreMessage}`,
+  ].filter(Boolean).join("\n");
+  const frameLine = [fr.현황 && `현황: ${fr.현황}`, fr.분석 && `분석: ${fr.분석}`, fr.역량경험 && `내 역량·경험: ${fr.역량경험}`, fr.포부 && `기여·포부: ${fr.포부}`].filter(Boolean).join("\n");
+
   return `[지원 정보]
 회사: ${app.company}
 직무: ${app.position}
+${reportLines ? `\n[심층 리포트 요약 — 이 방향·키워드를 자소서에 녹일 것]\n${reportLines}` : ""}
+${frameLine ? `\n[이 문항의 골격 — 이 순서/내용을 따라 작성]\n${frameLine}` : ""}
 
 [이 회사가 요구하는 역량 (공고 분석 결과) — 답변에서 이 키워드와 최대한 연결지어 서술할 것]
 ${reqLines || "등록된 요구 역량 없음"}
@@ -4744,6 +4759,224 @@ function InterviewCard({ iq, patchIq, removeIq, experiences, interviewCategories
   );
 }
 
+/* ---------- 심층 리포트 (기업분석·직무분석 구조화 + 자소서 골격) ---------- */
+function CompanyReport({ app, setApplications, experiences, metrics }) {
+  const rp = app.report || {};
+  const setRp = (u) => setApplications(prev => prev.map(a => a.id === app.id ? { ...a, report: typeof u === "function" ? u(a.report || {}) : u } : a));
+  const patch = (k, v) => setRp(r => ({ ...r, [k]: v }));
+  const setArr = (k, arr) => setRp(r => ({ ...r, [k]: arr }));
+  const fin = rp.financials || { rows: [], overseas: "" };
+  const setFin = (u) => setRp(r => ({ ...r, financials: typeof u === "function" ? u(r.financials || { rows: [], overseas: "" }) : u }));
+  const connect = rp.connect || {};
+  const essentials = rp.essentials || ["", "", "", "", ""];
+  const frames = rp.essayFrames || {};
+  const setFrame = (eid, k, v) => setRp(r => ({ ...r, essayFrames: { ...(r.essayFrames || {}), [eid]: { ...((r.essayFrames || {})[eid] || {}), [k]: v } } }));
+
+  const sendToInterview = (q) => setApplications(prev => prev.map(a => a.id === app.id
+    ? { ...a, interviews: [...(a.interviews || []), { id: "iq_" + Date.now() + Math.random().toString(36).slice(2, 4), question: q, category: "기업분석", selectedExperienceId: null, practiceCount: 0, confidence: null, followUps: [], answerKeywords: [], script: "" }] } : a));
+  const addQna = (q) => setApplications(prev => prev.map(a => {
+    if (a.id !== app.id) return a;
+    const ca = a.companyAnalysis || { research: [], digs: [], qna: [], strategy: null };
+    if ((ca.qna || []).some(x => x.question === q)) return a;
+    return { ...a, companyAnalysis: { ...ca, qna: [...(ca.qna || []), { id: "qa_" + Date.now() + Math.random().toString(36).slice(2, 4), question: q, answer: "" }] } };
+  }));
+
+  // 붙여넣기 자동 채우기
+  const [pasteText, setPasteText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importErr, setImportErr] = useState("");
+  const [showImport, setShowImport] = useState(!rp.oneLiner);
+  const runImport = async () => {
+    if (!pasteText.trim()) return;
+    setImporting(true); setImportErr("");
+    try {
+      const sys = `아래는 어떤 회사·직무에 대한 기업분석/직무분석 리포트(마크다운)다. 여기서 정보를 뽑아 JSON 스키마에 채워라. 원문에 없는 건 빈 문자열/빈 배열로 두고 지어내지 마라. 표의 수치·이유도 텍스트로 옮겨라.
+스키마: {"oneLiner":"한 줄 정의","revenue":"수익 구조","financials":{"rows":[{"year":"","revenue":"","op":"영업이익","why":"증감 이유"}],"overseas":"해외사업"},"market":"시장 위치","direction":"방향성·CEO/신년사","newbizMicro":"신사업 미시","newbizMacro":"신사업 거시(공통분모)","issues":"최근 이슈","companyKeywords":[],"whyQuestions":[],"cautions":"주의","jobDuties":"직무가 하는 일","jobCompetencies":"요구 역량","jobCriteria":"진짜 평가 포인트","jobSpecific":"이 회사에서 직무 특수성","jobKeywords":[],"jobQuestions":[],"connect":{"want":"기업이 원하는 것","skill":"직무 필요 역량","exp":"내 경험"},"coreMessage":"자소서 핵심 메시지","essentials":["뭘 하는 회사","뭘로 돈 버나","시장 위치","가장 집중","필요한 사람"]}
+JSON만 출력.`;
+      const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ systemPrompt: sys, context: pasteText.slice(0, 12000), messages: [{ role: "user", content: "위 리포트를 JSON으로 구조화해줘." }] }) });
+      const json = await res.json();
+      if (!res.ok) throw new Error(typeof json?.error === "string" ? json.error : "AI 호출 실패");
+      const text = (json.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+      const parsed = parseAIJson(text);
+      setRp(r => ({ ...r, ...parsed, financials: parsed.financials || r.financials, connect: parsed.connect || r.connect, essentials: parsed.essentials || r.essentials, raw: pasteText }));
+      setShowImport(false); setPasteText("");
+    } catch (e) { setImportErr(e.message || String(e)); }
+    finally { setImporting(false); }
+  };
+
+  // 프롬프트 복사
+  const [copied, setCopied] = useState(false);
+  const buildPrompt = () => `너는 국내 대기업 채용을 잘 아는 취업 컨설턴트다. 아래 회사·직무에 자소서를 쓰기 전, [기업분석]과 [직무분석]을 각각 따로 수행하고 마지막에 자소서 방향으로 종합해라.
+
+[대상]
+- 회사: ${app.company || "(회사명)"}
+- 직무: ${app.position || "(직무명)"}
+- 채용공고(JD): ${(app.jobPostingRaw || "").slice(0, 2000) || "(없음)"}
+
+[원칙] 웹 검색으로 사실을 확인하고, 확인 안 된 구체 사실(수치·순위·연도·M&A·제품명·인물)은 단정하지 말고 (확인 필요)로 표시. 숫자 나열 금지·'왜'에 초점. 키워드 중심. 출처 표기(DART 사업보고서·기업 홈페이지·한경컨센서스·뉴스).
+
+PART 1) 기업분석: 1.한 줄 정의 2.수익 구조 3.실적 최근 3년(매출·영업이익 표)과 '작년' 매출 + 연도별 증감 '이유' 4.해외사업(진출국·해외매출 비중·최근 동향과 왜) 5.시장 위치·경쟁사 6.방향성(현 CEO/신년사 키워드·비전) 7.신사업 미시(구체 하나)+거시(공통분모 한 줄) 8.최근 6~12개월 이슈 9.자소서용 키워드 5~8 10.'왜' 질문 5 11.쓰면 안 되는 것.
+PART 2) 직무분석: 1.실제 하는 일 2.요구 역량(중요도) 3.진짜 평가 포인트 4.이 회사에서 직무 특수성 5.직무 키워드 6.내 경험 매칭 표 7.직무 예상 질문 5.
+PART 3) 종합: 1.연결 고리(기업이 원하는 것→직무 역량→내 경험) 2.자소서 핵심 메시지 3.문항별 골격(현황→분석→내 역량·경험→기여·포부) 4.필수 5문답 5.더 조사할 것+검색어.
+각 PART를 제목으로 구분하고, 사실 옆에 (출처)/(확인 필요)를 표기하라.`;
+  const copyPrompt = () => { try { navigator.clipboard.writeText(buildPrompt()); } catch { } setCopied(true); setTimeout(() => setCopied(false), 1500); };
+
+  // 렌더 헬퍼
+  const textField = (label, k, rows = 3, ph = "") => (
+    <div style={{ marginBottom: 14 }}>
+      <Label>{label}</Label>
+      <Textarea rows={rows} placeholder={ph} value={rp[k] || ""} onChange={e => patch(k, e.target.value)} style={{ fontSize: 13 }} />
+    </div>
+  );
+  const chips = (label, k, hint) => { const arr = rp[k] || []; return (
+    <div style={{ marginBottom: 14 }}>
+      <Label>{label}</Label>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+        {arr.map((kw, i) => (<span key={i} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 600, color: C.green, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "2px 6px 2px 8px" }}>#{kw}<span onClick={() => setArr(k, arr.filter((_, j) => j !== i))} style={{ cursor: "pointer", color: C.faint }}>×</span></span>))}
+        <input placeholder="+ 키워드(엔터)" onKeyDown={e => { const v = e.target.value.trim(); if (e.key === "Enter" && v) { setArr(k, [...arr, v]); e.target.value = ""; } }} style={{ fontFamily: font, fontSize: 12, border: "none", outline: "none", width: 100, background: "transparent", color: C.sub }} />
+      </div>
+    </div>
+  ); };
+  const qList = (label, k) => { const arr = rp[k] || []; return (
+    <div style={{ marginBottom: 14 }}>
+      <Label>{label}</Label>
+      <div style={{ display: "grid", gap: 4 }}>
+        {arr.map((q, i) => (<div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <span style={{ color: C.faint, fontSize: 12 }}>·</span>
+          <input value={q} onChange={e => setArr(k, arr.map((x, j) => j === i ? e.target.value : x))} style={{ fontFamily: font, flex: 1, minWidth: 0, fontSize: 12.5, border: "none", outline: "none", background: "transparent", color: C.text }} />
+          <span onClick={() => addQna(q)} title="문답에 추가" style={{ cursor: "pointer", fontSize: 11, color: C.blue, whiteSpace: "nowrap" }}>문답</span>
+          <span onClick={() => sendToInterview(q)} title="면접에 추가" style={{ cursor: "pointer", fontSize: 11, color: C.blue, whiteSpace: "nowrap" }}>면접</span>
+          <span onClick={() => setArr(k, arr.filter((_, j) => j !== i))} style={{ cursor: "pointer", fontSize: 11, color: C.faint }}>✕</span>
+        </div>))}
+        <span onClick={() => setArr(k, [...arr, "새 질문"])} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>+ 추가</span>
+      </div>
+    </div>
+  ); };
+  const grid2 = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: 16 };
+  const inCell = { fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 8, border: `1px solid ${C.line}`, background: C.panel, color: C.text, minWidth: 0, boxSizing: "border-box" };
+
+  return (
+    <div>
+      {/* 붙여넣기 자동 채우기 */}
+      <Card style={{ marginBottom: 16, background: C.accent }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer" }} onClick={() => setShowImport(s => !s)}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>클로드코드 리포트 붙여넣기 → 자동 채우기</div>
+          <span style={{ fontSize: 12, color: C.faint }}>{showImport ? "접기 ▴" : "펼치기 ▾"}</span>
+        </div>
+        {showImport && <div style={{ marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <Btn small onClick={copyPrompt}>{copied ? "복사됨 ✓" : "이 회사용 프롬프트 복사"}</Btn>
+            <span style={{ fontSize: 11.5, color: C.faint }}>복사 → 클로드코드 실행 → 결과를 아래에 붙여넣기</span>
+          </div>
+          <Textarea rows={5} placeholder="클로드코드가 준 마크다운 리포트를 통째로 붙여넣으세요…" value={pasteText} onChange={e => setPasteText(e.target.value)} style={{ fontSize: 12.5 }} />
+          <div style={{ marginTop: 8 }}><Btn primary small onClick={runImport} disabled={importing || !pasteText.trim()}>{importing ? "채우는 중…" : "리포트에서 자동 채우기"}</Btn></div>
+          {importErr && <div style={{ fontSize: 12, color: C.red, marginTop: 6 }}>{importErr}</div>}
+          <div style={{ fontSize: 11, color: C.faint, marginTop: 6 }}>자동 채운 뒤 각 칸을 직접 수정할 수 있어요. 붙여넣기 없이 처음부터 직접 채워도 됩니다.</div>
+        </div>}
+      </Card>
+
+      {/* 1. 기업분석 */}
+      <CASection n="1" title="기업분석" desc="회사·산업. 모든 칸은 직접 수정 가능.">
+        <div style={grid2}>
+          <div>{textField("한 줄 정의", "oneLiner", 2)}{textField("수익 구조", "revenue", 3)}</div>
+          <div>{textField("시장 위치 · 경쟁사", "market", 3)}{textField("방향성 · 현 CEO/신년사", "direction", 3)}</div>
+        </div>
+        {/* 실적 3년 표 */}
+        <div style={{ marginBottom: 14 }}>
+          <Label>실적 (최근 3년) · 매출 · 영업이익 · 증감 이유(왜)</Label>
+          <div style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: 520 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "72px 1fr 1fr 2fr 22px", gap: 8, fontSize: 11, color: C.faint, marginBottom: 4 }}>
+                <span>연도</span><span>매출</span><span>영업이익</span><span>증감 이유(왜)</span><span></span>
+              </div>
+              {(fin.rows || []).map((row, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "72px 1fr 1fr 2fr 22px", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                  {["year", "revenue", "op", "why"].map(f => <input key={f} value={row[f] || ""} placeholder={{ year: "2025", revenue: "매출", op: "영업이익", why: "왜 늘고 줄었나" }[f]} onChange={e => setFin(x => ({ ...x, rows: x.rows.map((rr, j) => j === i ? { ...rr, [f]: e.target.value } : rr) }))} style={inCell} />)}
+                  <span onClick={() => setFin(x => ({ ...x, rows: x.rows.filter((_, j) => j !== i) }))} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <span onClick={() => setFin(x => ({ ...x, rows: [...(x.rows || []), { year: "", revenue: "", op: "", why: "" }] }))} style={{ fontSize: 11.5, color: C.blue, cursor: "pointer" }}>+ 연도 추가</span>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <Label>해외사업 · 진출국·해외매출 비중·최근 동향</Label>
+          <Textarea rows={3} value={fin.overseas || ""} onChange={e => setFin(x => ({ ...x, overseas: e.target.value }))} style={{ fontSize: 13 }} />
+        </div>
+        <div style={grid2}>
+          <div>{textField("신사업 — 미시 (구체 사업 하나)", "newbizMicro", 3)}</div>
+          <div>{textField("신사업 — 거시 (공통분모 한 줄)", "newbizMacro", 3)}</div>
+        </div>
+        {textField("최근 이슈 (6~12개월)", "issues", 3)}
+        {chips("자소서용 기업 키워드", "companyKeywords")}
+        {qList("'왜?' 질문 (면접 대비)", "whyQuestions")}
+        {textField("⚠ 이 회사에 쓰면 안 되는 것", "cautions", 2)}
+      </CASection>
+
+      {/* 2. 직무분석 */}
+      <CASection n="2" title="직무분석" desc="기업분석과 별개로 직무 자체를.">
+        <div style={grid2}>
+          <div>{textField("실제로 하는 일", "jobDuties", 4)}{textField("진짜 평가 포인트 (표면 자격 이면)", "jobCriteria", 3)}</div>
+          <div>{textField("요구 역량", "jobCompetencies", 4)}{textField("이 회사에서 이 직무의 특수성", "jobSpecific", 3)}</div>
+        </div>
+        {chips("직무 키워드", "jobKeywords")}
+        {qList("직무 예상 면접 질문", "jobQuestions")}
+      </CASection>
+
+      {/* 3. 종합 — 자소서 방향 */}
+      <CASection n="3" title="종합 — 자소서 방향" desc="분석을 자소서로 잇는 골격.">
+        <div style={{ marginBottom: 16 }}>
+          <Label>연결 고리</Label>
+          <div style={{ display: "flex", gap: 6, alignItems: "stretch", flexWrap: "wrap" }}>
+            {[["기업이 원하는 것", "want"], ["직무에 필요한 역량", "skill"], ["내가 가진 경험", "exp"]].map(([lb, k], i) => (
+              <React.Fragment key={k}>
+                {i > 0 && <span style={{ alignSelf: "center", color: C.faint }}>→</span>}
+                <div style={{ flex: "1 1 200px", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 10, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10.5, fontWeight: 700, color: C.green }}>{lb}</div>
+                  <Textarea rows={2} value={connect[k] || ""} onChange={e => setRp(r => ({ ...r, connect: { ...(r.connect || {}), [k]: e.target.value } }))} style={{ fontSize: 12.5, border: "none", padding: "4px 0", minHeight: 0 }} />
+                </div>
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+        {textField("자소서 핵심 메시지", "coreMessage", 2)}
+        <div style={{ marginBottom: 16 }}>
+          <Label>자소서 전 필수 5문답</Label>
+          <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+            {["정확히 뭘 하는 회사인가?", "무엇으로 돈을 버는가?", "시장에서 어떤 위치인가?", "가장 집중하는 것은?", "이 회사에 필요한 사람은?"].map((q, i) => (
+              <div key={i} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: "10px 12px" }}>
+                <div style={{ fontSize: 12, fontWeight: 700 }}>{i + 1}. {q}</div>
+                <Textarea rows={2} value={essentials[i] || ""} onChange={e => setRp(r => { const arr = [...(r.essentials || ["", "", "", "", ""])]; arr[i] = e.target.value; return { ...r, essentials: arr }; })} style={{ fontSize: 12.5, marginTop: 4 }} />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* 문항별 골격 (F) */}
+        <div>
+          <Label>문항별 자소서 골격 <span style={{ color: C.faint, fontWeight: 400 }}>· 현황 → 분석 → 내 역량·경험 → 기여·포부 (자소서 작성 시 AI가 참고)</span></Label>
+          {(app.essays || []).length === 0
+            ? <div style={{ fontSize: 12.5, color: C.faint }}>자소서 탭에 문항을 추가하면 여기에 문항별 골격 칸이 생겨요.</div>
+            : <div style={{ display: "grid", gap: 10 }}>
+                {(app.essays || []).map(es => { const fr = frames[es.id] || {}; return (
+                  <div key={es.id} style={{ border: `1px solid ${C.line}`, borderRadius: 10, padding: 12 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 700, marginBottom: 6 }}>{es.question || "(문항 미입력)"}</div>
+                    <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
+                      {[["현황", "현황"], ["분석", "분석"], ["내 역량·경험", "역량경험"], ["기여·포부", "포부"]].map(([lb, k]) => (
+                        <div key={k}>
+                          <div style={{ fontSize: 10.5, fontWeight: 700, color: C.green, marginBottom: 2 }}>{lb}</div>
+                          <Textarea rows={2} value={fr[k] || ""} onChange={e => setFrame(es.id, k, e.target.value)} style={{ fontSize: 12, minHeight: 0 }} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ); })}
+              </div>}
+        </div>
+      </CASection>
+    </div>
+  );
+}
+
 function ApplicationDetail({ app, setApplications, experiences, outputs, metrics, onBack, onOpenExp, addTrash, interviewCategories, addInterviewCategory }) {
   const [tab, setTab] = useState("공고 분석");
   const [chatEssayId, setChatEssayId] = useState(null);
@@ -4787,13 +5020,15 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
       <AppLinks app={app} setApplications={setApplications} />
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18, flexWrap: "wrap" }}>
-        {["공고 분석", "기업분석", "자소서", "면접", "복습"].map(t => (
+        {["공고 분석", "기업분석", "심층 리포트", "자소서", "면접", "복습"].map(t => (
           <div key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
             color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{t}</div>
         ))}
       </div>
 
       {tab === "기업분석" && <CompanyAnalysis app={app} setApplications={setApplications} experiences={experiences} metrics={metrics} />}
+
+      {tab === "심층 리포트" && <CompanyReport app={app} setApplications={setApplications} experiences={experiences} metrics={metrics} />}
 
       {tab === "복습" && <ApplicationReview app={app} experiences={experiences} metrics={metrics} />}
 
