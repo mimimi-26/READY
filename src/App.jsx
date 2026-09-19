@@ -1515,13 +1515,16 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
       <Card style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }} className="wrap-sm">
           <Input placeholder="이때 무슨 일이 있었나요? (예: 팀 프로젝트 발표)" value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }} className="wrap-sm">
+          {/* 시작~종료는 한 쌍이라 좁은 화면에서도 같은 줄에 둔다.
+              고정 140px 이면 두 개가 들어가지 않아 세로로 쪼개졌다.
+              남는 폭을 반씩 나눠 갖도록 flex 로 바꾸고 wrap 을 뺐다. */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, flex: "1 1 260px", minWidth: 0 }}>
             <input type="month" value={date ? date.slice(0, 7) : ""} onChange={e => setDate(e.target.value ? e.target.value + "-01" : "")}
-              style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-5)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, width: 140 }} />
-            <span style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>~</span>
+              style={{ fontFamily: font, fontSize: "var(--fs-sm)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, flex: 1, minWidth: 0 }} />
+            <span style={{ fontSize: "var(--fs-sm)", color: C.faintText, flexShrink: 0 }}>~</span>
             <input type="month" value={endDate ? endDate.slice(0, 7) : ""} min={date ? date.slice(0, 7) : undefined}
               onChange={e => setEndDate(e.target.value ? e.target.value + "-01" : "")}
-              style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-5)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, width: 140 }} />
+              style={{ fontFamily: font, fontSize: "var(--fs-sm)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, flex: 1, minWidth: 0 }} />
           </div>
           <Btn primary disabled={!title.trim() || !date} onClick={addActivity}>추가</Btn>
         </div>
@@ -1549,7 +1552,14 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
             return (
               <div key={idx} style={{ height: TIMELINE_ROW_H, display: "flex", alignItems: "center", fontSize: "var(--fs-xs)", color: C.faintText,
                 borderTop: i === 0 ? "none" : `1px solid ${C.lineSoft}` }}>
-                {(isJan || isTop) ? <span style={{ fontWeight: 700, color: C.text, fontSize: "var(--fs-xs)" }}>{y}·{m}월</span> : `${m}월`}
+                {/* "2026·1월" 을 한 줄에 쓰면 52px 컬럼을 넘겨 "2026·1 / 월" 로 갈라진다.
+                    연도를 굵게 위에, 월은 다른 달과 같은 서체로 아래에 둔다. */}
+                {(isJan || isTop) ? (
+                  <span style={{ display: "flex", flexDirection: "column", lineHeight: 1.1 }}>
+                    <span style={{ fontWeight: 700, color: C.text, fontSize: "var(--fs-2xs)" }}>{y}</span>
+                    <span>{m}월</span>
+                  </span>
+                ) : `${m}월`}
               </div>
             );
           })}
