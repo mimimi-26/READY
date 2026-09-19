@@ -436,18 +436,17 @@ function getCloudClient() {
 }
 
 let _cloudAuthPromise = null;
+let _cachedCloudUser = null;
 function ensureCloudAuth(supabase) {
-  if (!supabase) return Promise.resolve({ user: null, error: "Supabase 클라이언트가 없습니다 (환경변수 미설정)" });
+  // 더 이상 익명 로그인을 하지 않는다. 로그인 안 한 상태는 오류가 아니라 정상적인 "로컬 전용" 상태다.
+  if (!supabase) return Promise.resolve({ user: null, error: null });
   if (_cloudAuthPromise) return _cloudAuthPromise;
   _cloudAuthPromise = (async () => {
     try {
       const { data: { session }, error: sessErr } = await supabase.auth.getSession();
       if (sessErr) return { user: null, error: `세션 확인 실패: ${sessErr.message}` };
-      if (session?.user) return { user: session.user, error: null };
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (error) return { user: null, error: `익명 로그인 실패: ${error.message}` };
-      if (!data?.user) return { user: null, error: "익명 로그인 응답에 사용자 정보가 없습니다." };
-      return { user: data.user, error: null };
+      _cachedCloudUser = session?.user || null;
+      return { user: _cachedCloudUser, error: null };
     } catch (e) {
       return { user: null, error: `연결 중 예외 발생: ${e.message || String(e)}` };
     }
@@ -455,10 +454,70 @@ function ensureCloudAuth(supabase) {
   return _cloudAuthPromise;
 }
 function resetCloudAuth() { _cloudAuthPromise = null; }
+function getCachedCloudUser() { return _cachedCloudUser; }
 
-let _lastCloudAuthError = null;
-function setLastCloudAuthError(msg) { _lastCloudAuthError = msg; }
-function getLastCloudAuthError() { return _lastCloudAuthError; }
+async function signInWithGoogle(supabase) {
+  if (!supabase) return { error: "Supabase 클라이언트가 없습니다." };
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: { redirectTo: window.location.origin + window.location.pathname },
+  });
+  return { error: error ? error.message : null };
+}
+
+async function signOutCloud(supabase) {
+  if (!supabase) return;
+  try { await supabase.auth.signOut(); } catch { /* ignore */ }
+  _cachedCloudUser = null;
+  resetCloudAuth();
+  window.location.reload();
+}
+
+/* ---------- 로그인 시점 로컬/클라우드 데이터 충돌 조정 ---------- */
+let _reconcileResolve = null;
+let _reconcileGate = new Promise(res => { _reconcileResolve = res; });
+function resolveReconcile(mode) { if (_reconcileResolve) { _reconcileResolve(mode); _reconcileResolve = null; } }
+
+const RECONCILE_KEYS = ["experiences", "metrics", "outputs", "applications", "skills", "certs", "awards", "resumeProfile",
+  "masterEssays", "masterInterviews", "interviewCategories", "expCategories", "questionBlocks", "timelineActivities", "trash"];
+
+function isMeaningfulValue(key, val) {
+  if (val == null) return false;
+  if (Array.isArray(val)) return val.length > 0;
+  if (key === "resumeProfile") return !!(val.name || val.headline || val.targetRole);
+  if (typeof val === "object") return Object.keys(val).length > 0;
+  return false;
+}
+function summarizeValue(key, val) {
+  if (Array.isArray(val)) return `${val.length}개`;
+  if (key === "resumeProfile") return val.name || val.headline || "(내용 있음)";
+  return "있음";
+}
+const RECONCILE_LABEL = { experiences: "경험", metrics: "성과 수치", outputs: "활용 문장", applications: "지원 현황", skills: "역량·스킬",
+  certs: "자격증", awards: "수상기록", resumeProfile: "기본 이력서", masterEssays: "마스터 자소서",
+  masterInterviews: "마스터 면접", interviewCategories: "면접 카테고리", expCategories: "경험 카테고리",
+  questionBlocks: "질문별 블록", timelineActivities: "타임라인 활동", trash: "휴지통" };
+
+async function reconcileOnLogin(supabase, user) {
+  const local = {};
+  RECONCILE_KEYS.forEach(k => {
+    try { const raw = window.localStorage.getItem(STORAGE_PREFIX + k); if (raw != null) local[k] = JSON.parse(raw); } catch { /* ignore */ }
+  });
+  let cloud = {};
+  try {
+    const { data, error } = await supabase.from("career_os_state").select("key, value").eq("user_id", user.id);
+    if (!error && data) data.forEach(row => { cloud[row.key] = row.value; });
+  } catch { /* ignore */ }
+
+  const diffs = [];
+  RECONCILE_KEYS.forEach(k => {
+    const l = local[k], c = cloud[k];
+    if (isMeaningfulValue(k, l) && isMeaningfulValue(k, c) && JSON.stringify(l) !== JSON.stringify(c)) {
+      diffs.push({ key: k, label: RECONCILE_LABEL[k] || k, localSummary: summarizeValue(k, l), cloudSummary: summarizeValue(k, c) });
+    }
+  });
+  return { diffs };
+}
 
 /* ---------- 브랜딩 데이터 CRUD (Supabase) ---------- */
 async function baGetOrCreateAnswer(supabase, userId, question) {
@@ -604,36 +663,38 @@ function usePersisted(key, initialValue) {
     catch (e) { /* 저장 실패해도 앱은 계속 동작 */ }
   }, [key, state]);
 
-  // 2) 클라우드에서 최초 1회 불러오기 (Supabase 설정된 경우만)
+  // 2) 클라우드 동기화 — 로그인 시점 충돌 조정(reconcile) 게이트를 먼저 기다린다
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const supabase = await getCloudClient();
       if (!supabase) { setCloudStatus("offline"); return; }
-      const { user, error: authErr } = await ensureCloudAuth(supabase);
-      if (!user || cancelled) {
-        if (authErr) setLastCloudAuthError(authErr);
-        setCloudStatus("offline");
-        return;
-      }
+      const { user } = await ensureCloudAuth(supabase);
+      if (!user || cancelled) { setCloudStatus("offline"); return; } // 로그인 안 함 = 정상적인 로컬 전용 상태
+
+      const mode = await _reconcileGate; // "local" | "cloud" | "none" — 로그인 시점에 1회 결정됨
+      if (cancelled) return;
       try {
-        const { data, error } = await supabase.from("career_os_state")
-          .select("value").eq("user_id", user.id).eq("key", key).maybeSingle();
-        if (cancelled) return;
-        if (error) throw error;
-        if (data && data.value !== null && data.value !== undefined) {
-          setState(data.value);
-          lastSyncedRef.current = JSON.stringify(data.value);
-        } else {
-          // 클라우드에 아직 없으면 지금 로컬 값을 최초 1회 업로드 (마이그레이션)
+        if (mode === "local") {
           await supabase.from("career_os_state").upsert({ user_id: user.id, key, value: state });
           lastSyncedRef.current = JSON.stringify(state);
+        } else {
+          const { data, error } = await supabase.from("career_os_state")
+            .select("value").eq("user_id", user.id).eq("key", key).maybeSingle();
+          if (cancelled) return;
+          if (error) throw error;
+          if (data && data.value !== null && data.value !== undefined) {
+            setState(data.value);
+            lastSyncedRef.current = JSON.stringify(data.value);
+          } else {
+            await supabase.from("career_os_state").upsert({ user_id: user.id, key, value: state });
+            lastSyncedRef.current = JSON.stringify(state);
+          }
         }
         cloudReadyRef.current = true;
         setCloudStatus("synced");
       } catch (e) {
         console.error("[cloud sync 실패]", key, e);
-        setLastCloudAuthError(e.message || String(e));
         setCloudStatus("error");
       }
     })();
@@ -668,7 +729,7 @@ function usePersisted(key, initialValue) {
   return [state, setState, cloudStatus];
 }
 
-export default function App() {
+function App() {
   const [nav, setNav] = useState("home"); // home | analyze | archive | apply | resume
   const backupInputRef = useRef(null);
   const [experiences, setExperiences, cloudStatus] = usePersisted("experiences", []);
@@ -693,6 +754,43 @@ export default function App() {
   const [personalChatHistory, setPersonalChatHistory] = usePersisted("personalChatHistory", []);
   const addInterviewCategory = (c) => setInterviewCategories(prev => prev.includes(c) ? prev : [...prev, c]);
   const addExpCategory = (c) => setExpCategories(prev => prev.includes(c) ? prev : [...prev, c]);
+
+  const [authUser, setAuthUser] = useState(undefined); // undefined=확인 중, null=로그아웃, object=로그인됨
+  const [authSupabase, setAuthSupabase] = useState(null);
+  const [conflict, setConflict] = useState(null); // { diffs } — 로컬/클라우드 둘 다 의미 있는 데이터가 있어 다를 때만 표시
+  const [authLoading, setAuthLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const supabase = await getCloudClient();
+      setAuthSupabase(supabase);
+      if (!supabase) { resolveReconcile("none"); setAuthUser(null); return; }
+      const { user } = await ensureCloudAuth(supabase);
+      setAuthUser(user);
+      if (!user) { resolveReconcile("none"); return; }
+      try {
+        const result = await reconcileOnLogin(supabase, user);
+        if (result.diffs.length > 0) setConflict(result);
+        else resolveReconcile("none");
+      } catch {
+        resolveReconcile("none");
+      }
+      if (window.location.hash.includes("access_token") || window.location.search.includes("code=")) {
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    })();
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    setAuthLoading(true);
+    const sb = authSupabase || await getCloudClient();
+    if (!sb) { setAuthLoading(false); alert("Supabase가 설정되어 있지 않습니다."); return; }
+    const { error } = await signInWithGoogle(sb);
+    if (error) { setAuthLoading(false); alert("로그인 실패: " + error); }
+  };
+  const handleLogout = async () => { if (authSupabase) await signOutCloud(authSupabase); };
+
+  const resolveConflict = (mode) => { resolveReconcile(mode); setConflict(null); };
 
   const isBlankSlate = experiences.length === 0 && applications.length === 0 && skills.length === 0 && certs.length === 0;
   const loadDemoData = () => {
@@ -775,17 +873,17 @@ export default function App() {
   const openAnalyze = (id) => { setAnalyzeId(id); setNav("analyze"); setDetailId(null); };
   const openDetail = (id) => { setDetailId(id); setNav("archive"); };
 
-  const menuGroups = [
-    { label: "시작", items: [["home", "홈"], ["guide", "사용 가이드"], ["chat", "AI에게 물어보기"]] },
-    { label: "경험 정리", items: [["timeline", "타임라인"], ["import", "파일 가져오기"], ["analyze", "경험 분석"], ["archive", "경험 보관함"], ["skills", "역량·스킬"]] },
-    { label: "브랜딩", items: [["branding", "퍼스널 브랜딩"]] },
-    { label: "지원 준비", items: [["apply", "지원 관리"], ["master", "자소서·면접 준비"], ["resume", "기본 이력서"]] },
-    { label: "기타", items: [["trash", "휴지통"]] },
+  const TOP_NAV = [
+    { key: "home", label: "홈", nav: "home" },
+    { key: "myexp", label: "내 경험", subTabs: [["archive", "경험 보관함"], ["timeline", "타임라인"], ["skills", "역량·스킬"]] },
+    { key: "prep", label: "지원 준비", subTabs: [["apply", "지원 관리"], ["master", "자소서·면접 준비"], ["resume", "기본 이력서"], ["branding", "퍼스널 브랜딩"]] },
   ];
-  const [openGroups, setOpenGroups] = useState(() => Object.fromEntries(menuGroups.map(g => [g.label, true])));
-  const toggleGroup = (label) => setOpenGroups(p => ({ ...p, [label]: !p[label] }));
+  const activeTop = TOP_NAV.find(t => t.key === nav || (t.subTabs && t.subTabs.some(([k]) => k === nav))) || TOP_NAV[0];
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   return (
     <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: isMobile ? "column" : "row", color: C.text }}>
@@ -809,15 +907,17 @@ export default function App() {
         </div>
         {(!isMobile || mobileMenuOpen) && (
           <div style={{ marginTop: isMobile ? 12 : 4 }}>
-            {menuGroups.map((g, gi) => (
-              <div key={g.label} style={{ marginBottom: 4, marginTop: gi === 0 ? 0 : 14, paddingTop: gi === 0 ? 0 : 14, borderTop: gi === 0 ? "none" : `1px solid ${C.lineSoft}` }}>
-                <div onClick={() => toggleGroup(g.label)} style={{
-                  display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 10px 8px",
-                  fontSize: 10.5, fontWeight: 700, color: C.faint, letterSpacing: ".07em", cursor: "pointer" }}>
-                  <span>{g.label.toUpperCase()}</span>
-                  <span style={{ fontSize: 9, color: C.faint, transform: openGroups[g.label] ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .1s" }}>▾</span>
-                </div>
-                {openGroups[g.label] && g.items.map(([k, l]) => (
+            {TOP_NAV.map(t => (
+              <div key={t.key} onClick={() => { if (t.subTabs) { if (activeTop.key !== t.key) go(t.subTabs[0][0]); if (isMobile) setMobileMenuOpen(false); } else { go(t.nav); if (isMobile) setMobileMenuOpen(false); } }} style={{
+                padding: "10px 12px", fontSize: 14, fontWeight: activeTop.key === t.key ? 700 : 500, cursor: "pointer",
+                color: activeTop.key === t.key ? C.text : C.sub, marginBottom: 2, borderRadius: 10,
+                background: activeTop.key === t.key && !t.subTabs ? C.lineSoft : "transparent" }}>
+                {t.label}
+              </div>
+            ))}
+            {activeTop.subTabs && (
+              <div style={{ marginTop: 4, marginBottom: 8, paddingLeft: 10 }}>
+                {activeTop.subTabs.map(([k, l]) => (
                   <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }} style={{
                     position: "relative", padding: "8px 10px 8px 16px", fontSize: 13.5, fontWeight: nav === k ? 700 : 500, cursor: "pointer",
                     color: nav === k ? C.text : C.sub, marginBottom: 1, borderRadius: 10,
@@ -827,46 +927,32 @@ export default function App() {
                   </div>
                 ))}
               </div>
-            ))}
-            <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.lineSoft}` }}>
-              <div style={{ fontSize: 11, color: C.faint, marginBottom: 6, display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 6, height: 6, borderRadius: 99, background:
-                  cloudStatus === "synced" ? C.green : cloudStatus === "syncing" ? C.blue : cloudStatus === "error" ? C.red : C.faint }} />
-                {cloudStatus === "synced" ? "클라우드에 저장됨" : cloudStatus === "syncing" ? "동기화 중…" : cloudStatus === "error" ? "동기화 실패 (로컬엔 저장됨)" : "이 브라우저에만 저장됨"}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <span onClick={exportBackup} style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
-                  데이터 백업 (다운로드)
-                </span>
-                <span onClick={() => backupInputRef.current?.click()} style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
-                  백업 불러오기
-                </span>
-                <input ref={backupInputRef} type="file" accept="application/json" style={{ display: "none" }}
-                  onChange={e => { const f = e.target.files[0]; if (f) importBackup(f); e.target.value = ""; }} />
-                <span onClick={async () => {
-                  if (!window.confirm("저장된 모든 데이터를 지우고 초기 상태로 되돌릴까요? (클라우드에 저장된 데이터도 함께 지워집니다) 되돌릴 수 없습니다.")) return;
-                  Object.keys(window.localStorage).filter(k => k.startsWith(STORAGE_PREFIX)).forEach(k => window.localStorage.removeItem(k));
-                  try {
-                    const supabase = await getCloudClient();
-                    if (supabase) {
-                      const user = await ensureCloudAuth(supabase);
-                      if (user) await supabase.from("career_os_state").delete().eq("user_id", user.id);
-                    }
-                  } catch (e) { console.error("[클라우드 초기화 실패]", e); }
-                  window.location.reload();
-                }} style={{ fontSize: 11, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
-                  전체 데이터 초기화
-                </span>
-              </div>
-            </div>
+            )}
           </div>
         )}
       </aside>
 
       {/* Main */}
       <main style={{ flex: 1, padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0 }}>
-        {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => go("guide")} />}
-        {nav === "guide" && <Guide onGo={go} />}
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint }}>
+            <span style={{ width: 6, height: 6, borderRadius: 99, background:
+              cloudStatus === "synced" ? C.green : cloudStatus === "syncing" ? C.blue : cloudStatus === "error" ? C.red : C.faint }} />
+            {cloudStatus === "synced" ? "클라우드에 저장됨" : cloudStatus === "syncing" ? "동기화 중…" : cloudStatus === "error" ? "동기화 실패 (로컬엔 저장됨)" : "저장됨 · 이 브라우저에만"}
+          </div>
+          <span onClick={exportBackup} style={{ fontSize: 12, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>백업 다운로드</span>
+          {authUser === undefined ? null : authUser ? (
+            <span onClick={handleLogout} style={{ fontSize: 12, color: C.sub, cursor: "pointer" }}>
+              {authUser.email || "로그인됨"} · <span style={{ textDecoration: "underline" }}>로그아웃</span>
+            </span>
+          ) : (
+            <Btn small onClick={handleGoogleLogin} disabled={authLoading}>{authLoading ? "이동 중…" : "Google로 로그인"}</Btn>
+          )}
+          <span onClick={() => setShowGuide(true)} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: 99, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
+          <span onClick={() => setShowSettings(true)} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: 99, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</span>
+        </div>
+
+        {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => setShowGuide(true)} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
           history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={go} />}
         {nav === "analyze" && <Analyze experiences={experiences} setExperiences={setExperiences} analyzeId={analyzeId} setAnalyzeId={setAnalyzeId} metrics={metrics} setMetrics={setMetrics} onDone={openDetail} />}
@@ -882,8 +968,210 @@ export default function App() {
         {nav === "resume" && <Resume experiences={experiences} outputs={outputs} metrics={metrics} resumeProfile={resumeProfile} setResumeProfile={setResumeProfile} skills={skills} certs={certs} setCerts={setCerts} awards={awards} setAwards={setAwards} addTrash={addTrash} />}
         {nav === "trash" && <Trash trash={trash} onRestore={restoreTrash} onPurge={purgeTrash} onClear={clearTrash} />}
       </main>
+
+      {/* 플로팅 AI 물어보기 버튼 */}
+      {!chatOpen && (
+        <button onClick={() => setChatOpen(true)} title="AI에게 물어보기" style={{
+          position: "fixed", right: isMobile ? 16 : 28, bottom: isMobile ? 16 : 28, zIndex: 40,
+          width: 52, height: 52, borderRadius: 99, background: C.green, color: "#fff", border: "none",
+          boxShadow: "0 4px 14px rgba(0,0,0,.18)", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          💬
+        </button>
+      )}
+      {chatOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "flex-end", alignItems: isMobile ? "stretch" : "flex-end", padding: isMobile ? 0 : 20 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setChatOpen(false); }}>
+          <div style={{ width: isMobile ? "100%" : 420, maxHeight: isMobile ? "100%" : "80vh", height: isMobile ? "100%" : "auto",
+            background: C.bg, borderRadius: isMobile ? 0 : 20, overflowY: "auto", padding: 20, boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+              <span onClick={() => setChatOpen(false)} style={{ cursor: "pointer", fontSize: 18, color: C.faint }}>✕</span>
+            </div>
+            <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
+              history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={() => setChatOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* 가이드 모달 */}
+      {showGuide && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowGuide(false); }}>
+          <div style={{ width: "100%", maxWidth: 920, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+              <span onClick={() => setShowGuide(false)} style={{ cursor: "pointer", fontSize: 18, color: C.faint }}>✕</span>
+            </div>
+            <Guide onGo={(n) => { setShowGuide(false); go(n); }} />
+          </div>
+        </div>
+      )}
+
+      {/* 설정 모달: 백업 불러오기 · 전체 초기화 · 휴지통 */}
+      {showSettings && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}>
+          <div style={{ width: "100%", maxWidth: 640, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <H2>설정</H2>
+              <span onClick={() => setShowSettings(false)} style={{ cursor: "pointer", fontSize: 18, color: C.faint }}>✕</span>
+            </div>
+
+            <Card style={{ marginBottom: 16 }}>
+              <Label>백업</Label>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                <Btn small onClick={exportBackup}>백업 다운로드</Btn>
+                <Btn small onClick={() => backupInputRef.current?.click()}>백업 불러오기</Btn>
+                <input ref={backupInputRef} type="file" accept="application/json" style={{ display: "none" }}
+                  onChange={e => { const f = e.target.files[0]; if (f) importBackup(f); e.target.value = ""; }} />
+              </div>
+            </Card>
+
+            <Card style={{ marginBottom: 16 }}>
+              <Label>휴지통 ({trash.length})</Label>
+              <div style={{ marginTop: 8 }}>
+                <Trash trash={trash} onRestore={restoreTrash} onPurge={purgeTrash} onClear={clearTrash} />
+              </div>
+            </Card>
+
+            <Card>
+              <Label>초기화</Label>
+              <div style={{ marginTop: 8 }}>
+                <span onClick={async () => {
+                  if (!window.confirm("저장된 모든 데이터를 지우고 초기 상태로 되돌릴까요? (클라우드에 저장된 데이터도 함께 지워집니다) 되돌릴 수 없습니다.")) return;
+                  Object.keys(window.localStorage).filter(k => k.startsWith(STORAGE_PREFIX)).forEach(k => window.localStorage.removeItem(k));
+                  try {
+                    const supabase = await getCloudClient();
+                    if (supabase) {
+                      const { user } = await ensureCloudAuth(supabase);
+                      if (user) await supabase.from("career_os_state").delete().eq("user_id", user.id);
+                    }
+                  } catch (e) { console.error("[클라우드 초기화 실패]", e); }
+                  window.location.reload();
+                }} style={{ fontSize: 12.5, color: C.red, cursor: "pointer", textDecoration: "underline" }}>
+                  전체 데이터 초기화
+                </span>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* 로그인 시 로컬/클라우드 데이터 충돌 — 절대 조용히 덮어쓰지 않는다 */}
+      {conflict && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60, display: "flex", justifyContent: "center", alignItems: "center", padding: 20 }}>
+          <div style={{ width: "100%", maxWidth: 560, background: C.bg, borderRadius: 20, padding: 26, boxShadow: "0 8px 30px rgba(0,0,0,.3)" }}>
+            <H2>어느 데이터를 사용할까요?</H2>
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.65, marginBottom: 16 }}>
+              이 브라우저와 클라우드(계정) 양쪽에 서로 다른 데이터가 있습니다. 실수로 자소서 등 작성한 내용이 사라지지 않도록, 어느 쪽을 남길지 직접 선택해야 합니다. <b>선택한 쪽이 다른 쪽을 덮어씁니다.</b>
+            </div>
+            <div style={{ marginBottom: 18, maxHeight: 220, overflowY: "auto" }}>
+              {conflict.diffs.map(d => (
+                <div key={d.key} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13 }}>
+                  <span style={{ fontWeight: 700 }}>{d.label}</span>
+                  <span style={{ color: C.sub }}>이 브라우저 {d.localSummary} · 클라우드 {d.cloudSummary}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <Btn style={{ flex: 1 }} onClick={() => resolveConflict("local")}>이 브라우저 데이터 사용</Btn>
+              <Btn primary style={{ flex: 1 }} onClick={() => resolveConflict("cloud")}>클라우드 데이터 사용</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/* ============================================================ 랜딩(히어로) */
+function Landing({ onStart, onGoogle }) {
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const steps = [
+    { n: 1, title: "경험을 넣으세요", desc: "자소서·이력서 파일을 첨부하거나, 그냥 아무거나 적어보세요. AI가 구조화해드립니다." },
+    { n: 2, title: "AI가 정리·검토합니다", desc: "성과 수치, 역량, 빠진 정보를 짚어주고, 자소서·면접 문장을 함께 다듬습니다." },
+    { n: 3, title: "지원 준비를 관리하세요", desc: "회사·직무별로 요구 역량 매칭부터 최종 이력서까지 한곳에서." },
+  ];
+  const handleGoogle = async () => {
+    setGoogleLoading(true);
+    try {
+      const sb = await getCloudClient();
+      if (sb) { await signInWithGoogle(sb); return; } // 로그인 후 redirect로 돌아옴
+    } catch { /* ignore */ }
+    setGoogleLoading(false);
+    onGoogle();
+  };
+  return (
+    <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", color: C.text }}>
+      <div style={{ maxWidth: 880, margin: "0 auto", padding: "60px 20px 80px" }}>
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-.01em", marginBottom: 18, color: C.green }}>Career OS</div>
+          <h1 style={{ fontSize: 30, fontWeight: 800, margin: "0 0 14px", lineHeight: 1.35 }}>
+            흩어진 경험을, 이력서·자소서로 바로 쓸 수 있게
+          </h1>
+          <div style={{ fontSize: 15, color: C.sub, lineHeight: 1.6, marginBottom: 28 }}>
+            자소서·이력서 파일을 넣으면 AI가 경험을 정리하고, 지원 준비까지 한곳에서 관리합니다.
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+            <Btn primary onClick={onStart} style={{ padding: "13px 26px", fontSize: 15 }}>바로 시작하기</Btn>
+            <Btn onClick={handleGoogle} disabled={googleLoading} style={{ padding: "13px 26px", fontSize: 15 }}>
+              {googleLoading ? "이동 중…" : "구글로 계속하기"}
+            </Btn>
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 48, borderRadius: 20, border: `1px solid ${C.line}`, background: C.panel, boxShadow: "0 10px 40px rgba(0,0,0,.06)", overflow: "hidden" }}>
+          <img src="/landing-screenshot.png" alt="Career OS 화면 예시" style={{ width: "100%", display: "block" }}
+            onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
+          <div style={{ display: "none", height: 360, alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10, background: C.accent, color: C.faint }}>
+            <Icon name="layers" size={40} />
+            <div style={{ fontSize: 13 }}>화면 미리보기</div>
+          </div>
+        </div>
+
+        <Card>
+          <Label>작동 방식</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 10 }}>
+            {steps.map(s => (
+              <div key={s.n} style={{ padding: "16px 4px" }}>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.green, marginBottom: 8 }}>{s.n}</div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{s.title}</div>
+                <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.55 }}>{s.desc}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <div style={{ textAlign: "center", marginTop: 32 }}>
+          <Btn primary onClick={onStart} style={{ padding: "13px 26px", fontSize: 15 }}>바로 시작하기</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================ 라우팅 루트 — 첫 방문자는 랜딩, 재방문자는 /app으로 */
+export default function Root() {
+  const [screen, setScreen] = useState(() => {
+    try {
+      if (window.location.pathname.startsWith("/app")) return "app";
+      const hasData = RECONCILE_KEYS.some(k => {
+        try { return !!window.localStorage.getItem(STORAGE_PREFIX + k); } catch { return false; }
+      });
+      if (hasData) return "app";
+      return "landing";
+    } catch { return "app"; }
+  });
+
+  useEffect(() => {
+    try {
+      if (screen === "app" && window.location.pathname !== "/app") window.history.replaceState(null, "", "/app");
+      if (screen === "landing" && window.location.pathname !== "/") window.history.replaceState(null, "", "/");
+    } catch { /* 샌드박스 미리보기 등에서는 무시 */ }
+  }, [screen]);
+
+  if (screen === "landing") {
+    return <Landing onStart={() => setScreen("app")} onGoogle={() => setScreen("app")} />;
+  }
+  return <App />;
 }
 
 /* ============================================================ 홈 */
@@ -1413,36 +1701,30 @@ function Guide({ onGo }) {
 
 /* ============================================================ 첫 방문자 온보딩 화면 */
 function HomeOnboarding({ onGoAnalyze, onGoImport, onLoadDemo, onGoGuide }) {
-  const steps = [
-    { icon: "upload", title: "파일 가져오기", desc: "기존 이력서·메모가 있다면 AI가 초안을 뽑아줍니다", act: onGoImport, primary: false },
-    { icon: "layers", title: "새 경험 등록", desc: "빈 페이지부터 하나씩 정리하고 싶다면", act: onGoAnalyze, primary: true },
-  ];
   return (
-    <div style={{ maxWidth: 640, margin: "40px auto 0" }}>
-      <div style={{ textAlign: "center", marginBottom: 32 }}>
+    <div style={{ maxWidth: 560, margin: "40px auto 0" }}>
+      <div style={{ textAlign: "center", marginBottom: 28 }}>
         <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, color: C.green }}>
           <Icon name="sparkle" size={34} />
         </div>
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>Career OS에 오신 걸 환영합니다</h1>
         <div style={{ fontSize: 13.5, color: C.sub, lineHeight: 1.6 }}>
-          아직 등록된 경험이 없습니다. 아래 두 가지 중 편한 방법으로 시작해보세요.
+          경험을 정리하고, 이력서·자소서로 이어가는 걸 도와드립니다.
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
-        {steps.map(s => (
-          <Card key={s.title} onClick={s.act} style={{
-            textAlign: "center", padding: "26px 18px",
-            border: s.primary ? `1px solid ${C.green}` : `1px solid ${C.line}`,
-            background: s.primary ? C.greenBg : C.panel }}>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: s.primary ? C.green : C.sub }}>
-              <Icon name={s.icon} size={28} />
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>{s.title}</div>
-            <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.5 }}>{s.desc}</div>
-          </Card>
-        ))}
-      </div>
+      <Card onClick={onGoImport} style={{
+        textAlign: "center", padding: "30px 20px", marginBottom: 14,
+        border: `1px solid ${C.green}`, background: C.greenBg }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: C.green }}>
+          <Icon name="upload" size={30} />
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>시작하기</div>
+        <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.5 }}>
+          이미 작성된 자소서 등의 파일이 있다면 첨부해주세요! 저희가 정리해드립니다.<br />
+          없다면 그냥 아무거나 적어도 괜찮아요 — 빈 화면부터 시작할 수도 있습니다.
+        </div>
+      </Card>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 18, fontSize: 12.5 }}>
         <span onClick={onGoGuide} style={{ color: C.sub, textDecoration: "underline", cursor: "pointer" }}>전체 사용법 먼저 보기</span>
@@ -2839,13 +3121,13 @@ ${raw}` }],
 
   if (phase === "input" || phase === "loading") return (
     <div style={{ maxWidth: 680 }}>
-      <H2>파일 가져오기</H2>
+      <H2>자료 넣기 / 경험 정리하기</H2>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 16, lineHeight: 1.65 }}>
-        기존 이력서·경험 정리 파일이 정형화되어 있지 않아도 괜찮습니다.<br />
+        기존 이력서·경험 정리 파일이 정형화되어 있지 않아도 괜찮습니다. 파일이 없다면 그냥 아래에 자유롭게 적어도 됩니다.<br />
         AI가 내용을 추출해 초안을 만들면, <b>모든 항목을 직접 확인·수정한 뒤</b> 반영합니다. 확인 전에는 아무것도 저장되지 않습니다.
       </div>
       <Card>
-        <Label>파일 선택 (.txt / .md / .docx / .xlsx / .xls / .csv) 또는 내용 붙여넣기</Label>
+        <Label>파일 선택 (.txt / .md / .docx / .xlsx / .xls / .csv) 또는 내용 직접 작성</Label>
         <input type="file" accept=".txt,.md,.docx,.xlsx,.xls,.csv" onChange={onFile} style={{ fontFamily: font, fontSize: 13, marginBottom: 10 }} />
         {fileName && <div style={{ fontSize: 12.5, color: C.blue, marginBottom: 8 }}>선택됨: {fileName}</div>}
 
@@ -2860,7 +3142,7 @@ ${raw}` }],
           </div>
         )}
 
-        <Textarea rows={11} placeholder="이력서·경험 메모 내용을 붙여넣으세요. 형식은 자유입니다." value={raw} onChange={e => setRaw(e.target.value)} />
+        <Textarea rows={11} placeholder="이미 작성된 자소서 등의 파일이 있다면 첨부해주세요! 저희가 정리해드립니다. (파일 없이 여기에 바로 적어도 괜찮아요)" value={raw} onChange={e => setRaw(e.target.value)} />
         {raw.length > 12000 && (
           <div style={{ marginTop: 8, fontSize: 12, color: C.sub }}>
             원문이 {raw.length.toLocaleString()}자로 깁니다. 너무 길면 API 오류가 날 수 있으니, 관련 없는 시트·행은 미리 지우고 필요한 부분만 남기는 걸 권장합니다.
@@ -4088,10 +4370,10 @@ function CloudDiagnostics() {
       resetCloudAuth();
       const { user, error } = await ensureCloudAuth(supabase);
       results.push({
-        label: "익명 로그인",
-        ok: !!user,
-        detail: user ? `사용자 ID ${user.id.slice(0, 8)}…` : (error || "알 수 없는 오류"),
-        hint: !user ? 'Supabase 대시보드 → Authentication → Sign In / Providers → "Anonymous Sign-Ins"가 꺼져있을 가능성이 가장 높습니다. 켜고 다시 시도하세요.' : null,
+        label: "로그인 상태",
+        ok: !error,
+        detail: user ? `로그인됨 (${user.email || user.id.slice(0, 8) + "…"})` : (error || "로그인되어 있지 않습니다 (정상 — Google 로그인을 하면 클라우드에 저장됩니다)"),
+        hint: (!user && error) ? 'Supabase 대시보드 → Authentication → Sign In / Providers → "Google"이 꺼져있거나 Client ID/Secret이 잘못 설정됐을 수 있습니다.' : null,
       });
 
       if (user) {
@@ -4319,13 +4601,18 @@ function BrandingHub() {
       <div style={{ maxWidth: 640 }}>
         <H2>퍼스널 브랜딩</H2>
         <Card style={{ marginBottom: 12 }}>
-          <Label>클라우드 연결에 실패했습니다</Label>
-          <div style={{ fontSize: 13, color: C.red, background: C.redBg, padding: "10px 12px", borderRadius: 12, marginTop: 8, marginBottom: 12, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
-            {authError || "알 수 없는 오류"}
+          <Label>Google 로그인이 필요합니다</Label>
+          <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, marginBottom: 12 }}>
+            브랜딩 탭은 클라우드 DB에 저장돼서, 답변이 쌓이면 Google 계정으로 로그인해야 이어서 쓸 수 있습니다.
           </div>
+          {authError && (
+            <div style={{ fontSize: 12.5, color: C.red, background: C.redBg, padding: "10px 12px", borderRadius: 12, marginBottom: 12, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
+              {authError}
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
-            <Btn small primary onClick={connect}>다시 연결하기</Btn>
-            <Btn small onClick={() => setOfflineMode(true)}>오프라인으로 계속하기</Btn>
+            <Btn small primary onClick={() => signInWithGoogle(supabase)}>Google로 로그인</Btn>
+            <Btn small onClick={() => setOfflineMode(true)}>로그인 없이 계속하기</Btn>
           </div>
         </Card>
         <CloudDiagnostics />
