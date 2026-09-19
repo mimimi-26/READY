@@ -100,24 +100,36 @@
    타이포 전환 시점을 일치시킨다. */
 @media (max-width: 820px) {
   :root {
-    --fs-2xs: 13px;
-    --fs-xs:  14px;
-    --fs-sm:  15px;
+    /* 본문(--fs-base)은 16px 을 유지한다. 그 아래 단계는 1px 씩 줄이고,
+       위 단계는 더 크게 줄인다. 데스크톱 비율을 그대로 키우면 좁은 화면에서
+       제목이 화면을 가득 채워 정보 위계가 오히려 무너진다. */
+    --fs-2xs: 12px;
+    --fs-xs:  13px;
+    --fs-sm:  14px;
     --fs-base: 16px;
     --fs-md:  16px;
-    --fs-lg:  18px;
-    --fs-xl:  20px;
-    --fs-2xl: 22px;
-    --fs-3xl: 24px;
-    --fs-4xl: 26px;
-    --fs-5xl: 30px;
+    --fs-lg:  17px;
+    --fs-xl:  18px;
+    --fs-2xl: 19px;
+    --fs-3xl: 20px;
+    --fs-4xl: 22px;
+    --fs-5xl: 25px;
   }
 }
 
 /* ---------- 앵커 이동 ---------- */
 html { scroll-behavior: smooth; }
 
-/* ---------- 한글 줄바꿈 품질 ---------- */
+/* ---------- 한글 줄바꿈 품질 ----------
+   word-break 의 기본값 normal 은 한글을 음절 단위로 끊는다.
+   "Career OS에 오신 걸 환영합니다" 가 "…오 / 신 걸…" 로 갈라지는 이유다.
+   keep-all 은 띄어쓰기에서만 줄을 바꿔 문장이 자연스럽게 끝난다.
+   URL 처럼 띄어쓰기 없이 긴 문자열은 overflow-wrap 으로 따로 풀어 준다. */
+html {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
 /* 제목의 고아 단어 방지, 본문은 줄 길이 균형 */
 h1, h2, h3 { text-wrap: balance; }
 p { text-wrap: pretty; }
