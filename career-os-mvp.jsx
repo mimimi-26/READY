@@ -892,64 +892,23 @@ function App() {
   const [chatOpen, setChatOpen] = useState(false);
 
   return (
-    <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: isMobile ? "column" : "row", color: C.text }}>
-      {/* Sidebar — CoreUI 다크 테마 */}
-      <aside style={{
-        width: isMobile ? "100%" : 220, background: C.sidebarBg,
-        borderRight: isMobile ? "none" : `1px solid ${C.sidebarLine}`,
-        borderBottom: isMobile ? `1px solid ${C.sidebarLine}` : "none",
-        padding: isMobile ? "14px 16px" : "0",
-        position: isMobile ? "static" : "sticky", top: 0,
-        height: isMobile ? "auto" : "100vh", boxSizing: "border-box", flexShrink: 0,
-        overflowY: isMobile ? "visible" : "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: isMobile ? 0 : "16px 18px", borderBottom: isMobile ? "none" : `1px solid ${C.sidebarLine}`, marginBottom: isMobile ? 0 : 6 }}>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em", color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.primary, display: "inline-block" }} />
-              Career OS
-            </div>
-            {!isMobile && <div style={{ fontSize: 11, color: C.sidebarText, marginTop: 4 }}>경험 분석 · 재사용</div>}
+    <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", color: C.text }}>
+      {/* 상단 헤더 — 화이트, 전체 폭 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10,
+        background: C.panel, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "12px 16px" : "12px 28px",
+        position: "sticky", top: 0, zIndex: 20, boxShadow: "0 2px 4px rgba(0,0,21,.04)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em", color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: C.primary, display: "inline-block" }} />
+            Career OS
           </div>
+          <span style={{ color: C.faint, fontSize: 14 }}>/</span>
+          <span style={{ fontSize: 14, color: C.sub, fontWeight: 600 }}>{activeTop.label}</span>
           {isMobile && (
             <Btn small onClick={() => setMobileMenuOpen(o => !o)}>{mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</Btn>
           )}
         </div>
-        {(!isMobile || mobileMenuOpen) && (
-          <div style={{ marginTop: isMobile ? 12 : 4, padding: isMobile ? 0 : "0 10px" }}>
-            {TOP_NAV.map(t => (
-              <div key={t.key} onClick={() => { if (t.subTabs) { if (activeTop.key !== t.key) go(t.subTabs[0][0]); if (isMobile) setMobileMenuOpen(false); } else { go(t.nav); if (isMobile) setMobileMenuOpen(false); } }} style={{
-                padding: "10px 12px", fontSize: 13.5, fontWeight: activeTop.key === t.key ? 700 : 500, cursor: "pointer",
-                color: activeTop.key === t.key ? C.sidebarTextActive : C.sidebarText, marginBottom: 2, borderRadius: 4,
-                background: activeTop.key === t.key && !t.subTabs ? C.primary : "transparent" }}
-                onMouseEnter={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = C.sidebarHover; }}
-                onMouseLeave={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = "transparent"; }}>
-                {t.label}
-              </div>
-            ))}
-            {activeTop.subTabs && (
-              <div style={{ marginTop: 2, marginBottom: 8, paddingLeft: 8 }}>
-                {activeTop.subTabs.map(([k, l]) => (
-                  <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }} style={{
-                    position: "relative", padding: "8px 10px 8px 18px", fontSize: 13, fontWeight: nav === k ? 700 : 400, cursor: "pointer",
-                    color: nav === k ? C.sidebarTextActive : C.sidebarText, marginBottom: 1, borderRadius: 4,
-                    background: nav === k ? C.sidebarHover : "transparent" }}>
-                    {nav === k && <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", width: 4, height: 4, borderRadius: 99, background: C.primary }} />}
-                    {l}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </aside>
-
-      {/* Main */}
-      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        {/* Topbar — CoreUI 헤더 */}
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14, flexWrap: "wrap",
-          background: C.panel, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "12px 16px" : "12px 28px",
-          position: "sticky", top: 0, zIndex: 10, boxShadow: "0 2px 4px rgba(0,0,21,.04)" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint }}>
             <span style={{ width: 6, height: 6, borderRadius: 99, background:
               cloudStatus === "synced" ? C.green : cloudStatus === "syncing" ? C.blue : cloudStatus === "error" ? C.red : C.faint }} />
@@ -966,7 +925,51 @@ function App() {
           <span onClick={() => setShowGuide(true)} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
           <span onClick={() => setShowSettings(true)} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</span>
         </div>
+      </div>
 
+      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flex: 1, minHeight: 0 }}>
+      {/* Sidebar — CoreUI 다크 테마 */}
+      <aside style={{
+        width: isMobile ? "100%" : 220, background: C.sidebarBg,
+        borderRight: isMobile ? "none" : `1px solid ${C.sidebarLine}`,
+        borderBottom: isMobile ? `1px solid ${C.sidebarLine}` : "none",
+        padding: isMobile ? "14px 16px" : "0",
+        position: isMobile ? "static" : "sticky", top: 53,
+        height: isMobile ? "auto" : "calc(100vh - 53px)", boxSizing: "border-box", flexShrink: 0,
+        overflowY: isMobile ? "visible" : "auto" }}>
+        {(!isMobile || mobileMenuOpen) && (
+          <div style={{ marginTop: isMobile ? 12 : 14, padding: isMobile ? 0 : "0 10px" }}>
+            {TOP_NAV.map(t => (
+              <React.Fragment key={t.key}>
+                <div onClick={() => { if (t.subTabs) { if (activeTop.key !== t.key) go(t.subTabs[0][0]); if (isMobile) setMobileMenuOpen(false); } else { go(t.nav); if (isMobile) setMobileMenuOpen(false); } }} style={{
+                  padding: "10px 12px", fontSize: 13.5, fontWeight: activeTop.key === t.key ? 700 : 500, cursor: "pointer",
+                  color: activeTop.key === t.key ? C.sidebarTextActive : C.sidebarText, marginBottom: 2, borderRadius: 4,
+                  background: activeTop.key === t.key && !t.subTabs ? C.primary : "transparent" }}
+                  onMouseEnter={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = C.sidebarHover; }}
+                  onMouseLeave={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = "transparent"; }}>
+                  {t.label}
+                </div>
+                {activeTop.key === t.key && t.subTabs && (
+                  <div style={{ marginTop: 2, marginBottom: 8, paddingLeft: 8 }}>
+                    {t.subTabs.map(([k, l]) => (
+                      <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }} style={{
+                        position: "relative", padding: "8px 10px 8px 18px", fontSize: 13, fontWeight: nav === k ? 700 : 400, cursor: "pointer",
+                        color: nav === k ? C.sidebarTextActive : C.sidebarText, marginBottom: 1, borderRadius: 4,
+                        background: nav === k ? C.sidebarHover : "transparent" }}>
+                        {nav === k && <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", width: 4, height: 4, borderRadius: 99, background: C.primary }} />}
+                        {l}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        )}
+      </aside>
+
+      {/* Main */}
+      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         <div style={{ padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => setShowGuide(true)} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
@@ -985,6 +988,7 @@ function App() {
         {nav === "trash" && <Trash trash={trash} onRestore={restoreTrash} onPurge={purgeTrash} onClear={clearTrash} />}
         </div>
       </main>
+      </div>
 
       {/* 플로팅 AI 물어보기 버튼 */}
       {!chatOpen && (
@@ -1820,6 +1824,10 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
             <div style={{ width: `${(done / total) * 100}%`, background: C.green }} />
             <div style={{ width: `${(needs / total) * 100}%`, background: C.orange }} />
           </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <Btn small primary onClick={onGoAnalyze}>+ 새 경험 분석 시작</Btn>
+            <Btn small onClick={onGoImport}>파일에서 가져오기</Btn>
+          </div>
         </Card>
 
         {/* 부족한 경험 유형 */}
@@ -1847,10 +1855,6 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
             </div>
           ))}
         </Card>
-      </div>
-      <div style={{ display: "flex", gap: 8 }}>
-        <Btn primary onClick={onGoAnalyze}>+ 새 경험 분석 시작</Btn>
-        <Btn onClick={onGoImport}>파일에서 가져오기</Btn>
       </div>
     </div>
   );
