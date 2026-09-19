@@ -385,7 +385,7 @@ const Card = ({ children, style, onClick, className }) => {
   const interactive = onClick ? clickableProps(onClick) : {};
   const cls = [interactive.className, className].filter(Boolean).join(" ") || undefined;
   return (
-  <div {...interactive} className={cls} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: "var(--r-sm)", padding: 18,
+  <div {...interactive} className={cls} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: "var(--r-sm)", padding: "var(--sp-6)",
     boxShadow: "0 0 1px rgba(0,0,21,.08), 0 1px 3px rgba(0,0,21,.06)",
     cursor: onClick ? "pointer" : "default", transition: "border-color .15s, box-shadow .15s", ...style }}
     onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = C.primary)}
@@ -396,9 +396,18 @@ const Card = ({ children, style, onClick, className }) => {
 };
 const H2 = ({ children }) => <h2 style={{ fontSize: "var(--fs-xl)", fontWeight: 700, margin: "0 0 14px", color: C.text }}>{children}</h2>;
 const Label = ({ children }) => <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: C.faintText, marginBottom: 4, letterSpacing: ".02em" }}>{children}</div>;
-const Btn = ({ children, primary, small, onClick, disabled, style, title }) => (
-  <button onClick={onClick} disabled={disabled} title={title} style={{
-    fontFamily: font, fontSize: small ? 12 : 13.5, fontWeight: 600, padding: small ? "5px 11px" : "8px 16px",
+const Btn = ({ children, primary, small, onClick, disabled, style, title, className }) => (
+  <button onClick={onClick} disabled={disabled} title={title}
+    className={["ui-click", className].filter(Boolean).join(" ")} style={{
+    fontFamily: font,
+    // 이 두 값은 타입/간격 스케일을 쓰지 않고 숫자로 남아 있었다.
+    // 치환 스크립트가 삼항 표현식을 건너뛰었기 때문이다.
+    fontSize: small ? "var(--fs-xs)" : "var(--fs-sm)", fontWeight: 600,
+    padding: small ? "var(--sp-2) var(--sp-4)" : "var(--sp-3) var(--sp-6)",
+    // 버튼 라벨은 절대 줄바꿈하지 않는다. "대화 초기화"가 "대화 초 / 기화"로
+    // 쪼개지면 읽기 어렵다. 줄을 바꿔야 할 때는 버튼 통째로 넘어가야 하며,
+    // 그건 부모 행의 .wrap-sm 이 처리한다.
+    whiteSpace: "nowrap",
     borderRadius: "var(--r-sm)", border: primary ? `1px solid ${C.primary}` : `1px solid ${C.line}`, cursor: disabled ? "default" : "pointer",
     background: disabled ? C.lineSoft : primary ? C.primary : C.panel, color: disabled ? C.faintText : primary ? "#fff" : C.text, ...style }}>
     {children}
@@ -1001,7 +1010,7 @@ function App() {
       {/* 상단 헤더 — 실제 CoreUI CHeader */}
       <CHeader position="sticky" className="mb-0" style={{ zIndex: 20 }}>
         <CContainer fluid className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
-          <div className="d-flex align-items-center" style={{ gap: 10 }}>
+          <div className="d-flex align-items-center flex-wrap" style={{ gap: 10 }}>
             <CHeaderBrand className="d-flex align-items-center" style={{ gap: 8, fontWeight: 800 }}>
               <span style={{ width: 8, height: 8, borderRadius: "var(--r-xs)", background: C.primary, display: "inline-block" }} />
               Career OS
@@ -1009,7 +1018,11 @@ function App() {
             <span className="text-body-secondary">/</span>
             <span className="text-body-secondary fw-semibold">{activeTop.label}</span>
             {isMobile && (
-              <CHeaderToggler onClick={() => setMobileMenuOpen(o => !o)}>{mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</CHeaderToggler>
+              <CHeaderToggler onClick={() => setMobileMenuOpen(o => !o)}
+                aria-expanded={mobileMenuOpen} aria-controls="main-nav"
+                // CoreUI 기본값이 20px 이라 320px 화면에서 "메뉴 접기"가 두 줄로 쪼개졌다.
+                style={{ fontSize: "var(--fs-base)", whiteSpace: "nowrap", padding: "var(--sp-1) var(--sp-2)" }}>
+                {mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</CHeaderToggler>
             )}
           </div>
           <CHeaderNav className="d-flex align-items-center flex-wrap" style={{ gap: 14 }}>
@@ -1040,7 +1053,7 @@ function App() {
           쓰지 않는다. visible prop 은 CoreUI 내부에서 mobile 판정 직후
           강제로 꺼지므로 여기서는 쓸 수 없고, 숨김 마진만 직접 무효화한다. */}
       {(!isMobile || mobileMenuOpen) && (
-        <CSidebar colorScheme="dark" aria-label="주 메뉴"
+        <CSidebar id="main-nav" colorScheme="dark" aria-label="주 메뉴"
           style={{ width: isMobile ? "100%" : 220, position: isMobile ? "static" : "sticky", top: 53,
             height: isMobile ? "auto" : "calc(100vh - 53px)",
             // CoreUI 의 .sidebar:not(.show) 가 margin-inline-start: -16rem 으로
@@ -1072,7 +1085,7 @@ function App() {
 
       {/* Main */}
       <main id="main-content" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <div className="page-body" style={{ padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
+        <div className="page-body" style={{ padding: isMobile ? "var(--sp-6)" : "var(--sp-8) var(--sp-8)", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => setShowGuide(true)} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
           history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={go} />}
@@ -1106,10 +1119,10 @@ function App() {
         </button>
       )}
       {chatOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "flex-end", alignItems: isMobile ? "stretch" : "flex-end", padding: isMobile ? 0 : 20 }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "flex-end", alignItems: isMobile ? "stretch" : "flex-end", padding: isMobile ? 0 : "var(--sp-7)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setChatOpen(false); }}>
           <div role="dialog" aria-modal="true" aria-label="AI 어시스턴트" style={{ width: isMobile ? "100%" : 420, maxHeight: isMobile ? "100%" : "80vh", height: isMobile ? "100%" : "auto",
-            background: C.bg, borderRadius: isMobile ? 0 : 20, overflowY: "auto", padding: 20, boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
+            background: C.bg, borderRadius: isMobile ? 0 : "var(--r-xl)", overflowY: "auto", padding: "var(--sp-7)", boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
               <span {...clickableProps(() => setChatOpen(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: "var(--fs-xl)", color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
@@ -1121,9 +1134,9 @@ function App() {
 
       {/* 가이드 모달 */}
       {showGuide && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "calc(var(--sp-8) + var(--sp-5)) var(--sp-7)", overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowGuide(false); }}>
-          <div role="dialog" aria-modal="true" aria-label="사용 가이드" className={isMobile ? "modal-full-mobile" : undefined} style={{ width: "100%", maxWidth: 920, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
+          <div role="dialog" aria-modal="true" aria-label="사용 가이드" className={isMobile ? "modal-full-mobile" : undefined} style={{ width: "100%", maxWidth: 920, background: C.bg, borderRadius: isMobile ? 0 : "var(--r-xl)", padding: isMobile ? "var(--sp-6)" : "var(--sp-8)", boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
               <span {...clickableProps(() => setShowGuide(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: "var(--fs-xl)", color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
@@ -1134,9 +1147,9 @@ function App() {
 
       {/* 설정 모달: 백업 불러오기 · 전체 초기화 · 휴지통 */}
       {showSettings && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "calc(var(--sp-8) + var(--sp-5)) var(--sp-7)", overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-          <div role="dialog" aria-modal="true" aria-label="설정" className={isMobile ? "modal-full-mobile" : undefined} style={{ width: "100%", maxWidth: 640, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
+          <div role="dialog" aria-modal="true" aria-label="설정" className={isMobile ? "modal-full-mobile" : undefined} style={{ width: "100%", maxWidth: 640, background: C.bg, borderRadius: isMobile ? 0 : "var(--r-xl)", padding: isMobile ? "var(--sp-6)" : "var(--sp-8)", boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <H2>설정</H2>
               <span {...clickableProps(() => setShowSettings(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: "var(--fs-xl)", color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
@@ -1184,8 +1197,8 @@ function App() {
 
       {/* 로그인 시 로컬/클라우드 데이터 충돌 — 절대 조용히 덮어쓰지 않는다 */}
       {conflict && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60, display: "flex", justifyContent: "center", alignItems: "center", padding: 20 }} className="wrap-sm">
-          <div style={{ width: "100%", maxWidth: 560, background: C.bg, borderRadius: "var(--r-xl)", padding: 26, boxShadow: "0 8px 30px rgba(0,0,0,.3)" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60, display: "flex", justifyContent: "center", alignItems: "center", padding: "var(--sp-7)" }} className="wrap-sm">
+          <div style={{ width: "100%", maxWidth: 560, background: C.bg, borderRadius: "var(--r-xl)", padding: "var(--sp-8)", boxShadow: "0 8px 30px rgba(0,0,0,.3)" }}>
             <H2>어느 데이터를 사용할까요?</H2>
             <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.65, marginBottom: 16 }}>
               이 브라우저와 클라우드(계정) 양쪽에 서로 다른 데이터가 있습니다. 실수로 자소서 등 작성한 내용이 사라지지 않도록, 어느 쪽을 남길지 직접 선택해야 합니다. <b>선택한 쪽이 다른 쪽을 덮어씁니다.</b>
@@ -1992,7 +2005,7 @@ function AnalyzeStart({ experiences, setExperiences, onStart }) {
     <div style={{ maxWidth: 640 }}>
       <H2>새 경험 분석</H2>
       <Card>
-        <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.7, marginBottom: 16, padding: 12, background: C.bg, borderRadius: "var(--r-lg)" }}>
+        <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.7, marginBottom: 16, padding: "var(--sp-5)", background: C.bg, borderRadius: "var(--r-lg)" }}>
           처음부터 완벽하게 작성할 필요는 없습니다.<br />기억나는 내용을 자유롭게 적으면, 질문을 통해 함께 구체화합니다.
         </div>
         <div style={{ display: "grid", gap: 13 }}>
@@ -2378,7 +2391,7 @@ function ActionEditor({ local, setLocal }) {
       {roots.map(renderRow)}
       {actions.length === 0 && <div style={{ fontSize: "var(--fs-base)", color: C.faintText, padding: "var(--sp-3) 0" }}>아직 입력된 행동이 없습니다.</div>}
 
-      <div style={{ marginTop: 12, padding: 12, background: C.bg, borderRadius: "var(--r-lg)" }}>
+      <div style={{ marginTop: 12, padding: "var(--sp-5)", background: C.bg, borderRadius: "var(--r-lg)" }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }} className="wrap-sm">
           <select value={draft.actionType} onChange={e => setDraft(d => ({ ...d, actionType: e.target.value }))}
             style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, background: C.panel }}>
@@ -2469,7 +2482,7 @@ function MetricEditor({ expId, metrics, setMetrics, local, patch }) {
           <span {...clickableProps(() => removeMetric(m.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-sm)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
         </div>
       )) : (
-        <div style={{ fontSize: "var(--fs-base)", color: C.sub, padding: 14, background: C.bg, borderRadius: "var(--r-lg)" }}>
+        <div style={{ fontSize: "var(--fs-base)", color: C.sub, padding: "var(--sp-5)", background: C.bg, borderRadius: "var(--r-lg)" }}>
           아직 수치가 없습니다. 정량 성과가 없다면 정성 변화(CS 감소, 프로세스 표준화 등)를 아래에 적어주세요.
         </div>
       )}
@@ -3855,7 +3868,7 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, padding: 12, borderTop: `1px solid ${C.line}` }} className="wrap-sm">
+      <div style={{ display: "flex", gap: 8, padding: "var(--sp-5)", borderTop: `1px solid ${C.line}` }} className="wrap-sm">
         <Textarea rows={2} placeholder={inputPlaceholder || "피드백을 입력하거나 '다음 문항'이라고 입력하세요"} value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
