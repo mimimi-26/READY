@@ -9,6 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@coreui/coreui": "^5.2.0",
+    "@coreui/icons": "^3.0.1",
+    "@coreui/icons-react": "^2.3.0",
+    "@coreui/react": "^5.4.0",
     "@supabase/supabase-js": "^2.45.4",
     "mammoth": "^1.7.2",
     "react": "^18.3.1",
