@@ -308,7 +308,7 @@ function CategorySelect({ value, options, onChange, onAddOption, placeholder, st
 
   if (adding) {
     return (
-      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, alignItems: "center" }} className="wrap-sm">
         <Input autoFocus placeholder="새 카테고리명" value={draft} onChange={e => setDraft(e.target.value)}
           onKeyDown={e => e.key === "Enter" && commit()} style={{ width: 140, fontSize: "var(--fs-sm)", padding: "var(--sp-2) var(--sp-3)", ...style }} />
         <Btn small onClick={commit}>추가</Btn>
@@ -369,25 +369,45 @@ function TokenText({ text, metrics }) {
 /* ---------- 공통 UI (와이어프레임 킷 톤 — 각진 박스, 아웃라인 태그) ---------- */
 const Badge = ({ label, color, bg }) => (
   <span style={{ fontSize: "var(--fs-xs)", fontWeight: 700, color: "#fff", background: color,
-    padding: "var(--sp-1) var(--sp-3)", borderRadius: "var(--r-xs)", whiteSpace: "nowrap", display: "inline-block", lineHeight: 1.5,
+    padding: "var(--sp-1) var(--sp-3)", borderRadius: "var(--r-xs)", display: "inline-block", lineHeight: 1.5,
     // 그리드 아이템이 되면 inline-block 이 block 으로 강제 변환(blockify)되어
     // 셀 전체 폭으로 늘어난다. 배지는 항상 내용 폭만 차지해야 한다.
-    justifySelf: "start", width: "fit-content" }}>{label}</span>
+    justifySelf: "start", width: "fit-content",
+    // 호출부가 긴 문장을 label 로 넘기는 곳이 있다(이력서의 역량 목록 등).
+    // nowrap 이면 그런 배지가 컨테이너를 밀어내 레이아웃 뷰포트까지 넓어진다.
+    // keep-all 이라 한글 단어 중간에서는 끊기지 않고 띄어쓰기에서만 줄이 바뀐다.
+    maxWidth: "100%", whiteSpace: "normal", wordBreak: "keep-all" }}>{label}</span>
 );
-const Card = ({ children, style, onClick }) => (
-  <div {...(onClick ? clickableProps(onClick) : {})} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: "var(--r-sm)", padding: 18,
+const Card = ({ children, style, onClick, className }) => {
+  // clickableProps 도 className("ui-click")을 넣으므로 호출부가 준 값과 합친다.
+  // 합치지 않으면 뒤에 오는 쪽이 앞을 덮어써서, 예를 들어 반응형 클래스가
+  // 조용히 사라지고 좁은 화면에서 그리드가 접히지 않는다.
+  const interactive = onClick ? clickableProps(onClick) : {};
+  const cls = [interactive.className, className].filter(Boolean).join(" ") || undefined;
+  return (
+  <div {...interactive} className={cls} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: "var(--r-sm)", padding: "var(--sp-6)",
     boxShadow: "0 0 1px rgba(0,0,21,.08), 0 1px 3px rgba(0,0,21,.06)",
     cursor: onClick ? "pointer" : "default", transition: "border-color .15s, box-shadow .15s", ...style }}
     onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = C.primary)}
     onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = C.line)}>
     {children}
   </div>
-);
+  );
+};
 const H2 = ({ children }) => <h2 style={{ fontSize: "var(--fs-xl)", fontWeight: 700, margin: "0 0 14px", color: C.text }}>{children}</h2>;
 const Label = ({ children }) => <div style={{ fontSize: "var(--fs-sm)", fontWeight: 600, color: C.faintText, marginBottom: 4, letterSpacing: ".02em" }}>{children}</div>;
-const Btn = ({ children, primary, small, onClick, disabled, style, title }) => (
-  <button onClick={onClick} disabled={disabled} title={title} style={{
-    fontFamily: font, fontSize: small ? 12 : 13.5, fontWeight: 600, padding: small ? "5px 11px" : "8px 16px",
+const Btn = ({ children, primary, small, onClick, disabled, style, title, className }) => (
+  <button onClick={onClick} disabled={disabled} title={title}
+    className={["ui-click", className].filter(Boolean).join(" ")} style={{
+    fontFamily: font,
+    // 이 두 값은 타입/간격 스케일을 쓰지 않고 숫자로 남아 있었다.
+    // 치환 스크립트가 삼항 표현식을 건너뛰었기 때문이다.
+    fontSize: small ? "var(--fs-xs)" : "var(--fs-sm)", fontWeight: 600,
+    padding: small ? "var(--sp-2) var(--sp-4)" : "var(--sp-3) var(--sp-6)",
+    // 버튼 라벨은 절대 줄바꿈하지 않는다. "대화 초기화"가 "대화 초 / 기화"로
+    // 쪼개지면 읽기 어렵다. 줄을 바꿔야 할 때는 버튼 통째로 넘어가야 하며,
+    // 그건 부모 행의 .wrap-sm 이 처리한다.
+    whiteSpace: "nowrap",
     borderRadius: "var(--r-sm)", border: primary ? `1px solid ${C.primary}` : `1px solid ${C.line}`, cursor: disabled ? "default" : "pointer",
     background: disabled ? C.lineSoft : primary ? C.primary : C.panel, color: disabled ? C.faintText : primary ? "#fff" : C.text, ...style }}>
     {children}
@@ -983,14 +1003,14 @@ function App() {
   useEscapeKey(showSettings, () => setShowSettings(false));
 
   return (
-    <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", color: C.text }}>
+    <div className="min-h-screen" style={{ fontFamily: font, background: C.bg, display: "flex", flexDirection: "column", color: C.text }}>
       {/* 키보드 사용자가 사이드바를 건너뛰고 본문으로 바로 이동 */}
       <a href="#main-content" className="skip-link">본문으로 건너뛰기</a>
       <Toaster />
       {/* 상단 헤더 — 실제 CoreUI CHeader */}
       <CHeader position="sticky" className="mb-0" style={{ zIndex: 20 }}>
         <CContainer fluid className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
-          <div className="d-flex align-items-center" style={{ gap: 10 }}>
+          <div className="d-flex align-items-center flex-wrap" style={{ gap: 10 }}>
             <CHeaderBrand className="d-flex align-items-center" style={{ gap: 8, fontWeight: 800 }}>
               <span style={{ width: 8, height: 8, borderRadius: "var(--r-xs)", background: C.primary, display: "inline-block" }} />
               Career OS
@@ -998,7 +1018,11 @@ function App() {
             <span className="text-body-secondary">/</span>
             <span className="text-body-secondary fw-semibold">{activeTop.label}</span>
             {isMobile && (
-              <CHeaderToggler onClick={() => setMobileMenuOpen(o => !o)}>{mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</CHeaderToggler>
+              <CHeaderToggler onClick={() => setMobileMenuOpen(o => !o)}
+                aria-expanded={mobileMenuOpen} aria-controls="main-nav"
+                // CoreUI 기본값이 20px 이라 320px 화면에서 "메뉴 접기"가 두 줄로 쪼개졌다.
+                style={{ fontSize: "var(--fs-base)", whiteSpace: "nowrap", padding: "var(--sp-1) var(--sp-2)" }}>
+                {mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</CHeaderToggler>
             )}
           </div>
           <CHeaderNav className="d-flex align-items-center flex-wrap" style={{ gap: 14 }}>
@@ -1022,9 +1046,24 @@ function App() {
       </CHeader>
 
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flex: 1, minHeight: 0 }}>
-      {/* Sidebar — 실제 CoreUI CSidebar */}
+      {/* Sidebar — 실제 CoreUI CSidebar
+          CoreUI 의 사이드바는 .show 클래스로 열고 닫는 오버레이 드로어다.
+          이 앱은 대신 흐름 안에서 펼쳐지는 인라인 메뉴를 쓰므로
+          (position: static, width: 100%, height: auto) 드로어 로직을
+          쓰지 않는다. visible prop 은 CoreUI 내부에서 mobile 판정 직후
+          강제로 꺼지므로 여기서는 쓸 수 없고, 숨김 마진만 직접 무효화한다. */}
       {(!isMobile || mobileMenuOpen) && (
-        <CSidebar colorScheme="dark" aria-label="주 메뉴" style={{ width: isMobile ? "100%" : 220, position: isMobile ? "static" : "sticky", top: 53, height: isMobile ? "auto" : "calc(100vh - 53px)" }}>
+        <CSidebar id="main-nav" colorScheme="dark" aria-label="주 메뉴"
+          style={{ width: isMobile ? "100%" : 220, position: isMobile ? "static" : "sticky", top: 53,
+            height: isMobile ? "auto" : "calc(100vh - 53px)",
+            // CoreUI 의 .sidebar:not(.show) 가 margin-inline-start: -16rem 으로
+            // 사이드바를 화면 밖에 숨겨 둔다. 이 앱은 오버레이 드로어가 아니라
+            // 흐름 안에서 펼쳐지는 인라인 메뉴를 쓰므로 그 숨김을 무효화한다.
+            marginInlineStart: 0,
+            // CoreUI 는 .sidebar 에 flex: 0 0 16rem 을 건다. 모바일에서는 부모가
+            // 세로 flex 라 flex-basis 가 '높이'를 결정하므로 위의 height: auto 가
+            // 무시되고 항목 아래로 빈 공간이 256px 까지 남는다. 내용에 맞게 접는다.
+            flex: isMobile ? "0 0 auto" : undefined }}>
           <CSidebarNav>
             {TOP_NAV.map(t => (
               t.subTabs ? (
@@ -1046,7 +1085,7 @@ function App() {
 
       {/* Main */}
       <main id="main-content" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <div className="page-body" style={{ padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
+        <div className="page-body" style={{ padding: isMobile ? "var(--sp-6)" : "var(--sp-8) var(--sp-8)", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => setShowGuide(true)} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
           history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={go} />}
@@ -1068,7 +1107,11 @@ function App() {
 
       {/* 플로팅 AI 물어보기 버튼 */}
       {!chatOpen && (
-        <button onClick={() => setChatOpen(true)} title="AI에게 물어보기" style={{
+        <button onClick={() => setChatOpen(true)} title="AI에게 물어보기" aria-label="AI에게 물어보기"
+          className="fab-safe" style={{
+          // fab-safe 가 아이폰 홈 인디케이터만큼 더 띄운다. 아래 right/bottom 은
+          // env() 를 모르는 브라우저를 위한 기본값이다.
+          "--fab-inset": isMobile ? "16px" : "28px",
           position: "fixed", right: isMobile ? 16 : 28, bottom: isMobile ? 16 : 28, zIndex: 40,
           width: 52, height: 52, borderRadius: "var(--r-full)", background: C.primary, color: "#fff", border: "none",
           boxShadow: "0 4px 14px rgba(0,0,0,.18)", cursor: "pointer", fontSize: "var(--fs-2xl)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -1076,10 +1119,10 @@ function App() {
         </button>
       )}
       {chatOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "flex-end", alignItems: isMobile ? "stretch" : "flex-end", padding: isMobile ? 0 : 20 }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "flex-end", alignItems: isMobile ? "stretch" : "flex-end", padding: isMobile ? 0 : "var(--sp-7)" }}
           onClick={(e) => { if (e.target === e.currentTarget) setChatOpen(false); }}>
           <div role="dialog" aria-modal="true" aria-label="AI 어시스턴트" style={{ width: isMobile ? "100%" : 420, maxHeight: isMobile ? "100%" : "80vh", height: isMobile ? "100%" : "auto",
-            background: C.bg, borderRadius: isMobile ? 0 : 20, overflowY: "auto", padding: 20, boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
+            background: C.bg, borderRadius: isMobile ? 0 : "var(--r-xl)", overflowY: "auto", padding: "var(--sp-7)", boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
               <span {...clickableProps(() => setChatOpen(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: "var(--fs-xl)", color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
@@ -1091,9 +1134,9 @@ function App() {
 
       {/* 가이드 모달 */}
       {showGuide && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "calc(var(--sp-8) + var(--sp-5)) var(--sp-7)", overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowGuide(false); }}>
-          <div role="dialog" aria-modal="true" aria-label="사용 가이드" style={{ width: "100%", maxWidth: 920, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
+          <div role="dialog" aria-modal="true" aria-label="사용 가이드" className={isMobile ? "modal-full-mobile" : undefined} style={{ width: "100%", maxWidth: 920, background: C.bg, borderRadius: isMobile ? 0 : "var(--r-xl)", padding: isMobile ? "var(--sp-6)" : "var(--sp-8)", boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
               <span {...clickableProps(() => setShowGuide(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: "var(--fs-xl)", color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
@@ -1104,9 +1147,9 @@ function App() {
 
       {/* 설정 모달: 백업 불러오기 · 전체 초기화 · 휴지통 */}
       {showSettings && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "calc(var(--sp-8) + var(--sp-5)) var(--sp-7)", overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-          <div role="dialog" aria-modal="true" aria-label="설정" style={{ width: "100%", maxWidth: 640, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
+          <div role="dialog" aria-modal="true" aria-label="설정" className={isMobile ? "modal-full-mobile" : undefined} style={{ width: "100%", maxWidth: 640, background: C.bg, borderRadius: isMobile ? 0 : "var(--r-xl)", padding: isMobile ? "var(--sp-6)" : "var(--sp-8)", boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <H2>설정</H2>
               <span {...clickableProps(() => setShowSettings(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: "var(--fs-xl)", color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
@@ -1114,7 +1157,7 @@ function App() {
 
             <Card style={{ marginBottom: 16 }}>
               <Label>백업</Label>
-              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }} className="wrap-sm">
                 <Btn small onClick={exportBackup}>백업 다운로드</Btn>
                 <Btn small onClick={() => backupInputRef.current?.click()}>백업 불러오기</Btn>
                 <input ref={backupInputRef} type="file" accept="application/json" style={{ display: "none" }}
@@ -1154,8 +1197,8 @@ function App() {
 
       {/* 로그인 시 로컬/클라우드 데이터 충돌 — 절대 조용히 덮어쓰지 않는다 */}
       {conflict && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60, display: "flex", justifyContent: "center", alignItems: "center", padding: 20 }}>
-          <div style={{ width: "100%", maxWidth: 560, background: C.bg, borderRadius: "var(--r-xl)", padding: 26, boxShadow: "0 8px 30px rgba(0,0,0,.3)" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 60, display: "flex", justifyContent: "center", alignItems: "center", padding: "var(--sp-7)" }} className="wrap-sm">
+          <div style={{ width: "100%", maxWidth: 560, background: C.bg, borderRadius: "var(--r-xl)", padding: "var(--sp-8)", boxShadow: "0 8px 30px rgba(0,0,0,.3)" }}>
             <H2>어느 데이터를 사용할까요?</H2>
             <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.65, marginBottom: 16 }}>
               이 브라우저와 클라우드(계정) 양쪽에 서로 다른 데이터가 있습니다. 실수로 자소서 등 작성한 내용이 사라지지 않도록, 어느 쪽을 남길지 직접 선택해야 합니다. <b>선택한 쪽이 다른 쪽을 덮어씁니다.</b>
@@ -1168,7 +1211,7 @@ function App() {
                 </div>
               ))}
             </div>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10 }} className="wrap-sm">
               <Btn style={{ flex: 1 }} onClick={() => resolveConflict("local")}>이 브라우저 데이터 사용</Btn>
               <Btn primary style={{ flex: 1 }} onClick={() => resolveConflict("cloud")}>클라우드 데이터 사용</Btn>
             </div>
@@ -1197,7 +1240,7 @@ function Landing({ onStart, onGoogle }) {
     onGoogle();
   };
   return (
-    <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", color: C.text }}>
+    <div className="min-h-screen" style={{ fontFamily: font, background: C.bg, color: C.text }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "60px var(--sp-7) 80px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <div style={{ fontSize: "var(--fs-md)", fontWeight: 800, letterSpacing: "-.01em", marginBottom: 18, color: C.primary }}>Career OS</div>
@@ -1207,7 +1250,7 @@ function Landing({ onStart, onGoogle }) {
           <div style={{ fontSize: "var(--fs-md)", color: C.sub, lineHeight: 1.6, marginBottom: 28 }}>
             자소서·이력서 파일을 넣으면 AI가 경험을 정리하고, 지원 준비까지 한곳에서 관리합니다.
           </div>
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }} className="wrap-sm">
             <Btn primary onClick={onStart} style={{ padding: "var(--sp-5) var(--sp-8)", fontSize: "var(--fs-md)" }}>바로 시작하기</Btn>
             <Btn onClick={handleGoogle} disabled={googleLoading} style={{ padding: "var(--sp-5) var(--sp-8)", fontSize: "var(--fs-md)" }}>
               {googleLoading ? "이동 중…" : "구글로 계속하기"}
@@ -1470,9 +1513,9 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
       </div>
 
       <Card style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }} className="wrap-sm">
           <Input placeholder="이때 무슨 일이 있었나요? (예: 팀 프로젝트 발표)" value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }} className="wrap-sm">
             <input type="month" value={date ? date.slice(0, 7) : ""} onChange={e => setDate(e.target.value ? e.target.value + "-01" : "")}
               style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-5)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, width: 140 }} />
             <span style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>~</span>
@@ -1514,9 +1557,9 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
 
         <div style={{ flex: 1, minWidth: 0 }}>
           {laneCount > 1 && (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }} className="wrap-sm">
               <span style={{ fontSize: "var(--fs-xs)", color: C.faintText }}>동시에 진행된 활동이 많아서 옆으로 넘어갑니다 ({laneCount}칸)</span>
-              <div style={{ display: "flex", gap: 4 }}>
+              <div style={{ display: "flex", gap: 4 }} className="wrap-sm">
                 <button onClick={() => scrollLanes(-1)} style={{ fontFamily: font, fontSize: "var(--fs-sm)", padding: "var(--sp-1) var(--sp-4)", borderRadius: "var(--r-md)", border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>◀</button>
                 <button onClick={() => scrollLanes(1)} style={{ fontFamily: font, fontSize: "var(--fs-sm)", padding: "var(--sp-1) var(--sp-4)", borderRadius: "var(--r-md)", border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>▶</button>
               </div>
@@ -1579,9 +1622,9 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
       })()}
 
       {selected.size > 1 && (
-        <div style={{ position: "sticky", bottom: 16, marginTop: 16, background: C.panel, border: `1px solid ${C.line}`, borderRadius: "var(--r-lg)", padding: "var(--sp-4) var(--sp-5)", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }}>
+        <div style={{ position: "sticky", bottom: 16, marginTop: 16, background: C.panel, border: `1px solid ${C.line}`, borderRadius: "var(--r-lg)", padding: "var(--sp-4) var(--sp-5)", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.06)" }} className="wrap-sm">
           <span style={{ fontSize: "var(--fs-sm)" }}>{selected.size}개 선택됨{selectedActivities.length < selected.size ? " (정리된 경험은 일괄 작업 대상에서 제외)" : ""}</span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
             <Btn small onClick={() => setSelected(new Set())}>선택 해제</Btn>
             <Btn small onClick={deleteSelected} disabled={selectedActivities.length === 0}>삭제</Btn>
             <Btn small primary onClick={organizeSelected} disabled={selectedActivities.length === 0}>선택한 항목 정리하기</Btn>
@@ -1610,14 +1653,14 @@ function TimelineActivityPanel({ activity, setActivities, onDeselect, onOrganize
         <span {...clickableProps(onDeselect, { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-base)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
       </div>
       <Input value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8 }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }} className="wrap-sm">
         <input type="month" value={date} onChange={e => setDate(e.target.value)}
           style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, width: 140 }} />
         <span style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>~</span>
         <input type="month" value={endDate} min={date} onChange={e => setEndDate(e.target.value)}
           style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, width: 140 }} />
       </div>
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
         <Btn small primary onClick={save}>저장</Btn>
         <Btn small onClick={onOrganize}>정리하기 →</Btn>
         <Btn small onClick={onDelete}>삭제</Btn>
@@ -1654,7 +1697,7 @@ function TimelineExperienceNote({ exp, setExperiences, onOpenExp, onDeselect }) 
         <span {...clickableProps(onDeselect, { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-base)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
       </div>
       <Input value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8, fontWeight: 700 }} />
-      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }} className="wrap-sm">
         <input type="month" value={startYm} onChange={e => setStartYm(e.target.value)}
           style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, width: 140 }} />
         <span style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>~</span>
@@ -1901,7 +1944,7 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
             <div style={{ width: `${(done / total) * 100}%`, background: C.green }} />
             <div style={{ width: `${(needs / total) * 100}%`, background: C.orange }} />
           </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }} className="wrap-sm">
             <Btn small primary onClick={onGoAnalyze}>+ 새 경험 분석 시작</Btn>
             <Btn small onClick={onGoImport}>파일에서 가져오기</Btn>
           </div>
@@ -1962,7 +2005,7 @@ function AnalyzeStart({ experiences, setExperiences, onStart }) {
     <div style={{ maxWidth: 640 }}>
       <H2>새 경험 분석</H2>
       <Card>
-        <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.7, marginBottom: 16, padding: 12, background: C.bg, borderRadius: "var(--r-lg)" }}>
+        <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.7, marginBottom: 16, padding: "var(--sp-5)", background: C.bg, borderRadius: "var(--r-lg)" }}>
           처음부터 완벽하게 작성할 필요는 없습니다.<br />기억나는 내용을 자유롭게 적으면, 질문을 통해 함께 구체화합니다.
         </div>
         <div style={{ display: "grid", gap: 13 }}>
@@ -2200,9 +2243,9 @@ JSON만 응답 (마크다운 백틱 없이):
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14 }} className="wrap-sm">
         <Btn onClick={() => stepIdx > 0 ? setStepIdx(stepIdx - 1) : (showDepth ? (setShowDepth(false), setStepIdx(CORE_STEPS.length - 1)) : null)} disabled={stepIdx === 0 && !showDepth}>← 이전</Btn>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
           {!showDepth && stepIdx === CORE_STEPS.length - 1 && (
             <>
               <Btn onClick={runConsistencyReview} disabled={reviewLoading}>{reviewLoading ? "검토 중…" : "AI로 검토받기"}</Btn>
@@ -2304,7 +2347,7 @@ function ActionEditor({ local, setLocal }) {
       <div key={a.id}>
         {isEditing ? (
           <div style={{ padding: "var(--sp-4) 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-            <div style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }} className="wrap-sm">
               <select value={editDraft.actionType} onChange={e => setEditDraft(d => ({ ...d, actionType: e.target.value }))}
                 style={{ fontFamily: font, fontSize: "var(--fs-sm)", padding: "var(--sp-2) var(--sp-3)", borderRadius: "var(--r-md)", border: `1px solid ${C.line}`, background: C.panel }}>
                 {Object.entries(ACTION_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -2319,7 +2362,7 @@ function ActionEditor({ local, setLocal }) {
               </label>
             </div>
             <Textarea value={editDraft.description} onChange={e => setEditDraft(d => ({ ...d, description: e.target.value }))} rows={2} style={{ fontSize: "var(--fs-base)" }} />
-            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }} className="wrap-sm">
               <Btn small primary onClick={() => saveEdit(a.id)}>저장</Btn>
               <Btn small onClick={cancelEdit}>취소</Btn>
             </div>
@@ -2348,8 +2391,8 @@ function ActionEditor({ local, setLocal }) {
       {roots.map(renderRow)}
       {actions.length === 0 && <div style={{ fontSize: "var(--fs-base)", color: C.faintText, padding: "var(--sp-3) 0" }}>아직 입력된 행동이 없습니다.</div>}
 
-      <div style={{ marginTop: 12, padding: 12, background: C.bg, borderRadius: "var(--r-lg)" }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
+      <div style={{ marginTop: 12, padding: "var(--sp-5)", background: C.bg, borderRadius: "var(--r-lg)" }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }} className="wrap-sm">
           <select value={draft.actionType} onChange={e => setDraft(d => ({ ...d, actionType: e.target.value }))}
             style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, background: C.panel }}>
             {Object.entries(ACTION_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -2363,7 +2406,7 @@ function ActionEditor({ local, setLocal }) {
             <input type="checkbox" checked={draft.isDirectAction} onChange={e => setDraft(d => ({ ...d, isDirectAction: e.target.checked }))} /> 직접 수행
           </label>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
           <Input placeholder="행동 설명 — 예: 과거 3년 판매량, 장바구니 데이터 분석" value={draft.description}
             onChange={e => setDraft(d => ({ ...d, description: e.target.value }))} onKeyDown={e => e.key === "Enter" && add()} style={{ flex: 1 }} />
           <Btn small onClick={add}>추가</Btn>
@@ -2439,11 +2482,11 @@ function MetricEditor({ expId, metrics, setMetrics, local, patch }) {
           <span {...clickableProps(() => removeMetric(m.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-sm)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
         </div>
       )) : (
-        <div style={{ fontSize: "var(--fs-base)", color: C.sub, padding: 14, background: C.bg, borderRadius: "var(--r-lg)" }}>
+        <div style={{ fontSize: "var(--fs-base)", color: C.sub, padding: "var(--sp-5)", background: C.bg, borderRadius: "var(--r-lg)" }}>
           아직 수치가 없습니다. 정량 성과가 없다면 정성 변화(CS 감소, 프로세스 표준화 등)를 아래에 적어주세요.
         </div>
       )}
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }} className="wrap-sm">
         <Input placeholder="지표명 (예: 매출)" value={draft.metricName} onChange={e => setDraft(d => ({ ...d, metricName: e.target.value }))} style={{ flex: 1 }} />
         <Input placeholder="변화 값 (예: 29)" value={draft.changeValue} onChange={e => setDraft(d => ({ ...d, changeValue: e.target.value }))} style={{ width: 110 }} />
         <Input placeholder="단위 (%)" value={draft.unit} onChange={e => setDraft(d => ({ ...d, unit: e.target.value }))} style={{ width: 70 }} />
@@ -2556,9 +2599,9 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
           addTrash={addTrash} onDone={(id) => { cancelMerge(); onOpen(id); }} onCancel={() => setMergeStep(false)} />
       ) : (
       <>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }} className="wrap-sm">
         <H2>경험 보관함</H2>
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6 }} className="wrap-sm">
           {mergeMode ? (
             <Btn small onClick={cancelMerge}>선택 모드 종료</Btn>
           ) : (
@@ -2576,9 +2619,9 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
       </div>
 
       {mergeMode && (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.accent, border: `1px solid ${C.line}`, borderRadius: "var(--r-lg)", padding: "var(--sp-4) var(--sp-5)", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.accent, border: `1px solid ${C.line}`, borderRadius: "var(--r-lg)", padding: "var(--sp-4) var(--sp-5)", marginBottom: 14, flexWrap: "wrap", gap: 8 }} className="wrap-sm">
           <span style={{ fontSize: "var(--fs-base)" }}>{selected.length}개 선택됨</span>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }} className="wrap-sm">
             <CategorySelect value="" options={expCategories} placeholder="카테고리 일괄 지정"
               onAddOption={addExpCategory}
               onChange={(v) => { setExperiences(prev => prev.map(e => selected.includes(e.id) ? { ...e, primaryCategory: v } : e)); }} />
@@ -2593,7 +2636,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }} className="wrap-sm">
         <Input placeholder="경험·역량·소속 검색" value={q} onChange={e => setQ(e.target.value)} style={{ maxWidth: 300 }} />
         {FILTERS.map(([v, l]) => (
           <button key={v} onClick={() => setFilter(v)} style={{ fontFamily: font, fontSize: "var(--fs-sm)", padding: "var(--sp-2) var(--sp-5)", borderRadius: "var(--r-lg)", cursor: "pointer", whiteSpace: "nowrap",
@@ -2711,7 +2754,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
               const total = hits.length + notes.length;
               return (
                 <Card key={b.id}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, gap: 8 }} className="wrap-sm">
                     {isEditing ? (
                       <Input value={b.label} placeholder="질문 내용" onChange={e => patchBlock(b.id, "label", e.target.value)}
                         style={{ fontWeight: 700, fontSize: "var(--fs-base)", border: "none", padding: "var(--sp-1) 0", flex: 1 }} />
@@ -2757,7 +2800,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
                         <option value="">+ 경험 불러오기</option>
                         {candidates.map(e => <option key={e.id} value={e.id}>{e.title}</option>)}
                       </select>
-                      <div style={{ display: "flex", gap: 6 }}>
+                      <div style={{ display: "flex", gap: 6 }} className="wrap-sm">
                         <Textarea placeholder="경험 없이 바로 메모나 답변 초안을 적어도 됩니다" value={noteDraft[b.id] || ""}
                           onChange={e => setNoteDraft(p => ({ ...p, [b.id]: e.target.value }))} style={{ flex: 1, minHeight: 44, fontSize: "var(--fs-base)" }} />
                         <Btn small onClick={() => { if ((noteDraft[b.id] || "").trim()) { addBlockNote(b.id, noteDraft[b.id].trim()); setNoteDraft(p => ({ ...p, [b.id]: "" })); } }}>메모 추가</Btn>
@@ -2830,7 +2873,7 @@ function MergeReview({ ids, experiences, setExperiences, metrics, setMetrics, ou
       <div style={{ fontSize: "var(--fs-sm)", color: C.faintText, marginTop: 8, lineHeight: 1.6 }}>
         배경·문제·행동 등 세부 필드는 기준 경험의 내용이 유지됩니다. 합친 뒤 경험 분석에서 전체 내용을 다시 확인·정리하는 것을 권장합니다.
       </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 16 }} className="wrap-sm">
         <Btn primary onClick={confirm}>합치기 확정</Btn>
         <Btn onClick={onCancel}>취소</Btn>
       </div>
@@ -2878,9 +2921,9 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
   return (
     <div style={{ maxWidth: 820 }}>
       <div {...clickableProps(onBack)} style={{ fontSize: "var(--fs-base)", color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 경험 보관함</div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }} className="wrap-sm">
         <h2 style={{ fontSize: "var(--fs-2xl)", fontWeight: 800, margin: 0 }}>{exp.title}</h2>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }} className="wrap-sm">
           <Badge label={STATUS_LABEL[exp.status]} color={STATUS_COLOR[exp.status][0]} bg={STATUS_COLOR[exp.status][1]} />
           <Btn small onClick={() => setShowReview(true)}>이 경험만 AI 진단</Btn>
           <Btn small onClick={() => onAnalyze(exp.id)}>{exp.depthDone ? "수정하기" : "심화 분석 계속"}</Btn>
@@ -2927,7 +2970,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
               ))}
               {exp.competencies.length === 0 && <span style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>아직 태그가 없습니다.</span>}
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
               <Input placeholder="역량 태그 추가 (예: 협상력)" value={tagDraft} onChange={e => setTagDraft(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && addTag()} style={{ maxWidth: 220 }} />
               <Btn small onClick={addTag}>추가</Btn>
@@ -3026,7 +3069,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
                   <span style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginLeft: "auto" }}>v{o.version}</span>
                 </div>
                 <div style={{ fontSize: "var(--fs-md)", lineHeight: 1.65 }}><TokenText text={o.content} metrics={metrics} /></div>
-                <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                <div style={{ display: "flex", gap: 8, marginTop: 12 }} className="wrap-sm">
                   {o.approvalStatus !== "approved" && <Btn small primary onClick={() => approve(o.id)}>승인</Btn>}
                   {o.isStale && <Btn small primary onClick={() => approve(o.id)}>확인 후 재승인</Btn>}
                   <Btn small onClick={() => setChatMode({ type: "regenerate", outputId: o.id })}>재생성</Btn>
@@ -3298,7 +3341,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
                 </div>
               )}
               {(e.metrics || []).map((m, mi) => (
-                <div key={mi} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: C.accent, border: `1px solid ${C.line}`, padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)" }}>
+                <div key={mi} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: C.accent, border: `1px solid ${C.line}`, padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-lg)" }} className="wrap-sm">
                   <Badge label="추가 확인 필요" color={C.redText} bg={C.redBg} />
                   <Input value={m.metricName} onChange={ev => patchMetric(e._id, mi, "metricName", ev.target.value)} style={{ width: 120 }} />
                   {m.beforeValue != null ? (
@@ -3348,7 +3391,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
         ))}
       </Card>
 
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", justifyContent: "space-between" }} className="wrap-sm">
         <Btn onClick={() => setPhase("input")}>← 다시 추출</Btn>
         <Btn primary onClick={commit}>확인한 항목 반영하기</Btn>
       </div>
@@ -3363,7 +3406,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
           선택한 항목이 <b>초기 메모</b> 상태로 추가되었습니다.<br />
           경험 보관함에서 각 경험의 <b>단계별 분석</b>을 진행하면, 가져온 수치도 근거 확인 후 정식 수치로 승격됩니다.
         </div>
-        <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 14 }} className="wrap-sm">
           <Btn primary onClick={() => { const last = experiences[experiences.length - 1]; last && onDone(last.id); }}>경험 보관함 보기 →</Btn>
           <Btn onClick={() => { setPhase("input"); setRaw(""); setResult(null); setFileName(""); }}>다른 파일 가져오기</Btn>
         </div>
@@ -3435,7 +3478,7 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
         })}
 
         {addingScope === s.id ? (
-          <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 10 }} className="wrap-sm">
             <Input autoFocus placeholder="예: 피벗 테이블 기반 판매 데이터 집계" value={scopeDraft.text}
               onChange={e => setScopeDraft(d => ({ ...d, text: e.target.value }))} onKeyDown={e => e.key === "Enter" && addScope(s.id)} style={{ flex: 1 }} />
             <select value={scopeDraft.evidenceExpId} onChange={e => setScopeDraft(d => ({ ...d, evidenceExpId: e.target.value }))}
@@ -3473,7 +3516,7 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
       {(tab === "도구" || tab === "직무 역량") && (
         <>
           {byCat(catOf[tab]).map(s => <SkillCard key={s.id} s={s} />)}
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
             <Input placeholder={tab === "도구" ? "도구 이름 (예: Google Analytics)" : "역량 이름 (예: 상품 기획)"} value={newSkill}
               onChange={e => setNewSkill(e.target.value)} onKeyDown={e => e.key === "Enter" && addSkill(catOf[tab])} style={{ maxWidth: 320 }} />
             <Btn onClick={() => addSkill(catOf[tab])}>+ 추가</Btn>
@@ -3791,13 +3834,13 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
 
   return (
     <Card style={{ padding: 0, overflow: "hidden" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "var(--sp-5) var(--sp-6)", borderBottom: `1px solid ${C.line}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "var(--sp-5) var(--sp-6)", borderBottom: `1px solid ${C.line}` }} className="wrap-sm">
         <div>
           <div style={{ fontSize: "var(--fs-base)", fontWeight: 700 }}>{title}</div>
           {subtitle && <div style={{ fontSize: "var(--fs-xs)", color: C.faintText }}>{subtitle}</div>}
           <div style={{ fontSize: "var(--fs-2xs)", color: C.faintText, marginTop: 2 }}>이 대화 내용은 응답 생성을 위해 외부 AI 서버로 전송됩니다</div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
           {messages.length > 0 && <Btn small onClick={() => { updateMessages([]); started.current = false; }}>대화 초기화</Btn>}
           {onSaveDraft && lastAssistant && <Btn small onClick={() => onSaveDraft(lastAssistant.content)}>{saveDraftLabel || "이 답변을 초안으로 저장"}</Btn>}
           <Btn small onClick={onClose}>{closeLabel || "← 목록으로"}</Btn>
@@ -3825,7 +3868,7 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ display: "flex", gap: 8, padding: 12, borderTop: `1px solid ${C.line}` }}>
+      <div style={{ display: "flex", gap: 8, padding: "var(--sp-5)", borderTop: `1px solid ${C.line}` }} className="wrap-sm">
         <Textarea rows={2} placeholder={inputPlaceholder || "피드백을 입력하거나 '다음 문항'이라고 입력하세요"} value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
@@ -3997,14 +4040,14 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
   return (
     <div style={{ maxWidth: 880 }}>
       <div {...clickableProps(onBack)} style={{ fontSize: "var(--fs-base)", color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 지원 관리</div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
-        <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }} className="wrap-sm">
+        <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }} className="wrap-sm">
           <Input value={app.company} onChange={e => patch("company", e.target.value)} style={{ fontSize: "var(--fs-2xl)", fontWeight: 800, border: "none", padding: "var(--sp-1) 0", width: 220 }} />
           <Input value={app.position} placeholder="직무" onChange={e => patch("position", e.target.value)} style={{ fontSize: "var(--fs-md)", color: C.sub, border: "none", padding: "var(--sp-1) 0", width: 160 }} />
         </div>
         <span {...clickableProps(deleteApp, { label: "닫기" })} title="이 지원 삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-md)", padding: "var(--sp-2)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
       </div>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, fontSize: "var(--fs-base)", color: C.sub }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, fontSize: "var(--fs-base)", color: C.sub }} className="wrap-sm">
         마감 <Input value={app.deadline || ""} placeholder="YYYY-MM-DD" onChange={e => patch("deadline", e.target.value)} style={{ width: 120, border: "none", padding: "var(--sp-1) 0", color: C.sub }} />
         <span>·</span>
         우선순위
@@ -4057,7 +4100,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                     <span {...clickableProps(removeReq, { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-sm)", flexShrink: 0, marginTop: 4 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                   </div>
                   <div style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginBottom: 6 }}>중요도 {"●".repeat(r.importance)}{"○".repeat(5 - r.importance)}</div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} className="wrap-sm">
                     <select value={r.matchedExp || ""} onChange={e => patchReq("matchedExp", e.target.value || null)}
                       style={{ fontFamily: font, fontSize: "var(--fs-sm)", padding: "var(--sp-2) var(--sp-3)", borderRadius: "var(--r-lg)", border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blueText : C.text }}>
                       <option value="">매칭 없음</option>
@@ -4178,7 +4221,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
             };
             return (
               <Card key={iq.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 10 }} className="wrap-sm">
                   <Input value={iq.question} onChange={e => patchIq("question", e.target.value)} style={{ fontWeight: 700, fontSize: "var(--fs-md)", border: "none", padding: "var(--sp-1) 0", flex: 1 }} />
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                     <CategorySelect value={iq.category} options={interviewCategories} placeholder="카테고리 없음" onAddOption={addInterviewCategory} onChange={(v) => patchIq("category", v)} />
@@ -4203,7 +4246,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                         <span {...clickableProps(() => patchIq("followUps", iq.followUps.filter((_, fi) => fi !== i)))} style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-xs)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                       </div>
                     ))}
-                    <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+                    <div style={{ marginTop: 10, display: "flex", gap: 8 }} className="wrap-sm">
                       <Btn small primary disabled title="준비 중인 기능입니다">60초 연습 시작</Btn><Btn small disabled title="준비 중인 기능입니다">키워드 가리기</Btn>
                     </div>
                   </>
@@ -4260,7 +4303,7 @@ function Trash({ trash, onRestore, onPurge, onClear }) {
             <span style={{ marginLeft: 8, fontSize: "var(--fs-base)", fontWeight: 600 }}>{t.label || "(제목 없음)"}</span>
             <div style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginTop: 3 }}>{formatDeletedAt(t.deletedAt)} 삭제됨</div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+          <div style={{ display: "flex", gap: 8, flexShrink: 0 }} className="wrap-sm">
             <Btn small primary onClick={() => onRestore(t.id)}>복구</Btn>
             <Btn small onClick={() => onPurge(t.id)}>영구 삭제</Btn>
           </div>
@@ -4367,7 +4410,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
             const exp = experiences.find(e => e.id === iq.selectedExperienceId);
             return (
               <Card key={iq.id}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, gap: 10 }} className="wrap-sm">
                   <Input value={iq.question} onChange={e => patchIq(iq.id, "question", e.target.value)} style={{ fontWeight: 700, fontSize: "var(--fs-md)", border: "none", padding: "var(--sp-1) 0", flex: 1 }} />
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                     <CategorySelect value={iq.category} options={interviewCategories} placeholder="카테고리 없음"
@@ -4554,7 +4597,7 @@ function BrandingOfflineWorkbook({ onRetryConnect, authError }) {
         <Card style={{ marginBottom: 12 }}>
           <Input placeholder="라벨 (선택)" value={label} onChange={e => setLabel(e.target.value)} style={{ marginBottom: 8 }} />
           <Textarea placeholder="답변을 적어주세요" value={content} onChange={e => setContent(e.target.value)} rows={5} />
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }} className="wrap-sm">
             <Btn small primary disabled={!content.trim()} onClick={addEntry}>저장</Btn>
             <Btn small onClick={() => setComposerOpen(false)}>취소</Btn>
           </div>
@@ -4563,7 +4606,7 @@ function BrandingOfflineWorkbook({ onRetryConnect, authError }) {
         <Btn small onClick={() => setComposerOpen(true)}>+ 답변 추가</Btn>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }} className="wrap-sm">
         <Btn onClick={() => setIdx(i => Math.max(i - 1, 0))} disabled={idx === 0}>← 이전</Btn>
         <Btn primary onClick={() => setIdx(i => Math.min(i + 1, BRANDING_FLAT_QUESTIONS.length - 1))} disabled={idx >= BRANDING_FLAT_QUESTIONS.length - 1}>다음 →</Btn>
       </div>
@@ -4680,7 +4723,7 @@ function BrandingHub() {
               {authError}
             </div>
           )}
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
             <Btn small primary onClick={() => signInWithGoogle(supabase)}>Google로 로그인</Btn>
             <Btn small onClick={() => setOfflineMode(true)}>로그인 없이 계속하기</Btn>
           </div>
@@ -4792,7 +4835,7 @@ function BrandingHome({ progress, profileItems, onGoWorkbook, onGoResult }) {
         ))}
       </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
         {nextQuestion ? <Btn primary onClick={() => onGoWorkbook(nextQuestion.id)}>이어서 하기 →</Btn> : <Btn primary onClick={onGoResult}>결과 보기 →</Btn>}
       </div>
     </div>
@@ -4804,7 +4847,7 @@ function FollowupAnswerBox({ onSubmit, onSkip }) {
   return (
     <div style={{ marginTop: 4 }}>
       <Textarea rows={2} placeholder="답변…" value={text} onChange={e => setText(e.target.value)} style={{ fontSize: "var(--fs-base)" }} />
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 6 }} className="wrap-sm">
         <Btn small primary disabled={!text.trim()} onClick={() => onSubmit(text)}>답변</Btn>
         <Btn small onClick={onSkip}>건너뛰기</Btn>
       </div>
@@ -5008,7 +5051,7 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
               {editingId === entry.id ? (
                 <div>
                   <Textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={4} />
-                  <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <div style={{ display: "flex", gap: 8, marginTop: 6 }} className="wrap-sm">
                     <Btn small primary onClick={() => saveEdit(entry)}>저장</Btn>
                     <Btn small onClick={() => setEditingId(null)}>취소</Btn>
                   </div>
@@ -5042,13 +5085,13 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
               <Input placeholder='라벨 (선택, 예: "2024년 프로젝트 때")' value={composerLabel} onChange={e => setComposerLabel(e.target.value)} style={{ marginBottom: 8 }} />
               <Textarea placeholder={question.input_type === "list" ? "쉼표나 줄바꿈으로 구분해서 적어주세요" : "답변을 적어주세요"}
                 value={composerContent} onChange={e => setComposerContent(e.target.value)} rows={5} />
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }} className="wrap-sm">
                 <Btn small primary disabled={!composerContent.trim()} onClick={addEntry}>저장</Btn>
                 <Btn small onClick={() => setComposerOpen(false)}>취소</Btn>
               </div>
             </Card>
           ) : (
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }} className="wrap-sm">
               <Btn small onClick={() => setComposerOpen(true)}>+ 답변 추가</Btn>
               {activeEntries.length >= 3 && <Btn small onClick={runConsolidate} disabled={consolidating}>{consolidating ? "종합하는 중…" : "답변들 종합하기"}</Btn>}
             </div>
@@ -5119,9 +5162,9 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
         </>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }} className="wrap-sm">
         <Btn onClick={goPrev} disabled={idx === 0}>← 이전</Btn>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
           <Btn onClick={skipQuestion}>건너뛰기</Btn>
           <Btn primary onClick={goNext} disabled={idx >= BRANDING_FLAT_QUESTIONS.length - 1}>다음 →</Btn>
         </div>
@@ -5172,7 +5215,7 @@ function BrandingProfile({ items, onChangeItem, onAddManual, onJumpToSource }) {
             {item.source_entry_ids && item.source_entry_ids.length > 0 && (
               <div style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginBottom: 8 }}>출처 답변 {item.source_entry_ids.length}건</div>
             )}
-            <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ display: "flex", gap: 6 }} className="wrap-sm">
               {item.status !== "확정" && <Btn small primary onClick={() => onChangeItem(item.id, { status: "확정", stale: false })}>확정</Btn>}
               {item.status !== "기각" && <Btn small onClick={() => onChangeItem(item.id, { status: "기각" })}>기각</Btn>}
               {item.stale && <Btn small onClick={() => onChangeItem(item.id, { stale: false })}>재확인 완료</Btn>}
@@ -5184,7 +5227,7 @@ function BrandingProfile({ items, onChangeItem, onAddManual, onJumpToSource }) {
 
       <Card>
         <Label>AI가 놓친 게 있다면 직접 추가</Label>
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }} className="wrap-sm">
           <select value={manualType} onChange={e => setManualType(e.target.value)}
             style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-md)", border: `1px solid ${C.line}`, background: C.panel }}>
             {Object.entries(PROFILE_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
@@ -5435,9 +5478,9 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
           <AutosaveIndicator state={autosave} />
         </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }} className="wrap-sm">
         <div style={{ fontSize: "var(--fs-base)", color: C.sub }}>경력 문장은 직접 입력하지 않고, 경험 보관함의 <b>승인된</b> 문장만 불러옵니다.</div>
-        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }} className="wrap-sm">
           <Btn small onClick={() => window.print()}>PDF로 저장 (인쇄)</Btn>
           <Btn small onClick={exportWord}>Word로 내보내기</Btn>
         </div>
@@ -5451,7 +5494,7 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 6 }} className="stack-sm">
           <div><Label>이름</Label><Input placeholder="이름" value={resumeProfile.name || ""} onChange={e => patch("name", e.target.value)} /></div>
           <div><Label>희망 직무</Label><Input placeholder="예: MD / 이커머스" value={resumeProfile.targetRole || ""} onChange={e => patch("targetRole", e.target.value)} /></div>
-          <div><Label>이메일</Label><Input placeholder="이메일" value={resumeProfile.email || ""} onChange={e => patch("email", e.target.value)} /></div>
+          <div><Label>이메일</Label><Input type="email" inputMode="email" autoComplete="email" placeholder="이메일" value={resumeProfile.email || ""} onChange={e => patch("email", e.target.value)} /></div>
           <div><Label>연락처</Label><Input placeholder="연락처" value={resumeProfile.phone || ""} onChange={e => patch("phone", e.target.value)} /></div>
           <div style={{ gridColumn: "1 / -1" }}><Label>한 줄 소개</Label><Input placeholder="한 줄 소개" value={resumeProfile.headline || ""} onChange={e => patch("headline", e.target.value)} /></div>
         </div>
@@ -5498,7 +5541,7 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
           </div>
         ))}
         {certs.length === 0 && <div style={{ fontSize: "var(--fs-sm)", color: C.faintText, padding: "var(--sp-2) 0" }}>등록된 자격증·어학이 없습니다.</div>}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }} className="wrap-sm">
           <Input placeholder="자격증명" value={certDraft.name} onChange={e => setCertDraft(d => ({ ...d, name: e.target.value }))} style={{ flex: 1.3 }} />
           <Input placeholder="발급 기관" value={certDraft.issuer} onChange={e => setCertDraft(d => ({ ...d, issuer: e.target.value }))} style={{ flex: 1 }} />
           <Input placeholder="취득일 (YYYY-MM)" value={certDraft.date} onChange={e => setCertDraft(d => ({ ...d, date: e.target.value }))} style={{ width: 130 }} />
@@ -5518,7 +5561,7 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
           </div>
         ))}
         {awards.length === 0 && <div style={{ fontSize: "var(--fs-sm)", color: C.faintText, padding: "var(--sp-2) 0" }}>등록된 수상기록이 없습니다.</div>}
-        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 12 }} className="wrap-sm">
           <Input placeholder="수상명 (예: 전국 대학생 공모전 대상)" value={awardDraft.name} onChange={e => setAwardDraft(d => ({ ...d, name: e.target.value }))} style={{ flex: 1.3 }} />
           <Input placeholder="수여 기관" value={awardDraft.issuer} onChange={e => setAwardDraft(d => ({ ...d, issuer: e.target.value }))} style={{ flex: 1 }} />
           <Input placeholder="수상일 (YYYY-MM)" value={awardDraft.date} onChange={e => setAwardDraft(d => ({ ...d, date: e.target.value }))} style={{ width: 130 }} />
