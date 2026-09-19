@@ -12,22 +12,27 @@ import * as XLSX from "xlsx";
    - 파일 가져오기: 비정형 텍스트/문서 → AI 추출 → 사용자 확인·수정 후 반영
    ============================================================ */
 
-/* ---------- 디자인 토큰 ---------- */
+/* ---------- 디자인 토큰 — CoreUI Free React Admin Template 스타일 ---------- */
 const C = {
-  bg: "#F7F7F5", panel: "#FFFFFF", line: "#E6E4DF", lineSoft: "#EFEDE8",
-  text: "#2B2A28", sub: "#6E6B65", faint: "#9C988F",
-  // 약한 강조 — 톤 다운된 그레이 (블루 끼 제거)
-  blue: "#6E6B65", blueBg: "#EFEDE8",
-  // 강한 강조 — 유일한 포인트 컬러: 채도 낮춘 파스텔 그린
-  green: "#3F7A5C", greenBg: "#E7F1EA",
-  // 경고·AI·미확인 표시도 전부 무채색 톤으로 통일
-  orange: "#6E6B65", orangeBg: "#EFEDE8",
-  ai: "#6E6B65", aiBg: "#EFEDE8",
-  // 실제 오류(빨강)만 별도 유지
-  red: "#B91C1C", redBg: "#FBEBEB",
-  accent: "#F2F1EE",
+  bg: "#EBEDEF", panel: "#FFFFFF", line: "#D8DBE0", lineSoft: "#F0F2F5",
+  text: "#3C4B64", sub: "#5C6873", faint: "#9DA5B1",
+  // CoreUI info (링크·중립 강조)
+  blue: "#3399FF", blueBg: "#E8F3FF",
+  // CoreUI primary (기본 액션 버튼)
+  primary: "#321FDB", primaryBg: "#EBE8FC",
+  // CoreUI success
+  green: "#2EB85C", greenBg: "#E4F7EA",
+  // CoreUI warning
+  orange: "#F9B115", orangeBg: "#FEF6E7",
+  // AI 표시는 CoreUI primary 톤 재사용
+  ai: "#321FDB", aiBg: "#EBE8FC",
+  // CoreUI danger
+  red: "#E55353", redBg: "#FDECEC",
+  accent: "#F4F5F7",
+  // 사이드바 전용 (다크 테마)
+  sidebarBg: "#212333", sidebarText: "#A1A8C3", sidebarTextActive: "#FFFFFF", sidebarHover: "#2A2C3F", sidebarLine: "#2E3046",
 };
-const font = "'Pretendard','Apple SD Gothic Neo',-apple-system,'Noto Sans KR',sans-serif";
+const font = "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue','Pretendard','Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif";
 
 /* ---------- 예시 데이터 (일반적인 아르바이트·인턴 경험 기준) ---------- */
 const seedMetrics = [
@@ -349,13 +354,14 @@ function TokenText({ text, metrics }) {
 
 /* ---------- 공통 UI (와이어프레임 킷 톤 — 각진 박스, 아웃라인 태그) ---------- */
 const Badge = ({ label, color, bg }) => (
-  <span style={{ fontSize: 11, fontWeight: 600, color, background: "transparent", border: `1px solid ${color}55`,
-    padding: "1px 7px", borderRadius: 14, whiteSpace: "nowrap", display: "inline-block", lineHeight: 1.6 }}>{label}</span>
+  <span style={{ fontSize: 11.5, fontWeight: 700, color: "#fff", background: color,
+    padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap", display: "inline-block", lineHeight: 1.5 }}>{label}</span>
 );
 const Card = ({ children, style, onClick }) => (
-  <div onClick={onClick} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 14, padding: 18,
-    cursor: onClick ? "pointer" : "default", transition: "border-color .15s", ...style }}
-    onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = C.faint)}
+  <div onClick={onClick} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: 18,
+    boxShadow: "0 0 1px rgba(0,0,21,.08), 0 1px 3px rgba(0,0,21,.06)",
+    cursor: onClick ? "pointer" : "default", transition: "border-color .15s, box-shadow .15s", ...style }}
+    onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = C.primary)}
     onMouseLeave={e => onClick && (e.currentTarget.style.borderColor = C.line)}>
     {children}
   </div>
@@ -364,18 +370,18 @@ const H2 = ({ children }) => <h2 style={{ fontSize: 18, fontWeight: 700, margin:
 const Label = ({ children }) => <div style={{ fontSize: 12, fontWeight: 600, color: C.faint, marginBottom: 4, letterSpacing: ".02em" }}>{children}</div>;
 const Btn = ({ children, primary, small, onClick, disabled, style, title }) => (
   <button onClick={onClick} disabled={disabled} title={title} style={{
-    fontFamily: font, fontSize: small ? 12 : 13.5, fontWeight: 600, padding: small ? "5px 11px" : "9px 16px",
-    borderRadius: 12, border: primary ? `1px solid ${C.blue}` : `1px solid ${C.line}`, cursor: disabled ? "default" : "pointer",
-    background: disabled ? C.lineSoft : primary ? C.blue : C.panel, color: disabled ? C.faint : primary ? "#fff" : C.text, ...style }}>
+    fontFamily: font, fontSize: small ? 12 : 13.5, fontWeight: 600, padding: small ? "5px 11px" : "8px 16px",
+    borderRadius: 6, border: primary ? `1px solid ${C.primary}` : `1px solid ${C.line}`, cursor: disabled ? "default" : "pointer",
+    background: disabled ? C.lineSoft : primary ? C.primary : C.panel, color: disabled ? C.faint : primary ? "#fff" : C.text, ...style }}>
     {children}
   </button>
 );
 const Input = props => (
-  <input {...props} style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`,
+  <input {...props} style={{ fontFamily: font, fontSize: 13.5, padding: "8px 12px", borderRadius: 6, border: `1px solid ${C.line}`,
     width: "100%", boxSizing: "border-box", background: C.panel, color: C.text, outline: "none", ...props.style }} />
 );
 const Textarea = props => (
-  <textarea {...props} style={{ fontFamily: font, fontSize: 13.5, lineHeight: 1.6, padding: "10px 12px", borderRadius: 14,
+  <textarea {...props} style={{ fontFamily: font, fontSize: 13.5, lineHeight: 1.6, padding: "10px 12px", borderRadius: 6,
     border: `1px solid ${C.line}`, width: "100%", boxSizing: "border-box", background: C.panel, color: C.text, outline: "none",
     resize: "vertical", minHeight: 84, ...props.style }} />
 );
@@ -887,42 +893,48 @@ function App() {
 
   return (
     <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: isMobile ? "column" : "row", color: C.text }}>
-      {/* Sidebar */}
+      {/* Sidebar — CoreUI 다크 테마 */}
       <aside style={{
-        width: isMobile ? "100%" : 208, background: C.panel,
-        borderRight: isMobile ? "none" : `1px solid ${C.line}`,
-        borderBottom: isMobile ? `1px solid ${C.line}` : "none",
-        padding: isMobile ? "14px 16px" : "22px 14px",
+        width: isMobile ? "100%" : 220, background: C.sidebarBg,
+        borderRight: isMobile ? "none" : `1px solid ${C.sidebarLine}`,
+        borderBottom: isMobile ? `1px solid ${C.sidebarLine}` : "none",
+        padding: isMobile ? "14px 16px" : "0",
         position: isMobile ? "static" : "sticky", top: 0,
         height: isMobile ? "auto" : "100vh", boxSizing: "border-box", flexShrink: 0,
         overflowY: isMobile ? "visible" : "auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: isMobile ? 0 : "16px 18px", borderBottom: isMobile ? "none" : `1px solid ${C.sidebarLine}`, marginBottom: isMobile ? 0 : 6 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em" }}>Career OS</div>
-            {!isMobile && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 4, marginBottom: 20 }}>경험 분석 · 재사용</div>}
+            <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em", color: "#fff", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.primary, display: "inline-block" }} />
+              Career OS
+            </div>
+            {!isMobile && <div style={{ fontSize: 11, color: C.sidebarText, marginTop: 4 }}>경험 분석 · 재사용</div>}
           </div>
           {isMobile && (
             <Btn small onClick={() => setMobileMenuOpen(o => !o)}>{mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</Btn>
           )}
         </div>
         {(!isMobile || mobileMenuOpen) && (
-          <div style={{ marginTop: isMobile ? 12 : 4 }}>
+          <div style={{ marginTop: isMobile ? 12 : 4, padding: isMobile ? 0 : "0 10px" }}>
             {TOP_NAV.map(t => (
               <div key={t.key} onClick={() => { if (t.subTabs) { if (activeTop.key !== t.key) go(t.subTabs[0][0]); if (isMobile) setMobileMenuOpen(false); } else { go(t.nav); if (isMobile) setMobileMenuOpen(false); } }} style={{
-                padding: "10px 12px", fontSize: 14, fontWeight: activeTop.key === t.key ? 700 : 500, cursor: "pointer",
-                color: activeTop.key === t.key ? C.text : C.sub, marginBottom: 2, borderRadius: 10,
-                background: activeTop.key === t.key && !t.subTabs ? C.lineSoft : "transparent" }}>
+                padding: "10px 12px", fontSize: 13.5, fontWeight: activeTop.key === t.key ? 700 : 500, cursor: "pointer",
+                color: activeTop.key === t.key ? C.sidebarTextActive : C.sidebarText, marginBottom: 2, borderRadius: 4,
+                background: activeTop.key === t.key && !t.subTabs ? C.primary : "transparent" }}
+                onMouseEnter={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = C.sidebarHover; }}
+                onMouseLeave={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = "transparent"; }}>
                 {t.label}
               </div>
             ))}
             {activeTop.subTabs && (
-              <div style={{ marginTop: 4, marginBottom: 8, paddingLeft: 10 }}>
+              <div style={{ marginTop: 2, marginBottom: 8, paddingLeft: 8 }}>
                 {activeTop.subTabs.map(([k, l]) => (
                   <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }} style={{
-                    position: "relative", padding: "8px 10px 8px 16px", fontSize: 13.5, fontWeight: nav === k ? 700 : 500, cursor: "pointer",
-                    color: nav === k ? C.text : C.sub, marginBottom: 1, borderRadius: 10,
-                    background: nav === k ? C.lineSoft : "transparent" }}>
-                    {nav === k && <span style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", width: 3, height: 14, borderRadius: 99, background: C.green }} />}
+                    position: "relative", padding: "8px 10px 8px 18px", fontSize: 13, fontWeight: nav === k ? 700 : 400, cursor: "pointer",
+                    color: nav === k ? C.sidebarTextActive : C.sidebarText, marginBottom: 1, borderRadius: 4,
+                    background: nav === k ? C.sidebarHover : "transparent" }}>
+                    {nav === k && <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", width: 4, height: 4, borderRadius: 99, background: C.primary }} />}
                     {l}
                   </div>
                 ))}
@@ -933,8 +945,11 @@ function App() {
       </aside>
 
       {/* Main */}
-      <main style={{ flex: 1, padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0 }}>
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
+      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        {/* Topbar — CoreUI 헤더 */}
+        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14, flexWrap: "wrap",
+          background: C.panel, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "12px 16px" : "12px 28px",
+          position: "sticky", top: 0, zIndex: 10, boxShadow: "0 2px 4px rgba(0,0,21,.04)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint }}>
             <span style={{ width: 6, height: 6, borderRadius: 99, background:
               cloudStatus === "synced" ? C.green : cloudStatus === "syncing" ? C.blue : cloudStatus === "error" ? C.red : C.faint }} />
@@ -948,10 +963,11 @@ function App() {
           ) : (
             <Btn small onClick={handleGoogleLogin} disabled={authLoading}>{authLoading ? "이동 중…" : "Google로 로그인"}</Btn>
           )}
-          <span onClick={() => setShowGuide(true)} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: 99, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
-          <span onClick={() => setShowSettings(true)} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: 99, border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</span>
+          <span onClick={() => setShowGuide(true)} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
+          <span onClick={() => setShowSettings(true)} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</span>
         </div>
 
+        <div style={{ padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => setShowGuide(true)} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
           history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={go} />}
@@ -967,13 +983,14 @@ function App() {
         {nav === "master" && <MasterPrep essays={masterEssays} setEssays={setMasterEssays} interviews={masterInterviews} setInterviews={setMasterInterviews} experiences={experiences} metrics={metrics} resumeProfile={resumeProfile} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
         {nav === "resume" && <Resume experiences={experiences} outputs={outputs} metrics={metrics} resumeProfile={resumeProfile} setResumeProfile={setResumeProfile} skills={skills} certs={certs} setCerts={setCerts} awards={awards} setAwards={setAwards} addTrash={addTrash} />}
         {nav === "trash" && <Trash trash={trash} onRestore={restoreTrash} onPurge={purgeTrash} onClear={clearTrash} />}
+        </div>
       </main>
 
       {/* 플로팅 AI 물어보기 버튼 */}
       {!chatOpen && (
         <button onClick={() => setChatOpen(true)} title="AI에게 물어보기" style={{
           position: "fixed", right: isMobile ? 16 : 28, bottom: isMobile ? 16 : 28, zIndex: 40,
-          width: 52, height: 52, borderRadius: 99, background: C.green, color: "#fff", border: "none",
+          width: 52, height: 52, borderRadius: 99, background: C.primary, color: "#fff", border: "none",
           boxShadow: "0 4px 14px rgba(0,0,0,.18)", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
           💬
         </button>
@@ -1103,7 +1120,7 @@ function Landing({ onStart, onGoogle }) {
     <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", color: C.text }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "60px 20px 80px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-.01em", marginBottom: 18, color: C.green }}>Career OS</div>
+          <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: "-.01em", marginBottom: 18, color: C.primary }}>Career OS</div>
           <h1 style={{ fontSize: 30, fontWeight: 800, margin: "0 0 14px", lineHeight: 1.35 }}>
             흩어진 경험을, 이력서·자소서로 바로 쓸 수 있게
           </h1>
@@ -1132,7 +1149,7 @@ function Landing({ onStart, onGoogle }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 10 }}>
             {steps.map(s => (
               <div key={s.n} style={{ padding: "16px 4px" }}>
-                <div style={{ fontSize: 22, fontWeight: 800, color: C.green, marginBottom: 8 }}>{s.n}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: C.primary, marginBottom: 8 }}>{s.n}</div>
                 <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{s.title}</div>
                 <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.55 }}>{s.desc}</div>
               </div>
@@ -1704,7 +1721,7 @@ function HomeOnboarding({ onGoAnalyze, onGoImport, onLoadDemo, onGoGuide }) {
   return (
     <div style={{ maxWidth: 560, margin: "40px auto 0" }}>
       <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, color: C.green }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, color: C.primary }}>
           <Icon name="sparkle" size={34} />
         </div>
         <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>Career OS에 오신 걸 환영합니다</h1>
@@ -1715,8 +1732,8 @@ function HomeOnboarding({ onGoAnalyze, onGoImport, onLoadDemo, onGoGuide }) {
 
       <Card onClick={onGoImport} style={{
         textAlign: "center", padding: "30px 20px", marginBottom: 14,
-        border: `1px solid ${C.green}`, background: C.greenBg }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: C.green }}>
+        border: `1px solid ${C.primary}`, background: C.primaryBg }}>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 12, color: C.primary }}>
           <Icon name="upload" size={30} />
         </div>
         <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 6 }}>시작하기</div>
