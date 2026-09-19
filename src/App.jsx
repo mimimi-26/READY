@@ -32,7 +32,22 @@ const C = {
   // 사이드바 전용 (다크 테마)
   sidebarBg: "#212333", sidebarText: "#A1A8C3", sidebarTextActive: "#FFFFFF", sidebarHover: "#2A2C3F", sidebarLine: "#2E3046",
 };
-const font = "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue','Pretendard','Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif";
+const font = "'Spoqa Han Sans Neo','Spoqa Han Sans JP',system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue','Apple SD Gothic Neo','Noto Sans KR',Arial,sans-serif";
+
+// Spoqa Han Sans Neo 웹폰트 로드 — index.html이 없는 실행 환경(아티팩트 미리보기 등)에서도
+// 런타임에 스타일시트를 주입해 폰트가 적용되도록 함. 이미 <head>에 있으면 중복 삽입하지 않음.
+function useSpoqaHanSansFont() {
+  useEffect(() => {
+    try {
+      const href = "https://spoqa.github.io/spoqa-han-sans/css/SpoqaHanSansNeo.css";
+      if (document.querySelector(`link[href="${href}"]`)) return;
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.appendChild(link);
+    } catch { /* 폰트 로드 실패해도 시스템 폰트로 정상 동작 */ }
+  }, []);
+}
 
 /* ---------- 예시 데이터 (일반적인 아르바이트·인턴 경험 기준) ---------- */
 const seedMetrics = [
@@ -1171,6 +1186,7 @@ function Landing({ onStart, onGoogle }) {
 
 /* ============================================================ 라우팅 루트 — 첫 방문자는 랜딩, 재방문자는 /app으로 */
 export default function Root() {
+  useSpoqaHanSansFont();
   const [screen, setScreen] = useState(() => {
     try {
       if (window.location.pathname.startsWith("/app")) return "app";
