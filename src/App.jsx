@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
+import "@coreui/coreui/dist/css/coreui.min.css";
+import { CHeader, CHeaderBrand, CHeaderNav, CHeaderToggler, CContainer, CSidebar, CSidebarNav, CNavItem, CNavGroup } from "@coreui/react";
 
 /* ============================================================
    Career OS MVP — v1.2 프로토타입
@@ -908,80 +910,62 @@ function App() {
 
   return (
     <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", color: C.text }}>
-      {/* 상단 헤더 — 화이트, 전체 폭 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10,
-        background: C.panel, borderBottom: `1px solid ${C.line}`, padding: isMobile ? "12px 16px" : "12px 28px",
-        position: "sticky", top: 0, zIndex: 20, boxShadow: "0 2px 4px rgba(0,0,21,.04)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, letterSpacing: "-.01em", color: C.text, display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: 2, background: C.primary, display: "inline-block" }} />
-            Career OS
+      {/* 상단 헤더 — 실제 CoreUI CHeader */}
+      <CHeader position="sticky" className="mb-0" style={{ zIndex: 20 }}>
+        <CContainer fluid className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
+          <div className="d-flex align-items-center" style={{ gap: 10 }}>
+            <CHeaderBrand className="d-flex align-items-center" style={{ gap: 8, fontWeight: 800 }}>
+              <span style={{ width: 8, height: 8, borderRadius: 2, background: C.primary, display: "inline-block" }} />
+              Career OS
+            </CHeaderBrand>
+            <span className="text-body-secondary">/</span>
+            <span className="text-body-secondary fw-semibold">{activeTop.label}</span>
+            {isMobile && (
+              <CHeaderToggler onClick={() => setMobileMenuOpen(o => !o)}>{mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</CHeaderToggler>
+            )}
           </div>
-          <span style={{ color: C.faint, fontSize: 14 }}>/</span>
-          <span style={{ fontSize: 14, color: C.sub, fontWeight: 600 }}>{activeTop.label}</span>
-          {isMobile && (
-            <Btn small onClick={() => setMobileMenuOpen(o => !o)}>{mobileMenuOpen ? "메뉴 접기 ▴" : "메뉴 ▾"}</Btn>
-          )}
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint }}>
-            <span style={{ width: 6, height: 6, borderRadius: 99, background:
-              cloudStatus === "synced" ? C.green : cloudStatus === "syncing" ? C.blue : cloudStatus === "error" ? C.red : C.faint }} />
-            {cloudStatus === "synced" ? "클라우드에 저장됨" : cloudStatus === "syncing" ? "동기화 중…" : cloudStatus === "error" ? "동기화 실패 (로컬엔 저장됨)" : "저장됨 · 이 브라우저에만"}
-          </div>
-          <span onClick={exportBackup} style={{ fontSize: 12, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>백업 다운로드</span>
-          {authUser === undefined ? null : authUser ? (
-            <span onClick={handleLogout} style={{ fontSize: 12, color: C.sub, cursor: "pointer" }}>
-              {authUser.email || "로그인됨"} · <span style={{ textDecoration: "underline" }}>로그아웃</span>
-            </span>
-          ) : (
-            <Btn small onClick={handleGoogleLogin} disabled={authLoading}>{authLoading ? "이동 중…" : "Google로 로그인"}</Btn>
-          )}
-          <span onClick={() => setShowGuide(true)} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
-          <span onClick={() => setShowSettings(true)} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</span>
-        </div>
-      </div>
+          <CHeaderNav className="d-flex align-items-center flex-wrap" style={{ gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint }}>
+              <span style={{ width: 6, height: 6, borderRadius: 99, background:
+                cloudStatus === "synced" ? C.green : cloudStatus === "syncing" ? C.blue : cloudStatus === "error" ? C.red : C.faint }} />
+              {cloudStatus === "synced" ? "클라우드에 저장됨" : cloudStatus === "syncing" ? "동기화 중…" : cloudStatus === "error" ? "동기화 실패 (로컬엔 저장됨)" : "저장됨 · 이 브라우저에만"}
+            </div>
+            <span onClick={exportBackup} style={{ fontSize: 12, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>백업 다운로드</span>
+            {authUser === undefined ? null : authUser ? (
+              <span onClick={handleLogout} style={{ fontSize: 12, color: C.sub, cursor: "pointer" }}>
+                {authUser.email || "로그인됨"} · <span style={{ textDecoration: "underline" }}>로그아웃</span>
+              </span>
+            ) : (
+              <Btn small onClick={handleGoogleLogin} disabled={authLoading}>{authLoading ? "이동 중…" : "Google로 로그인"}</Btn>
+            )}
+            <span onClick={() => setShowGuide(true)} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
+            <span onClick={() => setShowSettings(true)} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</span>
+          </CHeaderNav>
+        </CContainer>
+      </CHeader>
 
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flex: 1, minHeight: 0 }}>
-      {/* Sidebar — CoreUI 다크 테마 */}
-      <aside style={{
-        width: isMobile ? "100%" : 220, background: C.sidebarBg,
-        borderRight: isMobile ? "none" : `1px solid ${C.sidebarLine}`,
-        borderBottom: isMobile ? `1px solid ${C.sidebarLine}` : "none",
-        padding: isMobile ? "14px 16px" : "0",
-        position: isMobile ? "static" : "sticky", top: 53,
-        height: isMobile ? "auto" : "calc(100vh - 53px)", boxSizing: "border-box", flexShrink: 0,
-        overflowY: isMobile ? "visible" : "auto" }}>
-        {(!isMobile || mobileMenuOpen) && (
-          <div style={{ marginTop: isMobile ? 12 : 14, padding: isMobile ? 0 : "0 10px" }}>
+      {/* Sidebar — 실제 CoreUI CSidebar */}
+      {(!isMobile || mobileMenuOpen) && (
+        <CSidebar colorScheme="dark" style={{ width: isMobile ? "100%" : 220, position: isMobile ? "static" : "sticky", top: 53, height: isMobile ? "auto" : "calc(100vh - 53px)" }}>
+          <CSidebarNav>
             {TOP_NAV.map(t => (
-              <React.Fragment key={t.key}>
-                <div onClick={() => { if (t.subTabs) { if (activeTop.key !== t.key) go(t.subTabs[0][0]); if (isMobile) setMobileMenuOpen(false); } else { go(t.nav); if (isMobile) setMobileMenuOpen(false); } }} style={{
-                  padding: "10px 12px", fontSize: 13.5, fontWeight: activeTop.key === t.key ? 700 : 500, cursor: "pointer",
-                  color: activeTop.key === t.key ? C.sidebarTextActive : C.sidebarText, marginBottom: 2, borderRadius: 4,
-                  background: activeTop.key === t.key && !t.subTabs ? C.primary : "transparent" }}
-                  onMouseEnter={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = C.sidebarHover; }}
-                  onMouseLeave={e => { if (!(activeTop.key === t.key && !t.subTabs)) e.currentTarget.style.background = "transparent"; }}>
-                  {t.label}
-                </div>
-                {activeTop.key === t.key && t.subTabs && (
-                  <div style={{ marginTop: 2, marginBottom: 8, paddingLeft: 8 }}>
-                    {t.subTabs.map(([k, l]) => (
-                      <div key={k} onClick={() => { go(k); if (isMobile) setMobileMenuOpen(false); }} style={{
-                        position: "relative", padding: "8px 10px 8px 18px", fontSize: 13, fontWeight: nav === k ? 700 : 400, cursor: "pointer",
-                        color: nav === k ? C.sidebarTextActive : C.sidebarText, marginBottom: 1, borderRadius: 4,
-                        background: nav === k ? C.sidebarHover : "transparent" }}>
-                        {nav === k && <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", width: 4, height: 4, borderRadius: 99, background: C.primary }} />}
-                        {l}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </React.Fragment>
+              t.subTabs ? (
+                <CNavGroup key={t.key} toggler={t.label} visible={activeTop.key === t.key}
+                  onClick={() => { if (activeTop.key !== t.key) go(t.subTabs[0][0]); }}>
+                  {t.subTabs.map(([k, l]) => (
+                    <CNavItem key={k} href="#" active={nav === k}
+                      onClick={e => { e.preventDefault(); go(k); if (isMobile) setMobileMenuOpen(false); }}>{l}</CNavItem>
+                  ))}
+                </CNavGroup>
+              ) : (
+                <CNavItem key={t.key} href="#" active={activeTop.key === t.key}
+                  onClick={e => { e.preventDefault(); go(t.nav); if (isMobile) setMobileMenuOpen(false); }}>{t.label}</CNavItem>
+              )
             ))}
-          </div>
-        )}
-      </aside>
+          </CSidebarNav>
+        </CSidebar>
+      )}
 
       {/* Main */}
       <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
