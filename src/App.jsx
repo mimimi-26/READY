@@ -3,6 +3,8 @@ import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import "@coreui/coreui/dist/css/coreui.min.css";
 import { CHeader, CHeaderBrand, CHeaderNav, CHeaderToggler, CContainer, CSidebar, CSidebarNav, CNavItem, CNavGroup } from "@coreui/react";
+import CIcon from "@coreui/icons-react";
+import { cilX, cilWarning, cilLightbulb, cilSpeech, cilCog, cilLink } from "@coreui/icons";
 
 /* ============================================================
    Career OS MVP — v1.2 프로토타입
@@ -31,6 +33,11 @@ const C = {
   // CoreUI danger
   red: "#E55353", redBg: "#FDECEC",
   accent: "#F4F5F7",
+  // 텍스트 전용 변형 — 위 색들은 채움(프로그레스 바·상태 점·보더)용이라
+  // 밝기를 유지하고, 글자에 쓸 때만 아래 값을 써서 WCAG AA(4.5:1)를 맞춘다.
+  // 흰 카드(#FFF)·회색 배경(#EBEDEF)·각 틴트 배경 세 곳 모두에서 4.5:1 이상.
+  faintText: "#626C7B", blueText: "#0069D3", greenText: "#1F7B3E",
+  orangeText: "#8F6304", redText: "#D22020",
   // 사이드바 전용 (다크 테마)
   sidebarBg: "#212333", sidebarText: "#A1A8C3", sidebarTextActive: "#FFFFFF", sidebarHover: "#2A2C3F", sidebarLine: "#2E3046",
 };
@@ -278,25 +285,25 @@ const STEP_QUESTIONS = {
   "직무 연결": ["이 경험은 어떤 직무와 연결되는가?", "어떤 역량을 보여주는가?", "이 경험의 핵심 메시지는 무엇인가?"],
 };
 const STATUS_LABEL = { draft: "초기 메모", analyzing: "분석 중", needs_revision: "보완 필요", complete: "분석 완료" };
-const STATUS_COLOR = { draft: [C.sub, C.lineSoft], analyzing: [C.blue, C.blueBg], needs_revision: [C.orange, C.orangeBg], complete: [C.green, C.greenBg] };
+const STATUS_COLOR = { draft: [C.sub, C.lineSoft], analyzing: [C.blueText, C.blueBg], needs_revision: [C.orangeText, C.orangeBg], complete: [C.greenText, C.greenBg] };
 const CONTRIB_LABEL = { participated: "참여", responsible: "담당", led: "주도", proposed_and_executed: "제안 후 실행", full_ownership: "전체 책임" };
 const ACTION_LABEL = { goal: "목표", analysis: "분석", judgment: "판단", execution: "실행", collaboration: "협업", improvement: "개선" };
 // 행동 카드 전용 색상 (앱 전체는 무채색 기조지만, 유형 구분이 중요한 이 영역만 예외적으로 색을 씀)
 const ACTION_COLOR = {
-  goal: ["#5F6B99", "#EAECF5"],
+  goal: ["#5E6997", "#EAECF5"],
   analysis: ["#2F6FA8", "#E7F0F7"],
   judgment: ["#7A5AA8", "#EFEAF6"],
-  execution: ["#3F7A5C", "#E7F1EA"],
-  collaboration: ["#B8547E", "#FBEAF0"],
-  improvement: ["#B0791A", "#FBF1DF"],
+  execution: ["#3D7659", "#E7F1EA"],
+  collaboration: ["#AE4873", "#FBEAF0"],
+  improvement: ["#8F6315", "#FBF1DF"],
 };
 const APPROVAL = {
   ai_draft: { label: "AI 초안 · 미승인", color: C.ai, bg: C.aiBg },
-  user_editing: { label: "수정 중", color: C.blue, bg: C.blueBg },
-  approved: { label: "승인됨", color: C.green, bg: C.greenBg },
-  rejected: { label: "폐기", color: C.faint, bg: C.lineSoft },
+  user_editing: { label: "수정 중", color: C.blueText, bg: C.blueBg },
+  approved: { label: "승인됨", color: C.greenText, bg: C.greenBg },
+  rejected: { label: "폐기", color: C.faintText, bg: C.lineSoft },
 };
-const CERTAINTY = { verified: ["자료로 확인됨", C.green, C.greenBg], memory_based: ["기억에 기반함", C.orange, C.orangeBg], estimated: ["추정치", C.orange, C.orangeBg], needs_verification: ["추가 확인 필요", C.red, C.redBg] };
+const CERTAINTY = { verified: ["자료로 확인됨", C.greenText, C.greenBg], memory_based: ["기억에 기반함", C.orangeText, C.orangeBg], estimated: ["추정치", C.orangeText, C.orangeBg], needs_verification: ["추가 확인 필요", C.redText, C.redBg] };
 
 /* ---------- 카테고리 선택 (드롭다운 + 새 카테고리 추가) ---------- */
 function CategorySelect({ value, options, onChange, onAddOption, placeholder, style }) {
@@ -359,7 +366,7 @@ function TokenText({ text, metrics }) {
         return (
           <span key={i} title={metric ? `${metric.metricName} · ${cert[0]} · 근거: ${metric.evidenceSource || "없음"}` : "삭제된 수치"}
             style={{ background: metric ? (metric.certainty === "verified" ? C.greenBg : C.orangeBg) : C.redBg,
-              color: metric ? (metric.certainty === "verified" ? C.green : C.orange) : C.red,
+              color: metric ? (metric.certainty === "verified" ? C.greenText : C.orangeText) : C.redText,
               padding: "1px 5px", borderRadius: 12, fontWeight: 600, fontSize: "0.94em", cursor: "help" }}>
             {formatMetric(metric, m[2] || "exact")}
           </span>
@@ -375,7 +382,7 @@ const Badge = ({ label, color, bg }) => (
     padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap", display: "inline-block", lineHeight: 1.5 }}>{label}</span>
 );
 const Card = ({ children, style, onClick }) => (
-  <div onClick={onClick} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: 18,
+  <div {...(onClick ? clickableProps(onClick) : {})} style={{ background: C.panel, border: `1px solid ${C.line}`, borderRadius: 6, padding: 18,
     boxShadow: "0 0 1px rgba(0,0,21,.08), 0 1px 3px rgba(0,0,21,.06)",
     cursor: onClick ? "pointer" : "default", transition: "border-color .15s, box-shadow .15s", ...style }}
     onMouseEnter={e => onClick && (e.currentTarget.style.borderColor = C.primary)}
@@ -384,15 +391,31 @@ const Card = ({ children, style, onClick }) => (
   </div>
 );
 const H2 = ({ children }) => <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 14px", color: C.text }}>{children}</h2>;
-const Label = ({ children }) => <div style={{ fontSize: 12, fontWeight: 600, color: C.faint, marginBottom: 4, letterSpacing: ".02em" }}>{children}</div>;
+const Label = ({ children }) => <div style={{ fontSize: 12, fontWeight: 600, color: C.faintText, marginBottom: 4, letterSpacing: ".02em" }}>{children}</div>;
 const Btn = ({ children, primary, small, onClick, disabled, style, title }) => (
   <button onClick={onClick} disabled={disabled} title={title} style={{
     fontFamily: font, fontSize: small ? 12 : 13.5, fontWeight: 600, padding: small ? "5px 11px" : "8px 16px",
     borderRadius: 6, border: primary ? `1px solid ${C.primary}` : `1px solid ${C.line}`, cursor: disabled ? "default" : "pointer",
-    background: disabled ? C.lineSoft : primary ? C.primary : C.panel, color: disabled ? C.faint : primary ? "#fff" : C.text, ...style }}>
+    background: disabled ? C.lineSoft : primary ? C.primary : C.panel, color: disabled ? C.faintText : primary ? "#fff" : C.text, ...style }}>
     {children}
   </button>
 );
+// 클릭 가능하지만 <button> 으로 바꿀 수 없는 요소(내부에 블록 요소가 있거나
+// 클릭 요소가 중첩되어 HTML 콘텐츠 모델을 위반하는 경우)에 키보드 접근성을 부여한다.
+// role/tabIndex/onKeyDown 을 함께 주어 스크린리더에는 버튼으로 노출되고,
+// Enter·Space 로 동작한다. display 가 바뀌지 않으므로 레이아웃은 그대로다.
+const clickableProps = (onClick, { disabled = false, label } = {}) => ({
+  role: "button",
+  tabIndex: disabled ? -1 : 0,
+  "aria-disabled": disabled || undefined,
+  "aria-label": label,
+  className: "ui-click",
+  onClick: disabled ? undefined : onClick,
+  onKeyDown: disabled ? undefined : (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick?.(e); }
+  },
+});
+
 const Input = props => (
   <input {...props} style={{ fontFamily: font, fontSize: 13.5, padding: "8px 12px", borderRadius: 6, border: `1px solid ${C.line}`,
     width: "100%", boxSizing: "border-box", background: C.panel, color: C.text, outline: "none", ...props.style }} />
@@ -416,7 +439,7 @@ function useAutosave(dep) {
   return state;
 }
 const AutosaveIndicator = ({ state }) => (
-  <span style={{ fontSize: 12, color: state === "saving" ? C.blue : C.faint, display: "inline-flex", alignItems: "center", gap: 5 }}>
+  <span style={{ fontSize: 12, color: state === "saving" ? C.blueText : C.faintText, display: "inline-flex", alignItems: "center", gap: 5 }}>
     <span style={{ width: 6, height: 6, borderRadius: 99, background: state === "saving" ? C.blue : C.green }} />
     {state === "saving" ? "저장 중…" : "자동 저장됨"}
   </span>
@@ -425,6 +448,61 @@ const AutosaveIndicator = ({ state }) => (
 /* ============================================================ APP */
 /* ---------- 로컬 저장(localStorage) 지속성 훅 ---------- */
 const STORAGE_PREFIX = "careeros:";
+// 열려 있는 오버레이를 Escape 로 닫는다. 모달은 키보드만으로도 빠져나올 수 있어야 한다.
+function useEscapeKey(active, onClose) {
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [active, onClose]);
+}
+/* ---------- 토스트 ----------
+   alert() 는 브라우저를 멈추고, 스타일을 입힐 수 없고, 여러 건을 겹쳐 보여줄 수도 없다.
+   화면 좌하단(챗봇 FAB 반대편)에 쌓였다가 사라지는 비차단 알림으로 대체한다.
+   컴포넌트 트리 어디서든 toast() 로 호출할 수 있도록 모듈 수준 구독 방식을 쓴다. */
+const toastListeners = new Set();
+let toastSeq = 0;
+const toast = (message, tone = "info") => {
+  toastListeners.forEach((fn) => fn({ id: ++toastSeq, message, tone }));
+};
+function Toaster() {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    const add = (t) => {
+      setItems((prev) => [...prev, t]);
+      // 오류는 읽을 시간이 더 필요하다
+      setTimeout(() => setItems((prev) => prev.filter((i) => i.id !== t.id)), t.tone === "error" ? 8000 : 4500);
+    };
+    toastListeners.add(add);
+    return () => { toastListeners.delete(add); };
+  }, []);
+  if (!items.length) return null;
+  return (
+    <div style={{ position: "fixed", left: 20, bottom: 20, zIndex: 70, display: "flex", flexDirection: "column", gap: 8, maxWidth: "min(400px, calc(100vw - 40px))" }}>
+      {items.map((t) => (
+        <div key={t.id}
+          role={t.tone === "error" ? "alert" : "status"}
+          aria-live={t.tone === "error" ? "assertive" : "polite"}
+          style={{
+            display: "flex", alignItems: "flex-start", gap: 8,
+            background: C.panel, color: C.text,
+            border: `1px solid ${t.tone === "error" ? C.red : C.line}`,
+            borderLeft: `3px solid ${t.tone === "error" ? C.red : C.green}`,
+            borderRadius: 6, padding: "11px 13px", fontSize: 13, lineHeight: 1.5,
+            boxShadow: "0 4px 14px rgba(0,0,21,.14)",
+          }}>
+          <span style={{ flex: 1, minWidth: 0 }}>{t.message}</span>
+          <span {...clickableProps(() => setItems((prev) => prev.filter((i) => i.id !== t.id)), { label: "알림 닫기" })}
+            style={{ cursor: "pointer", color: C.faintText, flexShrink: 0, lineHeight: 1 }}>
+            <CIcon icon={cilX} width={12} height={12} aria-hidden="true" />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function useIsMobile(breakpoint = 820) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < breakpoint);
   useEffect(() => {
@@ -807,9 +885,9 @@ function App() {
   const handleGoogleLogin = async () => {
     setAuthLoading(true);
     const sb = authSupabase || await getCloudClient();
-    if (!sb) { setAuthLoading(false); alert("Supabase가 설정되어 있지 않습니다."); return; }
+    if (!sb) { setAuthLoading(false); toast("Supabase가 설정되어 있지 않습니다.", "error"); return; }
     const { error } = await signInWithGoogle(sb);
-    if (error) { setAuthLoading(false); alert("로그인 실패: " + error); }
+    if (error) { setAuthLoading(false); toast("로그인에 실패했습니다. " + error, "error"); }
   };
   const handleLogout = async () => { if (authSupabase) await signOutCloud(authSupabase); };
 
@@ -861,9 +939,9 @@ function App() {
         if (d.interviewCategories) setInterviewCategories(d.interviewCategories);
         if (d.expCategories) setExpCategories(d.expCategories);
         if (d.questionBlocks) setQuestionBlocks(d.questionBlocks);
-        alert("백업을 불러왔습니다.");
+        toast("백업을 불러왔습니다.");
       } catch (err) {
-        alert("백업 파일을 읽지 못했습니다: " + err.message);
+        toast("백업 파일을 읽지 못했습니다. " + err.message, "error");
       }
     };
     reader.readAsText(file);
@@ -907,9 +985,15 @@ function App() {
   const [showGuide, setShowGuide] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  useEscapeKey(chatOpen, () => setChatOpen(false));
+  useEscapeKey(showGuide, () => setShowGuide(false));
+  useEscapeKey(showSettings, () => setShowSettings(false));
 
   return (
     <div style={{ fontFamily: font, background: C.bg, minHeight: "100vh", display: "flex", flexDirection: "column", color: C.text }}>
+      {/* 키보드 사용자가 사이드바를 건너뛰고 본문으로 바로 이동 */}
+      <a href="#main-content" className="skip-link">본문으로 건너뛰기</a>
+      <Toaster />
       {/* 상단 헤더 — 실제 CoreUI CHeader */}
       <CHeader position="sticky" className="mb-0" style={{ zIndex: 20 }}>
         <CContainer fluid className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
@@ -925,21 +1009,21 @@ function App() {
             )}
           </div>
           <CHeaderNav className="d-flex align-items-center flex-wrap" style={{ gap: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faint }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: C.faintText }}>
               <span style={{ width: 6, height: 6, borderRadius: 99, background:
                 cloudStatus === "synced" ? C.green : cloudStatus === "syncing" ? C.blue : cloudStatus === "error" ? C.red : C.faint }} />
               {cloudStatus === "synced" ? "클라우드에 저장됨" : cloudStatus === "syncing" ? "동기화 중…" : cloudStatus === "error" ? "동기화 실패 (로컬엔 저장됨)" : "저장됨 · 이 브라우저에만"}
             </div>
-            <span onClick={exportBackup} style={{ fontSize: 12, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>백업 다운로드</span>
+            <span {...clickableProps(exportBackup)} style={{ fontSize: 12, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>백업 다운로드</span>
             {authUser === undefined ? null : authUser ? (
-              <span onClick={handleLogout} style={{ fontSize: 12, color: C.sub, cursor: "pointer" }}>
+              <span {...clickableProps(handleLogout)} style={{ fontSize: 12, color: C.sub, cursor: "pointer" }}>
                 {authUser.email || "로그인됨"} · <span style={{ textDecoration: "underline" }}>로그아웃</span>
               </span>
             ) : (
               <Btn small onClick={handleGoogleLogin} disabled={authLoading}>{authLoading ? "이동 중…" : "Google로 로그인"}</Btn>
             )}
-            <span onClick={() => setShowGuide(true)} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
-            <span onClick={() => setShowSettings(true)} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>⚙</span>
+            <span {...clickableProps(() => setShowGuide(true))} title="사용 가이드" style={{ cursor: "pointer", fontSize: 15, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
+            <span {...clickableProps(() => setShowSettings(true))} title="설정" style={{ cursor: "pointer", fontSize: 14, color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}><CIcon icon={cilCog} width={14} height={14} aria-hidden="true" /></span>
           </CHeaderNav>
         </CContainer>
       </CHeader>
@@ -947,19 +1031,19 @@ function App() {
       <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", flex: 1, minHeight: 0 }}>
       {/* Sidebar — 실제 CoreUI CSidebar */}
       {(!isMobile || mobileMenuOpen) && (
-        <CSidebar colorScheme="dark" style={{ width: isMobile ? "100%" : 220, position: isMobile ? "static" : "sticky", top: 53, height: isMobile ? "auto" : "calc(100vh - 53px)" }}>
+        <CSidebar colorScheme="dark" aria-label="주 메뉴" style={{ width: isMobile ? "100%" : 220, position: isMobile ? "static" : "sticky", top: 53, height: isMobile ? "auto" : "calc(100vh - 53px)" }}>
           <CSidebarNav>
             {TOP_NAV.map(t => (
               t.subTabs ? (
                 <CNavGroup key={t.key} toggler={t.label} visible={activeTop.key === t.key}
                   onClick={() => { if (activeTop.key !== t.key) go(t.subTabs[0][0]); }}>
                   {t.subTabs.map(([k, l]) => (
-                    <CNavItem key={k} href="#" active={nav === k}
+                    <CNavItem key={k} href="#" active={nav === k} aria-current={nav === k ? "page" : undefined}
                       onClick={e => { e.preventDefault(); go(k); if (isMobile) setMobileMenuOpen(false); }}>{l}</CNavItem>
                   ))}
                 </CNavGroup>
               ) : (
-                <CNavItem key={t.key} href="#" active={activeTop.key === t.key}
+                <CNavItem key={t.key} href="#" active={activeTop.key === t.key} aria-current={activeTop.key === t.key ? "page" : undefined}
                   onClick={e => { e.preventDefault(); go(t.nav); if (isMobile) setMobileMenuOpen(false); }}>{t.label}</CNavItem>
               )
             ))}
@@ -968,8 +1052,8 @@ function App() {
       )}
 
       {/* Main */}
-      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
+      <main id="main-content" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <div className="page-body" style={{ padding: isMobile ? "16px" : "26px 32px", maxWidth: 1120, minWidth: 0, width: "100%", boxSizing: "border-box" }}>
         {nav === "home" && <Home experiences={experiences} applications={applications} onGoAnalyze={() => go("analyze")} onGoImport={() => go("import")} onOpenDetail={openDetail} onOpenApp={id => { setNav("apply"); setAppDetailId(id); }} isBlankSlate={isBlankSlate} onLoadDemo={loadDemoData} onGoGuide={() => setShowGuide(true)} />}
         {nav === "chat" && <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
           history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={go} />}
@@ -995,16 +1079,16 @@ function App() {
           position: "fixed", right: isMobile ? 16 : 28, bottom: isMobile ? 16 : 28, zIndex: 40,
           width: 52, height: 52, borderRadius: 99, background: C.primary, color: "#fff", border: "none",
           boxShadow: "0 4px 14px rgba(0,0,0,.18)", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          💬
+          <CIcon icon={cilSpeech} width={22} height={22} aria-hidden="true" />
         </button>
       )}
       {chatOpen && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "flex-end", alignItems: isMobile ? "stretch" : "flex-end", padding: isMobile ? 0 : 20 }}
           onClick={(e) => { if (e.target === e.currentTarget) setChatOpen(false); }}>
-          <div style={{ width: isMobile ? "100%" : 420, maxHeight: isMobile ? "100%" : "80vh", height: isMobile ? "100%" : "auto",
+          <div role="dialog" aria-modal="true" aria-label="AI 어시스턴트" style={{ width: isMobile ? "100%" : 420, maxHeight: isMobile ? "100%" : "80vh", height: isMobile ? "100%" : "auto",
             background: C.bg, borderRadius: isMobile ? 0 : 20, overflowY: "auto", padding: 20, boxShadow: "0 8px 30px rgba(0,0,0,.2)" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
-              <span onClick={() => setChatOpen(false)} style={{ cursor: "pointer", fontSize: 18, color: C.faint }}>✕</span>
+              <span {...clickableProps(() => setChatOpen(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: 18, color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
             <PersonalAssistant experiences={experiences} skills={skills} certs={certs} awards={awards} resumeProfile={resumeProfile} applications={applications} metrics={metrics}
               history={personalChatHistory} setHistory={setPersonalChatHistory} onGo={() => setChatOpen(false)} />
@@ -1016,9 +1100,9 @@ function App() {
       {showGuide && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowGuide(false); }}>
-          <div style={{ width: "100%", maxWidth: 920, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
+          <div role="dialog" aria-modal="true" aria-label="사용 가이드" style={{ width: "100%", maxWidth: 920, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
-              <span onClick={() => setShowGuide(false)} style={{ cursor: "pointer", fontSize: 18, color: C.faint }}>✕</span>
+              <span {...clickableProps(() => setShowGuide(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: 18, color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
             <Guide onGo={(n) => { setShowGuide(false); go(n); }} />
           </div>
@@ -1029,10 +1113,10 @@ function App() {
       {showSettings && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.35)", zIndex: 50, display: "flex", justifyContent: "center", alignItems: "flex-start", padding: isMobile ? 0 : "40px 20px", overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setShowSettings(false); }}>
-          <div style={{ width: "100%", maxWidth: 640, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
+          <div role="dialog" aria-modal="true" aria-label="설정" style={{ width: "100%", maxWidth: 640, background: C.bg, borderRadius: isMobile ? 0 : 20, padding: isMobile ? 16 : 28, boxShadow: "0 8px 30px rgba(0,0,0,.2)", minHeight: isMobile ? "100vh" : "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <H2>설정</H2>
-              <span onClick={() => setShowSettings(false)} style={{ cursor: "pointer", fontSize: 18, color: C.faint }}>✕</span>
+              <span {...clickableProps(() => setShowSettings(false), { label: "닫기" })} style={{ cursor: "pointer", fontSize: 18, color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
 
             <Card style={{ marginBottom: 16 }}>
@@ -1055,7 +1139,7 @@ function App() {
             <Card>
               <Label>초기화</Label>
               <div style={{ marginTop: 8 }}>
-                <span onClick={async () => {
+                <span {...clickableProps(async () => {
                   if (!window.confirm("저장된 모든 데이터를 지우고 초기 상태로 되돌릴까요? (클라우드에 저장된 데이터도 함께 지워집니다) 되돌릴 수 없습니다.")) return;
                   Object.keys(window.localStorage).filter(k => k.startsWith(STORAGE_PREFIX)).forEach(k => window.localStorage.removeItem(k));
                   try {
@@ -1066,7 +1150,7 @@ function App() {
                     }
                   } catch (e) { console.error("[클라우드 초기화 실패]", e); }
                   window.location.reload();
-                }} style={{ fontSize: 12.5, color: C.red, cursor: "pointer", textDecoration: "underline" }}>
+                })} style={{ fontSize: 12.5, color: C.redText, cursor: "pointer", textDecoration: "underline" }}>
                   전체 데이터 초기화
                 </span>
               </div>
@@ -1141,7 +1225,7 @@ function Landing({ onStart, onGoogle }) {
         <div style={{ marginBottom: 48, borderRadius: 20, border: `1px solid ${C.line}`, background: C.panel, boxShadow: "0 10px 40px rgba(0,0,0,.06)", overflow: "hidden" }}>
           <img src="/landing-screenshot.png" alt="Career OS 화면 예시" style={{ width: "100%", display: "block" }}
             onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
-          <div style={{ display: "none", height: 360, alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10, background: C.accent, color: C.faint }}>
+          <div style={{ display: "none", height: 360, alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 10, background: C.accent, color: C.faintText }}>
             <Icon name="layers" size={40} />
             <div style={{ fontSize: 13 }}>화면 미리보기</div>
           </div>
@@ -1149,7 +1233,7 @@ function Landing({ onStart, onGoogle }) {
 
         <Card>
           <Label>작동 방식</Label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14, marginTop: 10 }} className="stack-sm">
             {steps.map(s => (
               <div key={s.n} style={{ padding: "16px 4px" }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: C.primary, marginBottom: 8 }}>{s.n}</div>
@@ -1398,14 +1482,14 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <input type="month" value={date ? date.slice(0, 7) : ""} onChange={e => setDate(e.target.value ? e.target.value + "-01" : "")}
               style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
-            <span style={{ fontSize: 12, color: C.faint }}>~</span>
+            <span style={{ fontSize: 12, color: C.faintText }}>~</span>
             <input type="month" value={endDate ? endDate.slice(0, 7) : ""} min={date ? date.slice(0, 7) : undefined}
               onChange={e => setEndDate(e.target.value ? e.target.value + "-01" : "")}
               style={{ fontFamily: font, fontSize: 13.5, padding: "9px 12px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
           </div>
           <Btn primary disabled={!title.trim() || !date} onClick={addActivity}>추가</Btn>
         </div>
-        <div style={{ fontSize: 11.5, color: C.faint, marginTop: 6 }}>종료 년월은 선택 사항입니다 — 비워두면 하루·한 달짜리 활동(점)으로, 채우면 기간이 있는 활동(막대)으로 표시됩니다.</div>
+        <div style={{ fontSize: 11.5, color: C.faintText, marginTop: 6 }}>종료 년월은 선택 사항입니다 — 비워두면 하루·한 달짜리 활동(점)으로, 채우면 기간이 있는 활동(막대)으로 표시됩니다.</div>
       </Card>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
@@ -1427,7 +1511,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
             const isJan = m === 1;
             const isTop = i === 0;
             return (
-              <div key={idx} style={{ height: TIMELINE_ROW_H, display: "flex", alignItems: "center", fontSize: 11, color: C.faint,
+              <div key={idx} style={{ height: TIMELINE_ROW_H, display: "flex", alignItems: "center", fontSize: 11, color: C.faintText,
                 borderTop: i === 0 ? "none" : `1px solid ${C.lineSoft}` }}>
                 {(isJan || isTop) ? <span style={{ fontWeight: 700, color: C.text, fontSize: 11.5 }}>{y}·{m}월</span> : `${m}월`}
               </div>
@@ -1438,7 +1522,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
         <div style={{ flex: 1, minWidth: 0 }}>
           {laneCount > 1 && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <span style={{ fontSize: 11.5, color: C.faint }}>동시에 진행된 활동이 많아서 옆으로 넘어갑니다 ({laneCount}칸)</span>
+              <span style={{ fontSize: 11.5, color: C.faintText }}>동시에 진행된 활동이 많아서 옆으로 넘어갑니다 ({laneCount}칸)</span>
               <div style={{ display: "flex", gap: 4 }}>
                 <button onClick={() => scrollLanes(-1)} style={{ fontFamily: font, fontSize: 12, padding: "3px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>◀</button>
                 <button onClick={() => scrollLanes(1)} style={{ fontFamily: font, fontSize: 12, padding: "3px 10px", borderRadius: 10, border: `1px solid ${C.line}`, background: C.panel, color: C.sub, cursor: "pointer" }}>▶</button>
@@ -1462,7 +1546,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
                   const isOrganized = it.kind === "experience";
                   if (isDot) {
                     return (
-                      <div key={it.key} onMouseDown={startDrag(it)} onClick={() => handleBlockClick(it)} title={it.title + " (드래그해서 시기 이동)"}
+                      <div key={it.key} onMouseDown={startDrag(it)} {...clickableProps(() => handleBlockClick(it))} title={it.title + " (드래그해서 시기 이동)"}
                         style={{ position: "absolute", top: top + 6, left: 2, right: 2, display: "flex", alignItems: "flex-start", gap: 7, cursor: "grab" }}>
                         <span style={{ width: 10, height: 10, borderRadius: 99, background: isSelected ? C.text : C.panel, border: `2px solid ${isSelected ? C.text : C.sub}`, flexShrink: 0, marginTop: 2 }} />
                         <span style={{ fontSize: 12, fontWeight: isSelected ? 700 : 500, color: C.text, lineHeight: 1.35, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{it.title}</span>
@@ -1470,12 +1554,12 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
                     );
                   }
                   return (
-                    <div key={it.key} onMouseDown={startDrag(it)} onClick={() => handleBlockClick(it)} title={it.title + " (드래그해서 시기 이동)"} style={{
+                    <div key={it.key} onMouseDown={startDrag(it)} {...clickableProps(() => handleBlockClick(it))} title={it.title + " (드래그해서 시기 이동)"} style={{
                       position: "absolute", top, left: 3, right: 3, height: Math.max(height, 24), borderRadius: 8, cursor: "grab", boxSizing: "border-box",
                       background: isOrganized ? C.greenBg : C.panel,
                       border: isOrganized ? `1px solid ${C.green}` : `1.5px dashed ${isSelected ? C.text : C.sub}`,
                       outline: isSelected ? `2px solid ${C.text}` : "none", outlineOffset: 1,
-                      padding: "6px 8px", fontSize: 12, fontWeight: isSelected ? 700 : 500, color: isOrganized ? C.green : C.text, lineHeight: 1.35,
+                      padding: "6px 8px", fontSize: 12, fontWeight: isSelected ? 700 : 500, color: isOrganized ? C.greenText : C.text, lineHeight: 1.35,
                       display: "-webkit-box", WebkitLineClamp: Math.max(1, Math.floor((Math.max(height, 24) - 12) / 16)), WebkitBoxOrient: "vertical", overflow: "hidden" }}>
                       {it.title}
                     </div>
@@ -1530,13 +1614,13 @@ function TimelineActivityPanel({ activity, setActivities, onDeselect, onOrganize
     <Card style={{ marginTop: 16, background: C.accent }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <Label>미정리 활동 — 수정</Label>
-        <span onClick={onDeselect} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+        <span {...clickableProps(onDeselect, { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
       </div>
       <Input value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8 }} />
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
         <input type="month" value={date} onChange={e => setDate(e.target.value)}
           style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
-        <span style={{ fontSize: 12, color: C.faint }}>~</span>
+        <span style={{ fontSize: 12, color: C.faintText }}>~</span>
         <input type="month" value={endDate} min={date} onChange={e => setEndDate(e.target.value)}
           style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
       </div>
@@ -1574,13 +1658,13 @@ function TimelineExperienceNote({ exp, setExperiences, onOpenExp, onDeselect }) 
     <Card style={{ marginTop: 16, background: C.greenBg }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
         <Label>정리된 경험 — 제목·시기 수정</Label>
-        <span onClick={onDeselect} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+        <span {...clickableProps(onDeselect, { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
       </div>
       <Input value={title} onChange={e => setTitle(e.target.value)} style={{ marginBottom: 8, fontWeight: 700 }} />
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
         <input type="month" value={startYm} onChange={e => setStartYm(e.target.value)}
           style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
-        <span style={{ fontSize: 12, color: C.faint }}>~</span>
+        <span style={{ fontSize: 12, color: C.faintText }}>~</span>
         <input type="month" value={endYm} min={startYm} onChange={e => setEndYm(e.target.value)}
           style={{ fontFamily: font, fontSize: 13.5, padding: "8px 10px", borderRadius: 14, border: `1px solid ${C.line}`, width: 140 }} />
         <Btn small primary onClick={saveDates}>저장</Btn>
@@ -1638,8 +1722,8 @@ function Guide({ onGo }) {
 
   const approvalFlow = [
     { label: "AI 초안", color: C.ai, desc: "AI가 문장을 생성한 직후" },
-    { label: "수정 중", color: C.blue, desc: "직접 내용을 고치는 단계" },
-    { label: "승인됨", color: C.green, desc: "확인 완료 — 이력서에 사용 가능" },
+    { label: "수정 중", color: C.blueText, desc: "직접 내용을 고치는 단계" },
+    { label: "승인됨", color: C.greenText, desc: "확인 완료 — 이력서에 사용 가능" },
   ];
 
   return (
@@ -1656,14 +1740,14 @@ function Guide({ onGo }) {
           {flow.map((f, i) => (
             <React.Fragment key={f.title}>
               <div style={{ flex: "1 1 140px", minWidth: 130, border: `1px solid ${C.line}`, borderRadius: 14, padding: "14px 12px", textAlign: "center", background: C.bg }}>
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: C.blue }}>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 8, color: C.blueText }}>
                   <Icon name={f.icon} size={26} />
                 </div>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{i + 1}. {f.title}</div>
                 <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.5 }}>{f.desc}</div>
               </div>
               {i < flow.length - 1 && (
-                <div style={{ display: "flex", alignItems: "center", color: C.faint, flex: "0 0 auto" }}>
+                <div style={{ display: "flex", alignItems: "center", color: C.faintText, flex: "0 0 auto" }}>
                   <Icon name="arrowRight" size={18} />
                 </div>
               )}
@@ -1674,10 +1758,10 @@ function Guide({ onGo }) {
 
       {/* 탭별 설명 */}
       <Label>탭별 안내</Label>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 8, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 8, marginBottom: 20 }} className="stack-sm">
         {tabs.map(t => (
           <Card key={t.nav} onClick={() => onGo(t.nav)} style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div style={{ color: C.blue, flexShrink: 0, marginTop: 2 }}><Icon name={t.icon} size={24} /></div>
+            <div style={{ color: C.blueText, flexShrink: 0, marginTop: 2 }}><Icon name={t.icon} size={24} /></div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>{t.title}</div>
               <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.55 }}>{t.desc}</div>
@@ -1700,7 +1784,7 @@ function Guide({ onGo }) {
                 <div style={{ fontSize: 13, fontWeight: 700, color: s.color, marginBottom: 4 }}>{s.label}</div>
                 <div style={{ fontSize: 11.5, color: C.sub, lineHeight: 1.5 }}>{s.desc}</div>
               </div>
-              {i < approvalFlow.length - 1 && <div style={{ color: C.faint }}><Icon name="arrowRight" size={16} /></div>}
+              {i < approvalFlow.length - 1 && <div style={{ color: C.faintText }}><Icon name="arrowRight" size={16} /></div>}
             </React.Fragment>
           ))}
         </div>
@@ -1748,8 +1832,8 @@ function HomeOnboarding({ onGoAnalyze, onGoImport, onLoadDemo, onGoGuide }) {
       </Card>
 
       <div style={{ display: "flex", justifyContent: "center", gap: 18, fontSize: 12.5 }}>
-        <span onClick={onGoGuide} style={{ color: C.sub, textDecoration: "underline", cursor: "pointer" }}>전체 사용법 먼저 보기</span>
-        <span onClick={onLoadDemo} style={{ color: C.sub, textDecoration: "underline", cursor: "pointer" }}>예시 데이터로 먼저 둘러보기</span>
+        <span {...clickableProps(onGoGuide)} style={{ color: C.sub, textDecoration: "underline", cursor: "pointer" }}>전체 사용법 먼저 보기</span>
+        <span {...clickableProps(onLoadDemo)} style={{ color: C.sub, textDecoration: "underline", cursor: "pointer" }}>예시 데이터로 먼저 둘러보기</span>
       </div>
     </div>
   );
@@ -1796,15 +1880,15 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
       <h1 style={{ fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>오늘 할 일부터 시작하세요</h1>
       <div style={{ fontSize: 13.5, color: C.sub, marginBottom: 22 }}>차트보다 행동. 다음에 해야 할 일을 바로 보여드립니다.</div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }} className="stack-sm">
         {/* 다음 행동 */}
         <Card style={{ gridColumn: "1 / -1", background: C.lineSoft, border: "none" }}>
           <Label>다음 행동</Label>
           {nextActions.length === 0 && <div style={{ fontSize: 13.5, color: C.sub, padding: "8px 0" }}>지금 당장 처리할 일이 없습니다. 새 경험을 등록하거나 지원을 추가해보세요.</div>}
           {nextActions.map((a, i) => (
-            <div key={i} onClick={a.act} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < nextActions.length - 1 ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
+            <div key={i} {...clickableProps(a.act)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: i < nextActions.length - 1 ? `1px solid ${C.line}` : "none", cursor: "pointer" }}>
               <span style={{ fontSize: 14 }}>{a.text}</span>
-              <span style={{ color: C.faint, fontSize: 13 }}>→</span>
+              <span style={{ color: C.faintText, fontSize: 13 }}>→</span>
             </div>
           ))}
         </Card>
@@ -1816,7 +1900,7 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
             {[["전체", total, C.text], ["분석 완료", done, C.green], ["보완 필요", needs, C.orange], ["초기 메모", draft, C.sub]].map(([l, v, c]) => (
               <div key={l}>
                 <div style={{ fontSize: 24, fontWeight: 800, color: c }}>{v}</div>
-                <div style={{ fontSize: 12, color: C.faint }}>{l}</div>
+                <div style={{ fontSize: 12, color: C.faintText }}>{l}</div>
               </div>
             ))}
           </div>
@@ -1836,20 +1920,20 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
           {typeCoverage.map(([l, n]) => (
             <div key={l} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", fontSize: 13.5 }}>
               <span>{l}</span>
-              {n === 0 ? <Badge label="준비 부족" color={C.red} bg={C.redBg} /> : <span style={{ fontWeight: 700 }}>{n}개</span>}
+              {n === 0 ? <Badge label="준비 부족" color={C.redText} bg={C.redBg} /> : <span style={{ fontWeight: 700 }}>{n}개</span>}
             </div>
           ))}
-          <div style={{ fontSize: 12, color: C.faint, marginTop: 6 }}>실패·갈등 경험은 면접 단골 질문입니다.</div>
+          <div style={{ fontSize: 12, color: C.faintText, marginTop: 6 }}>실패·갈등 경험은 면접 단골 질문입니다.</div>
         </Card>
 
         {/* 진행 중 지원 */}
         <Card style={{ gridColumn: "1 / -1" }}>
           <Label>진행 중인 지원</Label>
           {applications.map(a => (
-            <div key={a.id} onClick={() => onOpenApp(a.id)} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 90px 100px 160px", alignItems: "center", gap: 10, padding: "11px 0", borderBottom: `1px solid ${C.lineSoft}`, cursor: "pointer", fontSize: 13.5 }}>
+            <div key={a.id} {...clickableProps(() => onOpenApp(a.id))} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 90px 100px 160px", alignItems: "center", gap: 10, padding: "11px 0", borderBottom: `1px solid ${C.lineSoft}`, cursor: "pointer", fontSize: 13.5 }} className={"ui-click tbl-row"}>
               <div style={{ fontWeight: 700 }}>{a.company} <span style={{ fontWeight: 400, color: C.sub }}>{a.position}</span></div>
               <div style={{ color: C.sub }}>마감 {a.deadline}</div>
-              <Badge label={{ interested: "관심", analyzing: "분석 중", writing: "작성 중", submitted: "제출", interview: "면접", result: "결과" }[a.status]} color={C.blue} bg={C.blueBg} />
+              <Badge label={{ interested: "관심", analyzing: "분석 중", writing: "작성 중", submitted: "제출", interview: "면접", result: "결과" }[a.status]} color={C.blueText} bg={C.blueBg} />
               <div style={{ fontSize: 12, color: C.sub }}>자소서 {a.essayProgress}%</div>
               <div style={{ height: 5, background: C.lineSoft, borderRadius: 2 }}><div style={{ width: `${a.essayProgress}%`, height: "100%", background: C.blue, borderRadius: 2 }} /></div>
             </div>
@@ -1890,7 +1974,7 @@ function AnalyzeStart({ experiences, setExperiences, onStart }) {
         </div>
         <div style={{ display: "grid", gap: 13 }}>
           <div><Label>경험 제목 *</Label><Input placeholder="예: 웹사이트 운영 프로모션 기획" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="stack-sm">
             <div><Label>소속 또는 활동명</Label><Input placeholder="예: 온라인 쇼핑몰 (인턴)" value={form.organization} onChange={e => setForm(f => ({ ...f, organization: e.target.value }))} /></div>
             <div><Label>당시 역할</Label><Input placeholder="예: E-commerce Assistant" value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))} /></div>
           </div>
@@ -1924,7 +2008,7 @@ function AnalyzeStart({ experiences, setExperiences, onStart }) {
             <Card key={e.id} onClick={() => onStart(e.id)} style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", padding: "13px 16px" }}>
               <div>
                 <span style={{ fontWeight: 700, fontSize: 13.5 }}>{e.title}</span>
-                <span style={{ color: C.faint, fontSize: 12, marginLeft: 8 }}>{e.organization}</span>
+                <span style={{ color: C.faintText, fontSize: 12, marginLeft: 8 }}>{e.organization}</span>
               </div>
               <Badge label={STATUS_LABEL[e.status]} color={STATUS_COLOR[e.status][0]} bg={STATUS_COLOR[e.status][1]} />
             </Card>
@@ -2064,7 +2148,7 @@ JSON만 응답 (마크다운 백틱 없이):
     <div style={{ maxWidth: 760 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
         <div>
-          <div style={{ fontSize: 12, color: C.faint }}>{showDepth ? "심화 분석 (선택)" : "핵심 분석"} · {exp.title}</div>
+          <div style={{ fontSize: 12, color: C.faintText }}>{showDepth ? "심화 분석 (선택)" : "핵심 분석"} · {exp.title}</div>
           <h2 style={{ fontSize: 19, fontWeight: 800, margin: "2px 0 0" }}>{stepIdx + 1}. {step}</h2>
         </div>
         <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
@@ -2076,9 +2160,9 @@ JSON만 응답 (마크다운 백틱 없이):
       {/* 스텝 네비게이터 */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
         {steps.map((s, i) => (
-          <div key={s} onClick={() => setStepIdx(i)} style={{ flex: 1, cursor: "pointer" }}>
+          <div key={s} {...clickableProps(() => setStepIdx(i))} style={{ flex: 1, cursor: "pointer" }}>
             <div style={{ height: 4, borderRadius: 2, background: i < stepIdx ? C.green : i === stepIdx ? C.blue : C.lineSoft, marginBottom: 4 }} />
-            <div style={{ fontSize: 11.5, color: i === stepIdx ? C.text : C.faint, fontWeight: i === stepIdx ? 700 : 500 }}>{s}</div>
+            <div style={{ fontSize: 11.5, color: i === stepIdx ? C.text : C.faintText, fontWeight: i === stepIdx ? 700 : 500 }}>{s}</div>
           </div>
         ))}
       </div>
@@ -2118,7 +2202,7 @@ JSON만 응답 (마크다운 백틱 없이):
       </Card>
 
       {!isStepFilled(step) && (
-        <div style={{ fontSize: 12, color: C.orange, marginTop: 10, background: C.orangeBg, padding: "8px 12px", borderRadius: 14 }}>
+        <div style={{ fontSize: 12, color: C.orangeText, marginTop: 10, background: C.orangeBg, padding: "8px 12px", borderRadius: 14 }}>
           이 단계 입력이 비어있거나 짧습니다. 이대로 넘어가면 "보완 필요"로 표시됩니다 — 나중에 다시 채워도 됩니다.
         </div>
       )}
@@ -2145,15 +2229,15 @@ JSON만 응답 (마크다운 백틱 없이):
         <>
           {reviewError && (
             <div style={{ marginTop: 12, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 4 }}>오류</div>
-              <div style={{ fontSize: 12, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{reviewError}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.redText, marginBottom: 4 }}>오류</div>
+              <div style={{ fontSize: 12, color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{reviewError}</div>
             </div>
           )}
           {reviewIssues && (
             <Card style={{ marginTop: 12, background: C.accent }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <Label>AI 검토 결과</Label>
-                <span onClick={() => setReviewIssues(null)} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                <span {...clickableProps(() => setReviewIssues(null), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
               </div>
               {reviewOverall && <div style={{ fontSize: 13, marginBottom: 10, lineHeight: 1.6 }}>{reviewOverall}</div>}
               {reviewIssues.length === 0 ? (
@@ -2163,7 +2247,7 @@ JSON만 응답 (마크다운 백틱 없이):
                   {reviewIssues.map((iss, i) => (
                     <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px", gap: 10 }}>
                       <div>
-                        <Badge label={iss.step} color={C.blue} bg={C.blueBg} />
+                        <Badge label={iss.step} color={C.blueText} bg={C.blueBg} />
                         <div style={{ fontSize: 13, marginTop: 6, lineHeight: 1.5 }}>{iss.issue}</div>
                       </div>
                       <Btn small onClick={() => jumpToStep(iss.step)} style={{ flexShrink: 0 }}>이 단계로 가기</Btn>
@@ -2176,7 +2260,7 @@ JSON만 응답 (마크다운 백틱 없이):
         </>
       )}
       {!showDepth && (
-        <div style={{ fontSize: 12, color: C.faint, marginTop: 10, textAlign: "right" }}>
+        <div style={{ fontSize: 12, color: C.faintText, marginTop: 10, textAlign: "right" }}>
           핵심 5단계만으로 경험 카드가 생성됩니다. 심화 4단계(목표·어려움·배운 점·직무 연결)는 나중에 추가할 수 있습니다.
         </div>
       )}
@@ -2221,7 +2305,7 @@ function ActionEditor({ local, setLocal }) {
   const parentOptions = (excludeId) => actions.filter(a => a.id !== excludeId);
 
   const renderRow = (a) => {
-    const [color, bg] = ACTION_COLOR[a.actionType] || [C.blue, C.blueBg];
+    const [color, bg] = ACTION_COLOR[a.actionType] || [C.blueText, C.blueBg];
     const isEditing = editingId === a.id;
     return (
       <div key={a.id}>
@@ -2250,10 +2334,10 @@ function ActionEditor({ local, setLocal }) {
         ) : (
           <div style={{ display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
             <Badge label={ACTION_LABEL[a.actionType]} color={color} bg={bg} />
-            <span onClick={() => startEdit(a)} style={{ fontSize: 13.5, flex: 1, cursor: "pointer" }}>{a.description}</span>
-            {!a.isDirectAction && <Badge label="타인 수행" color={C.orange} bg={C.orangeBg} />}
-            <span onClick={() => startEdit(a)} title="수정" style={{ cursor: "pointer", color: C.faint, fontSize: 12, textDecoration: "underline" }}>수정</span>
-            <span onClick={() => remove(a.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+            <span {...clickableProps(() => startEdit(a))} style={{ fontSize: 13.5, flex: 1, cursor: "pointer" }}>{a.description}</span>
+            {!a.isDirectAction && <Badge label="타인 수행" color={C.orangeText} bg={C.orangeBg} />}
+            <span {...clickableProps(() => startEdit(a))} title="수정" style={{ cursor: "pointer", color: C.faintText, fontSize: 12, textDecoration: "underline" }}>수정</span>
+            <span {...clickableProps(() => remove(a.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
           </div>
         )}
         {childrenOf(a.id).length > 0 && (
@@ -2269,7 +2353,7 @@ function ActionEditor({ local, setLocal }) {
     <div style={{ marginBottom: 12 }}>
       <Label>행동 카드 — 연관된 행동은 아래로 이어서 연결할 수 있습니다</Label>
       {roots.map(renderRow)}
-      {actions.length === 0 && <div style={{ fontSize: 13, color: C.faint, padding: "8px 0" }}>아직 입력된 행동이 없습니다.</div>}
+      {actions.length === 0 && <div style={{ fontSize: 13, color: C.faintText, padding: "8px 0" }}>아직 입력된 행동이 없습니다.</div>}
 
       <div style={{ marginTop: 12, padding: 12, background: C.bg, borderRadius: 14 }}>
         <div style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
@@ -2346,20 +2430,20 @@ function MetricEditor({ expId, metrics, setMetrics, local, patch }) {
   return (
     <div style={{ marginBottom: 12 }}>
       <Label>성과 수치 — ExperienceMetric 단일 원본</Label>
-      <div style={{ fontSize: 12, color: C.faint, marginBottom: 10, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 12, color: C.faintText, marginBottom: 10, lineHeight: 1.6 }}>
         수치는 여기에만 저장됩니다. 이력서·자소서·면접 문장은 이 수치를 토큰으로 참조하며, 원본이 바뀌면 모든 문장에 반영됩니다.
         <br />"추가 확인 필요"는 자소서 AI가 이 수치를 확정적으로 쓰지 않고 조심스럽게 다루게 하고, 면접 복습 화면에서도 경고로 표시됩니다. 실제 자료로 맞는지 확인했다면 아래에서 상태를 바꿔주세요.
       </div>
       {mine.length > 0 ? mine.map(m => (
-        <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 130px 150px 20px", gap: 8, alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
+        <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr 110px 130px 150px 20px", gap: 8, alignItems: "center", padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }} className="tbl-row">
           <span style={{ fontWeight: 600 }}>{m.metricName}</span>
-          <span style={{ color: C.blue, fontWeight: 700 }}>{formatMetric(m, "exact")}</span>
+          <span style={{ color: C.blueText, fontWeight: 700 }}>{formatMetric(m, "exact")}</span>
           <span style={{ fontSize: 12, color: C.sub }}>{m.comparisonBasis || m.evidenceSource || "—"}</span>
           <select value={m.certainty} onChange={e => updateCertainty(m.id, e.target.value)}
             style={{ fontFamily: font, fontSize: 11.5, padding: "4px 6px", borderRadius: 10, border: `1px solid ${CERTAINTY[m.certainty][1]}55`, background: CERTAINTY[m.certainty][2], color: CERTAINTY[m.certainty][1] }}>
             {Object.entries(CERTAINTY).map(([v, [label]]) => <option key={v} value={v}>{label}</option>)}
           </select>
-          <span onClick={() => removeMetric(m.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+          <span {...clickableProps(() => removeMetric(m.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 12 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
         </div>
       )) : (
         <div style={{ fontSize: 13, color: C.sub, padding: 14, background: C.bg, borderRadius: 14 }}>
@@ -2544,8 +2628,8 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <Badge label={STATUS_LABEL[e.status]} color={STATUS_COLOR[e.status][0]} bg={STATUS_COLOR[e.status][1]} />
-                  {!mergeMode && <span onClick={ev => { ev.stopPropagation(); deleteExp(e.id); }}
-                    title="삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>}
+                  {!mergeMode && <span {...clickableProps(ev => { ev.stopPropagation(); deleteExp(e.id); }, { label: "닫기" })}
+                    title="삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>}
                 </div>
               </div>
               <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 8 }}>{e.organization} · {e.startDate}~{e.endDate}</div>
@@ -2553,12 +2637,12 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
                 {e.competencies.slice(0, 3).map(c => <Badge key={c} label={"#" + c} color={C.sub} bg={C.lineSoft} />)}
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: C.faint, marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 11.5, color: C.faintText, marginBottom: 8 }}>
                 <span>완성도 {doneCnt}/9 {e.status === "complete" && !e.depthDone && "· 심화 미입력"}</span>
                 <span>활용 {e.usageCount}회 · {e.updatedAt}</span>
               </div>
-              <div onClick={ev => ev.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ fontSize: 11.5, color: C.faint }}>카테고리:</span>
+              <div {...clickableProps(ev => ev.stopPropagation())} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 11.5, color: C.faintText }}>카테고리:</span>
                 <CategorySelect value={e.primaryCategory} options={expCategories} placeholder="미분류"
                   onAddOption={addExpCategory}
                   onChange={(v) => setExperiences(prev => prev.map(x => x.id === e.id ? { ...x, primaryCategory: v } : x))} />
@@ -2572,14 +2656,14 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
 
         return orderedKeys.map(key => (
           <div key={key} style={{ marginBottom: 20 }}>
-            <div onClick={() => setCollapsed(p => ({ ...p, [key]: !p[key] }))} style={{
+            <div {...clickableProps(() => setCollapsed(p => ({ ...p, [key]: !p[key] })))} style={{
               display: "flex", alignItems: "center", gap: 8, cursor: "pointer", marginBottom: 10 }}>
-              <span style={{ fontSize: 10, color: C.faint, transform: collapsed[key] ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
+              <span style={{ fontSize: 10, color: C.faintText, transform: collapsed[key] ? "rotate(-90deg)" : "rotate(0deg)" }}>▾</span>
               <span style={{ fontSize: 13.5, fontWeight: 700 }}>{key}</span>
-              <span style={{ fontSize: 12, color: C.faint }}>({groups[key].length})</span>
+              <span style={{ fontSize: 12, color: C.faintText }}>({groups[key].length})</span>
             </div>
             {!collapsed[key] && (
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="stack-sm">
                 {groups[key].map(renderCard)}
               </div>
             )}
@@ -2590,7 +2674,7 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
       {view === "comp" && (
         <div>
           <Input placeholder="역량 검색" value={compQ} onChange={e => setCompQ(e.target.value)} style={{ maxWidth: 260, marginBottom: 14 }} />
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="stack-sm">
             {shownComps.map(c => {
               const hits = experiences.filter(e => e.competencies.includes(c));
               const isOpen = expandedComp[c];
@@ -2599,19 +2683,19 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
                 <Card key={c}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ fontWeight: 700, fontSize: 13.5 }}>#{c}</div>
-                    <span style={{ fontSize: 11.5, color: C.faint }}>{hits.length}개</span>
+                    <span style={{ fontSize: 11.5, color: C.faintText }}>{hits.length}개</span>
                   </div>
                   {shown.map(e => (
-                    <div key={e.id} onClick={() => onOpen(e.id)} style={{ padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}`, cursor: "pointer" }}>
+                    <div key={e.id} {...clickableProps(() => onOpen(e.id))} style={{ padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}`, cursor: "pointer" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                         <span style={{ fontSize: 13, fontWeight: 600 }}>{e.title}</span>
                         <Badge label={STATUS_LABEL[e.status]} color={STATUS_COLOR[e.status][0]} bg={STATUS_COLOR[e.status][1]} />
                       </div>
-                      {e.oneLineSummary && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.oneLineSummary}</div>}
+                      {e.oneLineSummary && <div style={{ fontSize: 11.5, color: C.faintText, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.oneLineSummary}</div>}
                     </div>
                   ))}
                   {hits.length > 4 && (
-                    <div onClick={() => setExpandedComp(p => ({ ...p, [c]: !p[c] }))} style={{ fontSize: 12, color: C.sub, cursor: "pointer", marginTop: 6 }}>
+                    <div {...clickableProps(() => setExpandedComp(p => ({ ...p, [c]: !p[c] })))} style={{ fontSize: 12, color: C.sub, cursor: "pointer", marginTop: 6 }}>
                       {isOpen ? "접기" : `+ ${hits.length - 4}개 더보기`}
                     </div>
                   )}
@@ -2619,13 +2703,13 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
               );
             })}
           </div>
-          {shownComps.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>일치하는 역량이 없습니다.</div>}
+          {shownComps.length === 0 && <div style={{ fontSize: 13, color: C.faintText }}>일치하는 역량이 없습니다.</div>}
         </div>
       )}
 
       {view === "question" && (
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }} className="stack-sm">
             {questionBlocks.map(b => {
               const hits = b.expIds.map(id => experiences.find(e => e.id === id)).filter(Boolean);
               const notes = b.notes || [];
@@ -2639,14 +2723,14 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
                       <Input value={b.label} placeholder="질문 내용" onChange={e => patchBlock(b.id, "label", e.target.value)}
                         style={{ fontWeight: 700, fontSize: 13.5, border: "none", padding: "2px 0", flex: 1 }} />
                     ) : (
-                      <div onClick={() => setEditingBlockId(b.id)} style={{ fontWeight: 700, fontSize: 13.5, cursor: "pointer", flex: 1 }}>{b.label || "(제목 없음 — 클릭해서 입력)"}</div>
+                      <div {...clickableProps(() => setEditingBlockId(b.id))} style={{ fontWeight: 700, fontSize: 13.5, cursor: "pointer", flex: 1 }}>{b.label || "(제목 없음 — 클릭해서 입력)"}</div>
                     )}
                     <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-                      {total === 0 ? <Badge label="준비 부족" color={C.red} bg={C.redBg} /> : <span style={{ fontSize: 11.5, color: C.faint }}>{total}개</span>}
+                      {total === 0 ? <Badge label="준비 부족" color={C.redText} bg={C.redBg} /> : <span style={{ fontSize: 11.5, color: C.faintText }}>{total}개</span>}
                       {isEditing ? (
                         <Btn small onClick={() => setEditingBlockId(null)}>완료</Btn>
                       ) : (
-                        <span onClick={() => removeBlock(b.id)} title="질문 삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                        <span {...clickableProps(() => removeBlock(b.id), { label: "닫기" })} title="질문 삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                       )}
                     </div>
                   </div>
@@ -2654,8 +2738,8 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
                   {hits.map(e => (
                     <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
                       <Badge label="경험" color={C.sub} bg={C.lineSoft} />
-                      <span onClick={() => !isEditing && onOpen(e.id)} style={{ fontSize: 13, fontWeight: 600, flex: 1, cursor: isEditing ? "default" : "pointer" }}>{e.title}</span>
-                      {isEditing && <span onClick={() => removeBlockExp(b.id, e.id)} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>}
+                      <span {...clickableProps(() => !isEditing && onOpen(e.id))} style={{ fontSize: 13, fontWeight: 600, flex: 1, cursor: isEditing ? "default" : "pointer" }}>{e.title}</span>
+                      {isEditing && <span {...clickableProps(() => removeBlockExp(b.id, e.id), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 12 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>}
                     </div>
                   ))}
 
@@ -2667,11 +2751,11 @@ function Archive({ experiences, setExperiences, metrics, setMetrics, outputs, se
                       ) : (
                         <span style={{ fontSize: 13, lineHeight: 1.5, flex: 1, whiteSpace: "pre-wrap" }}>{n.text}</span>
                       )}
-                      {isEditing && <span onClick={() => removeBlockNote(b.id, n.id)} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>}
+                      {isEditing && <span {...clickableProps(() => removeBlockNote(b.id, n.id), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 12 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>}
                     </div>
                   ))}
 
-                  {total === 0 && !isEditing && <div style={{ fontSize: 12.5, color: C.faint }}>이 질문에 쓸 경험이나 메모가 아직 없습니다.</div>}
+                  {total === 0 && !isEditing && <div style={{ fontSize: 12.5, color: C.faintText }}>이 질문에 쓸 경험이나 메모가 아직 없습니다.</div>}
 
                   {isEditing && (
                     <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
@@ -2740,9 +2824,9 @@ function MergeReview({ ids, experiences, setExperiences, metrics, setMetrics, ou
           <input type="radio" name="primary" checked={primaryId === e.id} onChange={() => setPrimaryId(e.id)} style={{ marginTop: 3 }} />
           <div>
             <div style={{ fontWeight: 700, fontSize: 13.5, display: "flex", gap: 6, alignItems: "center" }}>
-              {e.title} {primaryId === e.id && <Badge label="기준" color={C.green} bg={C.greenBg} />}
+              {e.title} {primaryId === e.id && <Badge label="기준" color={C.greenText} bg={C.greenBg} />}
             </div>
-            <div style={{ fontSize: 12, color: C.faint }}>{e.organization} · {e.startDate}~{e.endDate}</div>
+            <div style={{ fontSize: 12, color: C.faintText }}>{e.organization} · {e.startDate}~{e.endDate}</div>
           </div>
         </label>
       ))}
@@ -2750,7 +2834,7 @@ function MergeReview({ ids, experiences, setExperiences, metrics, setMetrics, ou
         <Label>병합된 메모 (수정 가능)</Label>
         <Textarea rows={9} value={mergedNote} onChange={e => setMergedNote(e.target.value)} />
       </div>
-      <div style={{ fontSize: 12, color: C.faint, marginTop: 8, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 12, color: C.faintText, marginTop: 8, lineHeight: 1.6 }}>
         배경·문제·행동 등 세부 필드는 기준 경험의 내용이 유지됩니다. 합친 뒤 경험 분석에서 전체 내용을 다시 확인·정리하는 것을 권장합니다.
       </div>
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
@@ -2800,14 +2884,14 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
 
   return (
     <div style={{ maxWidth: 820 }}>
-      <div onClick={onBack} style={{ fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 경험 보관함</div>
+      <div {...clickableProps(onBack)} style={{ fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 경험 보관함</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
         <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0 }}>{exp.title}</h2>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Badge label={STATUS_LABEL[exp.status]} color={STATUS_COLOR[exp.status][0]} bg={STATUS_COLOR[exp.status][1]} />
           <Btn small onClick={() => setShowReview(true)}>이 경험만 AI 진단</Btn>
           <Btn small onClick={() => onAnalyze(exp.id)}>{exp.depthDone ? "수정하기" : "심화 분석 계속"}</Btn>
-          <span onClick={deleteExp} title="이 경험 삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 14, padding: "0 4px" }}>✕</span>
+          <span {...clickableProps(deleteExp, { label: "닫기" })} title="이 경험 삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faintText, fontSize: 14, padding: "0 4px" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
         </div>
       </div>
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 16 }}>{exp.organization} · {exp.role} · {exp.startDate}~{exp.endDate}</div>
@@ -2830,7 +2914,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {["요약", "사실", "행동", "성과", "활용 문장", "완성도"].map(t => (
-          <div key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
+          <div key={t} {...clickableProps(() => setTab(t))} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
             color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{t}</div>
         ))}
       </div>
@@ -2844,11 +2928,11 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
               {exp.competencies.map(c => (
                 <span key={c} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                  <Badge label={"#" + c} color={C.blue} bg={C.blueBg} />
-                  <span onClick={() => removeTag(c)} style={{ cursor: "pointer", color: C.faint, fontSize: 11 }}>✕</span>
+                  <Badge label={"#" + c} color={C.blueText} bg={C.blueBg} />
+                  <span {...clickableProps(() => removeTag(c), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 11 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                 </span>
               ))}
-              {exp.competencies.length === 0 && <span style={{ fontSize: 12.5, color: C.faint }}>아직 태그가 없습니다.</span>}
+              {exp.competencies.length === 0 && <span style={{ fontSize: 12.5, color: C.faintText }}>아직 태그가 없습니다.</span>}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <Input placeholder="역량 태그 추가 (예: 협상력)" value={tagDraft} onChange={e => setTagDraft(e.target.value)}
@@ -2859,7 +2943,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
           {missing.length > 0 && (
             <Card style={{ background: C.accent }}>
               <Label>부족한 정보</Label>
-              {missing.map((m, i) => <div key={i} style={{ fontSize: 13, color: C.orange, padding: "3px 0" }}>· {m}</div>)}
+              {missing.map((m, i) => <div key={i} style={{ fontSize: 13, color: C.orangeText, padding: "3px 0" }}>· {m}</div>)}
             </Card>
           )}
         </div>
@@ -2870,12 +2954,12 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
           <Label>사실 보관함 — 직접 수정 가능</Label>
           {[["organization", "소속"], ["role", "역할"], ["assignedTask", "주어진 업무"], ["discoveredProblem", "발견한 문제"]].map(([k, label]) => (
             <div key={k} style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5, alignItems: "center" }}>
-              <span style={{ color: C.faint, fontWeight: 600 }}>{label}</span>
+              <span style={{ color: C.faintText, fontWeight: 600 }}>{label}</span>
               <Input value={exp[k] || ""} placeholder="미입력" onChange={e => patchField(k, e.target.value)} style={{ border: "none", padding: "2px 0" }} />
             </div>
           ))}
           <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 10, padding: "9px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5, alignItems: "center" }}>
-            <span style={{ color: C.faint, fontWeight: 600 }}>기여 수준</span>
+            <span style={{ color: C.faintText, fontWeight: 600 }}>기여 수준</span>
             <select value={exp.contributionLevel || ""} onChange={e => patchField("contributionLevel", e.target.value)}
               style={{ fontFamily: font, fontSize: 13.5, padding: "6px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, width: 200 }}>
               <option value="">미입력</option>
@@ -2883,10 +2967,10 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
             </select>
           </div>
           <div style={{ padding: "9px 0", fontSize: 13.5 }}>
-            <div style={{ color: C.faint, fontWeight: 600, marginBottom: 6 }}>기여 근거</div>
+            <div style={{ color: C.faintText, fontWeight: 600, marginBottom: 6 }}>기여 근거</div>
             <Textarea value={exp.contributionEvidence || ""} placeholder="본인 기여를 증명할 근거를 적어주세요" onChange={e => patchField("contributionEvidence", e.target.value)} />
           </div>
-          <div style={{ fontSize: 12, color: C.faint, marginTop: 10 }}>여기서 고친 내용은 활용 문장이 참조하는 원본에 바로 반영됩니다. 이미 승인된 문장 자체는 자동으로 바뀌지 않으니, 필요하면 "재생성"으로 새로 만들어주세요.</div>
+          <div style={{ fontSize: 12, color: C.faintText, marginTop: 10 }}>여기서 고친 내용은 활용 문장이 참조하는 원본에 바로 반영됩니다. 이미 승인된 문장 자체는 자동으로 바뀌지 않으니, 필요하면 "재생성"으로 새로 만들어주세요.</div>
         </Card>
       )}
 
@@ -2934,7 +3018,7 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
       {tab === "활용 문장" && !chatMode && (
         <div style={{ display: "grid", gap: 12 }}>
           <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
-            수치는 <span style={{ background: C.greenBg, color: C.green, padding: "1px 5px", borderRadius: 12, fontWeight: 600 }}>토큰</span>으로 원본을 참조합니다. 승인된 문장만 제출본에 사용할 수 있습니다.
+            수치는 <span style={{ background: C.greenBg, color: C.greenText, padding: "1px 5px", borderRadius: 12, fontWeight: 600 }}>토큰</span>으로 원본을 참조합니다. 승인된 문장만 제출본에 사용할 수 있습니다.
           </div>
           {myOutputs.filter(o => o.approvalStatus !== "rejected").map(o => {
             const ap = APPROVAL[o.approvalStatus];
@@ -2945,8 +3029,8 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
                   {o.style && <Badge label={{ role_focused: "역할 중심", result_focused: "성과 중심", competency_focused: "역량 중심" }[o.style]} color={C.sub} bg={C.lineSoft} />}
                   {o.isAiGenerated && <Badge label="AI 생성" color={C.ai} bg={C.aiBg} />}
                   <Badge label={ap.label} color={ap.color} bg={ap.bg} />
-                  {o.isStale && <Badge label="참조 수치 변경됨 · 재승인 필요" color={C.red} bg={C.redBg} />}
-                  <span style={{ fontSize: 11, color: C.faint, marginLeft: "auto" }}>v{o.version}</span>
+                  {o.isStale && <Badge label="참조 수치 변경됨 · 재승인 필요" color={C.redText} bg={C.redBg} />}
+                  <span style={{ fontSize: 11, color: C.faintText, marginLeft: "auto" }}>v{o.version}</span>
                 </div>
                 <div style={{ fontSize: 14, lineHeight: 1.65 }}><TokenText text={o.content} metrics={metrics} /></div>
                 <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -2967,8 +3051,8 @@ function ExperienceDetail({ exp, metrics, setMetrics, outputs, setOutputs, setEx
           <Label>항목별 완성도 — 점수보다 보완할 항목이 우선</Label>
           {Object.entries(exp.completion).map(([k, v]) => (
             <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
-              <span>{k}{DEPTH_STEPS.includes(k) && <span style={{ fontSize: 11, color: C.faint, marginLeft: 6 }}>심화</span>}</span>
-              <Badge label={v} color={v === "충분" ? C.green : v === "보완 필요" ? C.orange : C.faint} bg={v === "충분" ? C.greenBg : v === "보완 필요" ? C.orangeBg : C.lineSoft} />
+              <span>{k}{DEPTH_STEPS.includes(k) && <span style={{ fontSize: 11, color: C.faintText, marginLeft: 6 }}>심화</span>}</span>
+              <Badge label={v} color={v === "충분" ? C.greenText : v === "보완 필요" ? C.orangeText : C.faintText} bg={v === "충분" ? C.greenBg : v === "보완 필요" ? C.orangeBg : C.lineSoft} />
             </div>
           ))}
         </Card>
@@ -3135,7 +3219,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
       <Card>
         <Label>파일 선택 (.txt / .md / .docx / .xlsx / .xls / .csv) 또는 내용 직접 작성</Label>
         <input type="file" accept=".txt,.md,.docx,.xlsx,.xls,.csv" onChange={onFile} style={{ fontFamily: font, fontSize: 13, marginBottom: 10 }} />
-        {fileName && <div style={{ fontSize: 12.5, color: C.blue, marginBottom: 8 }}>선택됨: {fileName}</div>}
+        {fileName && <div style={{ fontSize: 12.5, color: C.blueText, marginBottom: 8 }}>선택됨: {fileName}</div>}
 
         {workbook && (
           <div style={{ marginBottom: 10, padding: "12px 14px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
@@ -3156,8 +3240,8 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
         )}
         {error && (
           <div style={{ marginTop: 10, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 4 }}>오류</div>
-            <div style={{ fontSize: 12.5, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5 }}>{error}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.redText, marginBottom: 4 }}>오류</div>
+            <div style={{ fontSize: 12.5, color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace", lineHeight: 1.5 }}>{error}</div>
           </div>
         )}
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
@@ -3166,7 +3250,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
           </Btn>
         </div>
       </Card>
-      <div style={{ fontSize: 12, color: C.faint, marginTop: 12, lineHeight: 1.6 }}>
+      <div style={{ fontSize: 12, color: C.faintText, marginTop: 12, lineHeight: 1.6 }}>
         AI 추출 규칙: 원문에 없는 내용은 만들지 않으며, 모든 수치는 근거 자료가 확인될 때까지 "추가 확인 필요" 상태로 들어옵니다.<br />
         입력한 내용은 추출을 위해 외부 AI 서버로 전송되며, 이 앱이 별도로 저장하지 않습니다.
       </div>
@@ -3189,7 +3273,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
               <input type="checkbox" checked={result._profileInclude} onChange={() => setResult(p => ({ ...p, _profileInclude: !p._profileInclude }))} />
               기본 이력서에 반영
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, opacity: result._profileInclude ? 1 : 0.45 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, opacity: result._profileInclude ? 1 : 0.45 }} className="stack-sm">
               <div><Label>이름</Label><Input value={result.profile.name || ""} onChange={e => patchProfile("name", e.target.value)} /></div>
               <div><Label>이메일</Label><Input value={result.profile.email || ""} onChange={e => patchProfile("email", e.target.value)} /></div>
               {result.profile.targetRole && <div style={{ gridColumn: "1 / -1" }}><Label>목표 직무</Label><Input value={result.profile.targetRole || ""} onChange={e => patchProfile("targetRole", e.target.value)} /></div>}
@@ -3205,11 +3289,11 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
             <input type="checkbox" checked={e._include} onChange={() => toggle("experiences", e._id)} style={{ marginTop: 8 }} />
             <div style={{ flex: 1, display: "grid", gap: 8 }}>
               {e._duplicate && (
-                <div style={{ fontSize: 12, color: C.orange, background: C.accent, border: `1px solid ${C.line}`, padding: "6px 10px", borderRadius: 14 }}>
+                <div style={{ fontSize: 12, color: C.orangeText, background: C.accent, border: `1px solid ${C.line}`, padding: "6px 10px", borderRadius: 14 }}>
                   이미 보관함에 같은 제목·소속의 경험이 있습니다. 중복일 가능성이 있어 기본적으로 체크가 해제되어 있습니다.
                 </div>
               )}
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1.3fr 1.3fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1.3fr 1.3fr", gap: 8 }} className="tbl-row">
                 <Input value={e.title} onChange={ev => patchExp(e._id, "title", ev.target.value)} />
                 <Input value={e.organization || ""} placeholder="소속" onChange={ev => patchExp(e._id, "organization", ev.target.value)} />
                 <Input value={e.role || ""} placeholder="역할" onChange={ev => patchExp(e._id, "role", ev.target.value)} />
@@ -3217,17 +3301,17 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
               <Textarea style={{ minHeight: 54 }} value={e.rawNote || ""} onChange={ev => patchExp(e._id, "rawNote", ev.target.value)} />
               {(e.competencies || []).length > 0 && (
                 <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
-                  {e.competencies.map((c, i) => <Badge key={i} label={"#" + c} color={C.blue} bg={C.blueBg} />)}
+                  {e.competencies.map((c, i) => <Badge key={i} label={"#" + c} color={C.blueText} bg={C.blueBg} />)}
                 </div>
               )}
               {(e.metrics || []).map((m, mi) => (
                 <div key={mi} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", background: C.accent, border: `1px solid ${C.line}`, padding: "8px 10px", borderRadius: 14 }}>
-                  <Badge label="추가 확인 필요" color={C.red} bg={C.redBg} />
+                  <Badge label="추가 확인 필요" color={C.redText} bg={C.redBg} />
                   <Input value={m.metricName} onChange={ev => patchMetric(e._id, mi, "metricName", ev.target.value)} style={{ width: 120 }} />
                   {m.beforeValue != null ? (
                     <>
                       <Input value={m.beforeValue} onChange={ev => patchMetric(e._id, mi, "beforeValue", ev.target.value)} style={{ width: 70, textAlign: "right" }} />
-                      <span style={{ color: C.faint }}>→</span>
+                      <span style={{ color: C.faintText }}>→</span>
                       <Input value={m.afterValue} onChange={ev => patchMetric(e._id, mi, "afterValue", ev.target.value)} style={{ width: 70 }} />
                     </>
                   ) : (
@@ -3237,7 +3321,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
                   <span style={{ fontSize: 11.5, color: C.sub, flex: "1 1 100%" }}>{m.note}</span>
                 </div>
               ))}
-              <div style={{ fontSize: 11.5, color: C.faint }}>수치는 경험 분석의 성과 단계에서 근거를 확인해야 정식 수치(단일 원본)로 승격됩니다. 역량 태그는 AI 추정이니 경험 상세에서 다시 확인하세요.</div>
+              <div style={{ fontSize: 11.5, color: C.faintText }}>수치는 경험 분석의 성과 단계에서 근거를 확인해야 정식 수치(단일 원본)로 승격됩니다. 역량 태그는 AI 추정이니 경험 상세에서 다시 확인하세요.</div>
             </div>
           </div>
         </Card>
@@ -3253,7 +3337,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
             </label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", paddingLeft: 26 }}>
               {(s.scopeItems || []).map((it, i) => <Badge key={i} label={it.text} color={C.sub} bg={C.lineSoft} />)}
-              <Badge label="활용 범위 확인 필요" color={C.orange} bg={C.orangeBg} />
+              <Badge label="활용 범위 확인 필요" color={C.orangeText} bg={C.orangeBg} />
             </div>
           </div>
         ))}
@@ -3266,7 +3350,7 @@ function ImportFlow({ setExperiences, setSkills, setCerts, setResumeProfile, onD
             <input type="checkbox" checked={c._include} onChange={() => toggle("certs", c._id)} />
             <span style={{ fontWeight: 600, flexShrink: 0 }}>{c.name}</span>
             <span style={{ color: C.sub, fontSize: 12.5 }}>{c.date || "취득일 미상"}</span>
-            {c.note && <span style={{ color: C.orange, fontSize: 12 }}>{c.note}</span>}
+            {c.note && <span style={{ color: C.orangeText, fontSize: 12 }}>{c.note}</span>}
           </label>
         ))}
       </Card>
@@ -3332,8 +3416,8 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
           <Input value={s.name} onChange={e => patchSkill(s.id, "name", e.target.value)}
             style={{ fontWeight: 700, fontSize: 15, border: "none", padding: "2px 0", flex: 1 }} />
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-            <span style={{ fontSize: 11.5, color: C.faint, whiteSpace: "nowrap" }}>근거 연결 {linked}/{s.scopeItems.length}</span>
-            <span onClick={() => removeSkill(s.id)} title="이 항목 삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+            <span style={{ fontSize: 11.5, color: C.faintText, whiteSpace: "nowrap" }}>근거 연결 {linked}/{s.scopeItems.length}</span>
+            <span {...clickableProps(() => removeSkill(s.id), { label: "닫기" })} title="이 항목 삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
           </div>
         </div>
         <Input value={s.summary || ""} placeholder="한 줄 요약 (선택)" onChange={e => patchSkill(s.id, "summary", e.target.value)}
@@ -3346,13 +3430,13 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
             <div key={item.id} style={{ display: "flex", gap: 8, alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
               <span style={{ flex: 1, lineHeight: 1.5 }}>{item.text}</span>
               {exp ? (
-                <span onClick={() => onOpenExp(exp.id)} style={{ fontSize: 11.5, color: C.blue, background: "transparent", border: `1px solid ${C.blue}55`, padding: "1px 7px", borderRadius: 14, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
+                <span {...clickableProps(() => onOpenExp(exp.id))} style={{ fontSize: 11.5, color: C.blueText, background: "transparent", border: `1px solid ${C.blue}55`, padding: "1px 7px", borderRadius: 14, cursor: "pointer", fontWeight: 600, whiteSpace: "nowrap" }}>
                   {exp.title} →
                 </span>
               ) : (
-                <Badge label="경험 근거 없음" color={C.orange} bg={C.orangeBg} />
+                <Badge label="경험 근거 없음" color={C.orangeText} bg={C.orangeBg} />
               )}
-              <span onClick={() => removeScope(s.id, item.id)} style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+              <span {...clickableProps(() => removeScope(s.id, item.id), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 12 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
             </div>
           );
         })}
@@ -3382,13 +3466,13 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
       <div style={{ fontSize: 13, color: C.sub, marginBottom: 6, lineHeight: 1.6 }}>
         "상·중·하" 자기 평가 대신 <b>실제로 할 수 있는 작업</b>을 적고, 경험 근거를 연결합니다.
       </div>
-      <div style={{ fontSize: 12, color: C.faint, marginBottom: 16 }}>
+      <div style={{ fontSize: 12, color: C.faintText, marginBottom: 16 }}>
         근거가 연결된 항목만 이력서·자소서에서 자신 있게 쓸 수 있습니다. 근거 없는 항목은 면접 검증 리스크가 있습니다.
       </div>
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {["도구", "직무 역량"].map(t => (
-          <div key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
+          <div key={t} {...clickableProps(() => setTab(t))} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
             color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{t}</div>
         ))}
       </div>
@@ -3428,17 +3512,17 @@ function Applications({ applications, setApplications, onOpen, addTrash }) {
         <Btn primary onClick={addApp}>+ 지원 등록</Btn>
       </div>
       {applications.map(a => (
-        <Card key={a.id} onClick={() => onOpen(a.id)} style={{ marginBottom: 10, display: "grid", gridTemplateColumns: "1.5fr 1fr 100px 130px 130px 20px", alignItems: "center", gap: 10 }}>
+        <Card key={a.id} onClick={() => onOpen(a.id)} style={{ marginBottom: 10, display: "grid", gridTemplateColumns: "1.5fr 1fr 100px 130px 130px 20px", alignItems: "center", gap: 10 }} className="tbl-row">
           <div><span style={{ fontWeight: 700, fontSize: 14.5 }}>{a.company}</span><span style={{ color: C.sub, fontSize: 13, marginLeft: 8 }}>{a.position}</span></div>
           <div style={{ fontSize: 13, color: C.sub }}>마감 {a.deadline || "미정"}</div>
-          <Badge label={{ interested: "관심", analyzing: "분석 중", writing: "작성 중", submitted: "제출", interview: "면접", result: "결과" }[a.status]} color={C.blue} bg={C.blueBg} />
+          <Badge label={{ interested: "관심", analyzing: "분석 중", writing: "작성 중", submitted: "제출", interview: "면접", result: "결과" }[a.status]} color={C.blueText} bg={C.blueBg} />
           <div style={{ fontSize: 12.5, color: C.sub }}>자소서 {a.essayProgress}%</div>
           <div style={{ fontSize: 12.5, color: C.sub }}>면접 준비 {a.interviewProgress}%</div>
-          <span onClick={ev => { ev.stopPropagation(); deleteApp(a.id); }}
-            title="삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+          <span {...clickableProps(ev => { ev.stopPropagation(); deleteApp(a.id); }, { label: "닫기" })}
+            title="삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
         </Card>
       ))}
-      {applications.length === 0 && <div style={{ fontSize: 13, color: C.faint }}>등록된 지원처가 없습니다. "+ 지원 등록"으로 추가하세요.</div>}
+      {applications.length === 0 && <div style={{ fontSize: 13, color: C.faintText }}>등록된 지원처가 없습니다. "+ 지원 등록"으로 추가하세요.</div>}
     </div>
   );
 }
@@ -3717,8 +3801,8 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: `1px solid ${C.line}` }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700 }}>{title}</div>
-          {subtitle && <div style={{ fontSize: 11.5, color: C.faint }}>{subtitle}</div>}
-          <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>이 대화 내용은 응답 생성을 위해 외부 AI 서버로 전송됩니다</div>
+          {subtitle && <div style={{ fontSize: 11.5, color: C.faintText }}>{subtitle}</div>}
+          <div style={{ fontSize: 10.5, color: C.faintText, marginTop: 2 }}>이 대화 내용은 응답 생성을 위해 외부 AI 서버로 전송됩니다</div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           {messages.length > 0 && <Btn small onClick={() => { updateMessages([]); started.current = false; }}>대화 초기화</Btn>}
@@ -3738,11 +3822,11 @@ function EssayChat({ title, subtitle, systemPrompt, contextText, autoStartMessag
             </div>
           </div>
         ))}
-        {loading && <div style={{ fontSize: 12.5, color: C.faint }}>답변을 작성하는 중…</div>}
+        {loading && <div style={{ fontSize: 12.5, color: C.faintText }}>답변을 작성하는 중…</div>}
         {error && (
           <div style={{ padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 4 }}>오류</div>
-            <div style={{ fontSize: 12.5, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.redText, marginBottom: 4 }}>오류</div>
+            <div style={{ fontSize: 12.5, color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
           </div>
         )}
         <div ref={bottomRef} />
@@ -3802,8 +3886,8 @@ function JobPostingExtractor({ experiences, raw, onExtracted }) {
     <div style={{ marginTop: 10 }}>
       {error && (
         <div style={{ marginBottom: 8, padding: "8px 10px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 12 }}>
-          <div style={{ fontSize: 12, color: C.red, fontWeight: 700 }}>오류</div>
-          <div style={{ fontSize: 12, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
+          <div style={{ fontSize: 12, color: C.redText, fontWeight: 700 }}>오류</div>
+          <div style={{ fontSize: 12, color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
         </div>
       )}
       <Btn small primary disabled={loading || !raw.trim()} onClick={extract}>{loading ? "추출 중…" : "AI로 요구 역량 추출"}</Btn>
@@ -3823,9 +3907,9 @@ function ApplicationReview({ app, experiences, metrics }) {
         <Label>이 회사 핵심 키워드 (공고 분석 결과)</Label>
         {keywordSet.length > 0 ? (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {keywordSet.map(k => <Badge key={k} label={k} color={C.blue} bg={C.blueBg} />)}
+            {keywordSet.map(k => <Badge key={k} label={k} color={C.blueText} bg={C.blueBg} />)}
           </div>
-        ) : <div style={{ fontSize: 12.5, color: C.faint }}>등록된 요구 역량이 없습니다. 공고 분석 탭에서 추가하세요.</div>}
+        ) : <div style={{ fontSize: 12.5, color: C.faintText }}>등록된 요구 역량이 없습니다. 공고 분석 탭에서 추가하세요.</div>}
       </Card>
 
       <Label>면접 질문별 요약</Label>
@@ -3843,12 +3927,12 @@ function ApplicationReview({ app, experiences, metrics }) {
                 </div>
                 {matchedKeywords.length > 0 && (
                   <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 6 }}>
-                    {matchedKeywords.map(k => <Badge key={k} label={k} color={C.green} bg={C.greenBg} />)}
+                    {matchedKeywords.map(k => <Badge key={k} label={k} color={C.greenText} bg={C.greenBg} />)}
                   </div>
                 )}
                 {unverified.length > 0 && (
-                  <div style={{ fontSize: 12, color: C.red, background: C.redBg, padding: "6px 10px", borderRadius: 12, marginBottom: 6 }}>
-                    ⚠ 확인 안 된 수치: {unverified.map(m => `${m.metricName} (${formatMetric(m, "exact")})`).join(", ")}
+                  <div style={{ fontSize: 12, color: C.redText, background: C.redBg, padding: "6px 10px", borderRadius: 12, marginBottom: 6 }}>
+                    <CIcon icon={cilWarning} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />확인 안 된 수치: {unverified.map(m => `${m.metricName} (${formatMetric(m, "exact")})`).join(", ")}
                   </div>
                 )}
                 {(iq.followUps || []).length > 0 && (
@@ -3858,12 +3942,12 @@ function ApplicationReview({ app, experiences, metrics }) {
                 )}
               </>
             ) : (
-              <div style={{ fontSize: 12.5, color: C.faint }}>사용할 경험이 아직 선택되지 않았습니다.</div>
+              <div style={{ fontSize: 12.5, color: C.faintText }}>사용할 경험이 아직 선택되지 않았습니다.</div>
             )}
           </Card>
         );
       })}
-      {(app.interviews || []).length === 0 && <div style={{ fontSize: 13, color: C.faint }}>등록된 면접 질문이 없습니다.</div>}
+      {(app.interviews || []).length === 0 && <div style={{ fontSize: 13, color: C.faintText }}>등록된 면접 질문이 없습니다.</div>}
     </div>
   );
 }
@@ -3888,8 +3972,8 @@ function AppLinks({ app, setApplications }) {
     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
       {links.map(l => (
         <span key={l.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, background: C.lineSoft, borderRadius: 14, padding: "5px 10px", fontSize: 12.5 }}>
-          <a href={l.url} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: "none" }}>🔗 {l.label}</a>
-          <span onClick={() => remove(l.id)} style={{ cursor: "pointer", color: C.faint }}>✕</span>
+          <a href={l.url} target="_blank" rel="noreferrer" style={{ color: C.text, textDecoration: "none" }}><CIcon icon={cilLink} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{l.label}</a>
+          <span {...clickableProps(() => remove(l.id), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
         </span>
       ))}
       {adding ? (
@@ -3901,7 +3985,7 @@ function AppLinks({ app, setApplications }) {
           <Btn small onClick={() => { setAdding(false); setLabel(""); setUrl(""); }}>취소</Btn>
         </span>
       ) : (
-        <span onClick={() => setAdding(true)} style={{ fontSize: 12.5, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>+ 링크 추가 (회사 홈페이지, 채용공고, 지원 포탈 등)</span>
+        <span {...clickableProps(() => setAdding(true))} style={{ fontSize: 12.5, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>+ 링크 추가 (회사 홈페이지, 채용공고, 지원 포탈 등)</span>
       )}
     </div>
   );
@@ -3919,13 +4003,13 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
 
   return (
     <div style={{ maxWidth: 880 }}>
-      <div onClick={onBack} style={{ fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 지원 관리</div>
+      <div {...clickableProps(onBack)} style={{ fontSize: 13, color: C.sub, cursor: "pointer", marginBottom: 10 }}>← 지원 관리</div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
         <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
           <Input value={app.company} onChange={e => patch("company", e.target.value)} style={{ fontSize: 20, fontWeight: 800, border: "none", padding: "2px 0", width: 220 }} />
           <Input value={app.position} placeholder="직무" onChange={e => patch("position", e.target.value)} style={{ fontSize: 15, color: C.sub, border: "none", padding: "2px 0", width: 160 }} />
         </div>
-        <span onClick={deleteApp} title="이 지원 삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faint, fontSize: 14, padding: "4px" }}>✕</span>
+        <span {...clickableProps(deleteApp, { label: "닫기" })} title="이 지원 삭제 (휴지통에서 복구 가능)" style={{ cursor: "pointer", color: C.faintText, fontSize: 14, padding: "4px" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, fontSize: 13, color: C.sub }}>
         마감 <Input value={app.deadline || ""} placeholder="YYYY-MM-DD" onChange={e => patch("deadline", e.target.value)} style={{ width: 120, border: "none", padding: "2px 0", color: C.sub }} />
@@ -3943,7 +4027,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {["공고 분석", "자소서", "면접", "복습"].map(t => (
-          <div key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
+          <div key={t} {...clickableProps(() => setTab(t))} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
             color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{t}</div>
         ))}
       </div>
@@ -3951,7 +4035,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
       {tab === "복습" && <ApplicationReview app={app} experiences={experiences} metrics={metrics} />}
 
       {tab === "공고 분석" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 16, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1.3fr", gap: 16, alignItems: "start" }} className="stack-sm">
           <Card style={{ position: "sticky", top: 16 }}>
             <Label>채용공고 원문</Label>
             <Textarea rows={20} placeholder="채용공고 원문을 여기에 붙여넣으세요" value={app.jobPostingRaw || ""}
@@ -3977,12 +4061,12 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                 <div key={r.id} style={{ padding: "11px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <Input value={r.requirement} onChange={e => patchReq("requirement", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0", flex: 1 }} />
-                    <span onClick={removeReq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12, flexShrink: 0, marginTop: 4 }}>✕</span>
+                    <span {...clickableProps(removeReq, { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 12, flexShrink: 0, marginTop: 4 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                   </div>
-                  <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 6 }}>중요도 {"●".repeat(r.importance)}{"○".repeat(5 - r.importance)}</div>
+                  <div style={{ fontSize: 11.5, color: C.faintText, marginBottom: 6 }}>중요도 {"●".repeat(r.importance)}{"○".repeat(5 - r.importance)}</div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     <select value={r.matchedExp || ""} onChange={e => patchReq("matchedExp", e.target.value || null)}
-                      style={{ fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blue : C.text }}>
+                      style={{ fontFamily: font, fontSize: 12.5, padding: "6px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blueText : C.text }}>
                       <option value="">매칭 없음</option>
                       {experiences.map(e2 => <option key={e2.id} value={e2.id}>{e2.title}</option>)}
                     </select>
@@ -3992,7 +4076,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                 </div>
               );
             })}
-            {app.requirements.length === 0 && <div style={{ fontSize: 13, color: C.faint, marginBottom: 10 }}>왼쪽에 채용공고를 붙여넣고 "AI로 요구 역량 추출"을 누르거나, 아래에서 직접 추가하세요.</div>}
+            {app.requirements.length === 0 && <div style={{ fontSize: 13, color: C.faintText, marginBottom: 10 }}>왼쪽에 채용공고를 붙여넣고 "AI로 요구 역량 추출"을 누르거나, 아래에서 직접 추가하세요.</div>}
             <Btn small onClick={() => setApplications(prev => prev.map(a => a.id === app.id
               ? { ...a, requirements: [...a.requirements, { id: "r_" + Date.now(), requirement: "", category: "required_competency", importance: 3, matchedExp: null, matchReason: "", gap: "" }] } : a))}>
               + 요구 역량 추가
@@ -4037,8 +4121,8 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                     {q.isLocked && <Badge label="제출본 잠금" color={C.sub} bg={C.lineSoft} />}
                     <Badge label={{ not_started: "미시작", drafting: "초안 작성", reviewing: "검토", complete: "완료" }[q.status]}
-                      color={q.status === "complete" ? C.green : C.blue} bg={q.status === "complete" ? C.greenBg : C.blueBg} />
-                    <span onClick={removeQ} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                      color={q.status === "complete" ? C.greenText : C.blueText} bg={q.status === "complete" ? C.greenBg : C.blueBg} />
+                    <span {...clickableProps(removeQ, { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
@@ -4047,19 +4131,19 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                   <span style={{ fontSize: 12.5, color: C.sub }}>자</span>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 12, color: C.faint }}>선택 경험:</span>
+                  <span style={{ fontSize: 12, color: C.faintText }}>선택 경험:</span>
                   {q.selectedExperienceIds.map(id => {
                     const e = experiences.find(x => x.id === id);
                     if (!e) return null;
                     return (
                       <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        <Badge label={e.title} color={C.blue} bg={C.blueBg} />
-                        <span onClick={() => patchQ("selectedExperienceIds", q.selectedExperienceIds.filter(x => x !== id))}
-                          style={{ cursor: "pointer", color: C.faint, fontSize: 11 }}>✕</span>
+                        <Badge label={e.title} color={C.blueText} bg={C.blueBg} />
+                        <span {...clickableProps(() => patchQ("selectedExperienceIds", q.selectedExperienceIds.filter(x => x !== id)))}
+                          style={{ cursor: "pointer", color: C.faintText, fontSize: 11 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                       </span>
                     );
                   })}
-                  {q.selectedExperienceIds.length === 0 && <span style={{ fontSize: 11.5, color: C.faint }}>없음 — AI가 전체 경험 중 추천합니다</span>}
+                  {q.selectedExperienceIds.length === 0 && <span style={{ fontSize: 11.5, color: C.faintText }}>없음 — AI가 전체 경험 중 추천합니다</span>}
                   <select value="" onChange={e => {
                     const id = e.target.value;
                     if (id && !q.selectedExperienceIds.includes(id)) patchQ("selectedExperienceIds", [...q.selectedExperienceIds, id]);
@@ -4073,7 +4157,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                     onChange={e => patchQ("draft", e.target.value)}
                     onBlur={() => { if (q.draft?.trim() && q.status === "not_started") patchQ("status", "drafting"); }}
                     disabled={q.isLocked} rows={5} style={{ fontSize: 13, lineHeight: 1.6 }} />
-                  <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11.5, color: (q.draft || "").length > q.characterLimit ? C.red : C.faint, marginTop: 4 }}>
+                  <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11.5, color: (q.draft || "").length > q.characterLimit ? C.redText : C.faintText, marginTop: 4 }}>
                     {(q.draft || "").length} / {q.characterLimit}자
                   </div>
                 </div>
@@ -4105,13 +4189,13 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                   <Input value={iq.question} onChange={e => patchIq("question", e.target.value)} style={{ fontWeight: 700, fontSize: 14, border: "none", padding: "2px 0", flex: 1 }} />
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                     <CategorySelect value={iq.category} options={interviewCategories} placeholder="카테고리 없음" onAddOption={addInterviewCategory} onChange={(v) => patchIq("category", v)} />
-                    <span onClick={removeIq} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                    <span {...clickableProps(removeIq, { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                   <span style={{ fontSize: 13, color: C.sub }}>사용 경험:</span>
                   <select value={iq.selectedExperienceId || ""} onChange={e => patchIq("selectedExperienceId", e.target.value || null)}
-                    style={{ fontFamily: font, fontSize: 13, padding: "5px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blue : C.text }}>
+                    style={{ fontFamily: font, fontSize: 13, padding: "5px 8px", borderRadius: 14, border: `1px solid ${C.line}`, background: C.panel, color: exp ? C.blueText : C.text }}>
                     <option value="">선택 안 함</option>
                     {experiences.map(e2 => <option key={e2.id} value={e2.id}>{e2.title}</option>)}
                   </select>
@@ -4123,7 +4207,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                     {iq.followUps.map((f, i) => (
                       <div key={i} style={{ display: "flex", gap: 6, alignItems: "center", padding: "3px 0" }}>
                         <span style={{ fontSize: 13, color: C.sub, flex: 1 }}>· {f}</span>
-                        <span onClick={() => patchIq("followUps", iq.followUps.filter((_, fi) => fi !== i))} style={{ cursor: "pointer", color: C.faint, fontSize: 11 }}>✕</span>
+                        <span {...clickableProps(() => patchIq("followUps", iq.followUps.filter((_, fi) => fi !== i)))} style={{ cursor: "pointer", color: C.faintText, fontSize: 11 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                       </div>
                     ))}
                     <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
@@ -4131,7 +4215,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                     </div>
                   </>
                 ) : (
-                  <div style={{ fontSize: 13, color: C.orange, background: C.accent, border: `1px solid ${C.line}`, padding: "10px 12px", borderRadius: 14 }}>
+                  <div style={{ fontSize: 13, color: C.orangeText, background: C.accent, border: `1px solid ${C.line}`, padding: "10px 12px", borderRadius: 14 }}>
                     사용할 경험이 선택되지 않았습니다.
                   </div>
                 )}
@@ -4174,14 +4258,14 @@ function Trash({ trash, onRestore, onPurge, onClear }) {
         삭제한 항목은 영구 삭제하기 전까지 여기서 복구할 수 있습니다.
       </div>
       {trash.length === 0 && (
-        <Card><div style={{ fontSize: 13, color: C.faint, textAlign: "center", padding: "12px 0" }}>삭제한 항목이 없습니다.</div></Card>
+        <Card><div style={{ fontSize: 13, color: C.faintText, textAlign: "center", padding: "12px 0" }}>삭제한 항목이 없습니다.</div></Card>
       )}
       {trash.map(t => (
         <Card key={t.id} style={{ marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <Badge label={typeLabel[t.type] || t.type} color={C.sub} bg={C.lineSoft} />
             <span style={{ marginLeft: 8, fontSize: 13.5, fontWeight: 600 }}>{t.label || "(제목 없음)"}</span>
-            <div style={{ fontSize: 11.5, color: C.faint, marginTop: 3 }}>{formatDeletedAt(t.deletedAt)} 삭제됨</div>
+            <div style={{ fontSize: 11.5, color: C.faintText, marginTop: 3 }}>{formatDeletedAt(t.deletedAt)} 삭제됨</div>
           </div>
           <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
             <Btn small primary onClick={() => onRestore(t.id)}>복구</Btn>
@@ -4217,7 +4301,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {["자소서", "면접"].map(t => (
-          <div key={t} onClick={() => setTab(t)} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
+          <div key={t} {...clickableProps(() => setTab(t))} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
             color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{t}</div>
         ))}
       </div>
@@ -4247,15 +4331,15 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
                 <Input value={q.question} onChange={e => patchQ(q.id, "question", e.target.value)} style={{ fontWeight: 700, fontSize: 14, border: "none", padding: "2px 0", flex: 1 }} />
                 <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                   <Badge label={{ not_started: "미시작", drafting: "초안 작성", reviewing: "검토", complete: "완료" }[q.status]}
-                    color={q.status === "complete" ? C.green : C.blue} bg={q.status === "complete" ? C.greenBg : C.blueBg} />
-                  <span onClick={() => removeQ(q.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                    color={q.status === "complete" ? C.greenText : C.blueText} bg={q.status === "complete" ? C.greenBg : C.blueBg} />
+                  <span {...clickableProps(() => removeQ(q.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                 </div>
               </div>
               <Textarea value={q.draft || ""} placeholder="여기에 직접 작성해도 되고, 아래 'AI와 함께 작성'으로 도움받아도 됩니다."
                 onChange={e => patchQ(q.id, "draft", e.target.value)}
                 onBlur={() => { if (q.draft?.trim() && q.status === "not_started") patchQ(q.id, "status", "drafting"); }}
                 rows={5} style={{ fontSize: 13, lineHeight: 1.6 }} />
-              <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11.5, color: (q.draft || "").length > q.characterLimit ? C.red : C.faint, marginTop: 4, marginBottom: 8 }}>
+              <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11.5, color: (q.draft || "").length > q.characterLimit ? C.redText : C.faintText, marginTop: 4, marginBottom: 8 }}>
                 {(q.draft || "").length} / {q.characterLimit}자
               </div>
               <Btn small onClick={() => setChatId(q.id)}>AI와 함께 작성하기 →</Btn>
@@ -4295,7 +4379,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
                   <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
                     <CategorySelect value={iq.category} options={interviewCategories} placeholder="카테고리 없음"
                       onAddOption={addInterviewCategory} onChange={(v) => patchIq(iq.id, "category", v)} />
-                    <span onClick={() => removeIq(iq.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                    <span {...clickableProps(() => removeIq(iq.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
@@ -4405,7 +4489,7 @@ function CloudDiagnostics() {
         <Label>연결 상태 진단</Label>
         <Btn small onClick={run} disabled={running}>{running ? "확인 중…" : "다시 확인"}</Btn>
       </div>
-      {!checks ? <div style={{ fontSize: 13, color: C.faint }}>확인 중…</div> : (
+      {!checks ? <div style={{ fontSize: 13, color: C.faintText }}>확인 중…</div> : (
         <div style={{ display: "grid", gap: 10 }}>
           {checks.map((c, i) => (
             <div key={i} style={{ fontSize: 12.5 }}>
@@ -4414,7 +4498,7 @@ function CloudDiagnostics() {
                 <span style={{ fontWeight: 700 }}>{c.label}</span>
               </div>
               <div style={{ color: C.sub, marginLeft: 14, wordBreak: "break-all" }}>{c.detail}</div>
-              {c.hint && <div style={{ color: C.red, marginLeft: 14, marginTop: 2 }}>💡 {c.hint}</div>}
+              {c.hint && <div style={{ color: C.redText, marginLeft: 14, marginTop: 2 }}><CIcon icon={cilLightbulb} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{c.hint}</div>}
             </div>
           ))}
         </div>
@@ -4454,20 +4538,20 @@ function BrandingOfflineWorkbook({ onRetryConnect, authError }) {
       <Card style={{ marginBottom: 16, background: C.accent }}>
         <div style={{ fontSize: 12.5, color: C.sub, lineHeight: 1.6 }}>
           클라우드에 연결되지 않아 AI 꼬리질문·프로필 추출 없이 <b>답변만</b> 저장됩니다. 답변은 이 브라우저에 안전하게 남고, 연결되면 자동으로 업로드를 제안합니다.
-          {authError && <div style={{ marginTop: 6, fontFamily: "monospace", color: C.red, fontSize: 11.5 }}>마지막 오류: {authError}</div>}
+          {authError && <div style={{ marginTop: 6, fontFamily: "monospace", color: C.redText, fontSize: 11.5 }}>마지막 오류: {authError}</div>}
         </div>
         {totalOffline > 0 && <div style={{ marginTop: 8, fontSize: 12.5, fontWeight: 700 }}>오프라인 저장된 답변 {totalOffline}개</div>}
       </Card>
 
-      <div style={{ fontSize: 12, color: C.faint, marginBottom: 6 }}>{idx + 1}/{BRANDING_FLAT_QUESTIONS.length}</div>
+      <div style={{ fontSize: 12, color: C.faintText, marginBottom: 6 }}>{idx + 1}/{BRANDING_FLAT_QUESTIONS.length}</div>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, lineHeight: 1.5 }}>{question.text}</div>
-      {question.hint && <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, padding: "8px 12px", borderRadius: 12, marginBottom: 16 }}>💡 {question.hint}</div>}
+      {question.hint && <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, padding: "8px 12px", borderRadius: 12, marginBottom: 16 }}><CIcon icon={cilLightbulb} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{question.hint}</div>}
 
       {entries.map(e => (
         <Card key={e.id} style={{ marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={{ fontSize: 12, color: C.faint }}>{(e.createdAt || "").slice(0, 10)}{e.label ? ` · "${e.label}"` : ""}</div>
-            <span onClick={() => removeEntry(e.id)} style={{ fontSize: 11.5, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>삭제</span>
+            <div style={{ fontSize: 12, color: C.faintText }}>{(e.createdAt || "").slice(0, 10)}{e.label ? ` · "${e.label}"` : ""}</div>
+            <span {...clickableProps(() => removeEntry(e.id))} style={{ fontSize: 11.5, color: C.faintText, cursor: "pointer", textDecoration: "underline" }}>삭제</span>
           </div>
           <div style={{ fontSize: 13.5, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{e.content}</div>
         </Card>
@@ -4578,9 +4662,9 @@ function BrandingHub() {
       clearOfflineAnswers();
       setOfflineCount(0);
       refreshProgress();
-      alert("오프라인 답변을 클라우드에 업로드했습니다. 워크북에서 열어보면 AI 꼬리질문·프로필 추출이 새로 진행됩니다 (해당 문항에 새 답변을 추가하면 자동 실행돼요).");
+      toast("오프라인 답변을 클라우드에 업로드했습니다. 워크북에서 열면 AI 꼬리질문과 프로필 추출이 다시 진행됩니다.");
     } catch (e) {
-      alert("동기화 중 오류: " + (e.message || String(e)));
+      toast("동기화에 실패했습니다. " + (e.message || String(e)), "error");
     } finally {
       setSyncingOffline(false);
     }
@@ -4599,7 +4683,7 @@ function BrandingHub() {
             브랜딩 탭은 클라우드 DB에 저장돼서, 답변이 쌓이면 Google 계정으로 로그인해야 이어서 쓸 수 있습니다.
           </div>
           {authError && (
-            <div style={{ fontSize: 12.5, color: C.red, background: C.redBg, padding: "10px 12px", borderRadius: 12, marginBottom: 12, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
+            <div style={{ fontSize: 12.5, color: C.redText, background: C.redBg, padding: "10px 12px", borderRadius: 12, marginBottom: 12, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
               {authError}
             </div>
           )}
@@ -4623,7 +4707,7 @@ function BrandingHub() {
     <div style={{ maxWidth: 820 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
         <H2>퍼스널 브랜딩</H2>
-        <span onClick={() => setShowDiag(p => !p)} style={{ fontSize: 11.5, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>
+        <span {...clickableProps(() => setShowDiag(p => !p))} style={{ fontSize: 11.5, color: C.faintText, cursor: "pointer", textDecoration: "underline" }}>
           {showDiag ? "연결 상태 닫기" : "연결 상태 확인"}
         </span>
       </div>
@@ -4639,7 +4723,7 @@ function BrandingHub() {
       </div>
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {tabs.map(([k, l]) => (
-          <div key={k} onClick={() => setTab(k)} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === k ? 700 : 500, cursor: "pointer",
+          <div key={k} {...clickableProps(() => setTab(k))} style={{ padding: "9px 14px", fontSize: 13.5, fontWeight: tab === k ? 700 : 500, cursor: "pointer",
             color: tab === k ? C.text : C.sub, borderBottom: tab === k ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{l}</div>
         ))}
       </div>
@@ -4684,21 +4768,21 @@ function BrandingHome({ progress, profileItems, onGoWorkbook, onGoResult }) {
     <div>
       {staleItems.length > 0 && (
         <Card style={{ marginBottom: 14, background: C.accent }}>
-          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>⚠ 출처가 바뀐 항목 {staleItems.length}개</div>
+          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}><CIcon icon={cilWarning} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />출처가 바뀐 항목 {staleItems.length}개</div>
           <div style={{ fontSize: 12.5, color: C.sub }}>답변을 수정하거나 보관 처리해서, 이 항목들의 근거가 예전과 달라졌습니다. 프로필 탭에서 다시 확인해주세요.</div>
         </Card>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }} className="stack-sm">
         <Card>
           <Label>진행도</Label>
           <div style={{ fontSize: 22, fontWeight: 800 }}>{answeredCount} / {totalQuestions}</div>
-          <div style={{ fontSize: 12, color: C.faint }}>답변한 질문</div>
+          <div style={{ fontSize: 12, color: C.faintText }}>답변한 질문</div>
         </Card>
         <Card>
           <Label>프로필 항목</Label>
-          <div style={{ fontSize: 22, fontWeight: 800 }}>{confirmed.length}<span style={{ fontSize: 13, color: C.faint, fontWeight: 500 }}> 확정 · {proposed.length} 제안</span></div>
-          <div style={{ fontSize: 12, color: C.faint }}>확정 12개 이상 & 강점 3개+ & 가치관 2개+ 부터 산출물 생성 가능</div>
+          <div style={{ fontSize: 22, fontWeight: 800 }}>{confirmed.length}<span style={{ fontSize: 13, color: C.faintText, fontWeight: 500 }}> 확정 · {proposed.length} 제안</span></div>
+          <div style={{ fontSize: 12, color: C.faintText }}>확정 12개 이상 & 강점 3개+ & 가치관 2개+ 부터 산출물 생성 가능</div>
         </Card>
       </div>
 
@@ -4708,7 +4792,7 @@ function BrandingHome({ progress, profileItems, onGoWorkbook, onGoResult }) {
           <Card key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontSize: 13.5, fontWeight: 700 }}>Step {s.id} · {s.name}</div>
-              <div style={{ fontSize: 12, color: C.faint }}>{s.desc}</div>
+              <div style={{ fontSize: 12, color: C.faintText }}>{s.desc}</div>
             </div>
             <div style={{ fontSize: 13, color: C.sub }}>{s.done}/{s.total}</div>
           </Card>
@@ -4913,19 +4997,19 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
           {toast}
         </div>
       )}
-      <div style={{ fontSize: 12, color: C.faint, marginBottom: 6 }}>Step {question.step} · {stepInfo?.name} — {idx + 1}/{BRANDING_FLAT_QUESTIONS.length}</div>
+      <div style={{ fontSize: 12, color: C.faintText, marginBottom: 6 }}>Step {question.step} · {stepInfo?.name} — {idx + 1}/{BRANDING_FLAT_QUESTIONS.length}</div>
       <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, lineHeight: 1.5 }}>{question.text}</div>
-      {question.hint && <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, padding: "8px 12px", borderRadius: 12, marginBottom: 16 }}>💡 {question.hint}</div>}
+      {question.hint && <div style={{ fontSize: 12.5, color: C.sub, background: C.accent, padding: "8px 12px", borderRadius: 12, marginBottom: 16 }}><CIcon icon={cilLightbulb} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{question.hint}</div>}
 
-      {loading ? <div style={{ fontSize: 13, color: C.faint }}>불러오는 중…</div> : (
+      {loading ? <div style={{ fontSize: 13, color: C.faintText }}>불러오는 중…</div> : (
         <>
           {activeEntries.map(entry => (
             <Card key={entry.id} style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ fontSize: 12, color: C.faint }}>답변 {entry.seq} · {(entry.created_at || "").slice(0, 10)}{entry.label ? ` · "${entry.label}"` : ""}</div>
+                <div style={{ fontSize: 12, color: C.faintText }}>답변 {entry.seq} · {(entry.created_at || "").slice(0, 10)}{entry.label ? ` · "${entry.label}"` : ""}</div>
                 <div style={{ display: "flex", gap: 10 }}>
-                  <span onClick={() => startEdit(entry)} style={{ fontSize: 11.5, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>수정</span>
-                  <span onClick={() => archiveEntry(entry)} style={{ fontSize: 11.5, color: C.faint, cursor: "pointer", textDecoration: "underline" }}>보관</span>
+                  <span {...clickableProps(() => startEdit(entry))} style={{ fontSize: 11.5, color: C.sub, cursor: "pointer", textDecoration: "underline" }}>수정</span>
+                  <span {...clickableProps(() => archiveEntry(entry))} style={{ fontSize: 11.5, color: C.faintText, cursor: "pointer", textDecoration: "underline" }}>보관</span>
                 </div>
               </div>
               {editingId === entry.id ? (
@@ -4946,13 +5030,13 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
                   {f.answer ? (
                     <div style={{ fontSize: 13, color: C.sub }}>{f.answer}</div>
                   ) : f.skipped ? (
-                    <div style={{ fontSize: 12, color: C.faint }}>(건너뜀)</div>
+                    <div style={{ fontSize: 12, color: C.faintText }}>(건너뜀)</div>
                   ) : (
                     <FollowupAnswerBox onSubmit={(text) => answerFollowup(f, text)} onSkip={() => skipFollowup(f)} />
                   )}
                 </div>
               ))}
-              {chainLoading[entry.id] && <div style={{ fontSize: 12, color: C.faint, marginTop: 8 }}>꼬리질문 생각하는 중…</div>}
+              {chainLoading[entry.id] && <div style={{ fontSize: 12, color: C.faintText, marginTop: 8 }}>꼬리질문 생각하는 중…</div>}
               {(entry.branding_followups || []).length > 0 && (entry.branding_followups || []).every(f => f.answer || f.skipped)
                 && (entry.branding_followups || []).length < 3 && !chainLoading[entry.id] && (
                 <div style={{ marginTop: 8 }}><Btn small onClick={() => probeMore(entry)}>+ 더 파고들기</Btn></div>
@@ -4979,8 +5063,8 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
 
           {consolidateError && (
             <div style={{ marginTop: 10, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 4 }}>오류</div>
-              <div style={{ fontSize: 12, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{consolidateError}</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.redText, marginBottom: 4 }}>오류</div>
+              <div style={{ fontSize: 12, color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{consolidateError}</div>
             </div>
           )}
 
@@ -4988,15 +5072,15 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
             <Card style={{ marginTop: 10, background: C.accent }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <Label>{activeEntries.length}개 답변 종합 결과</Label>
-                <span onClick={() => setConsolidateResult(null)} style={{ cursor: "pointer", color: C.faint, fontSize: 13 }}>✕</span>
+                <span {...clickableProps(() => setConsolidateResult(null), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: 13 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
               </div>
 
               {consolidateResult.constants?.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 6 }}>반복되는 패턴 (신뢰도 높음)</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.greenText, marginBottom: 6 }}>반복되는 패턴 (신뢰도 높음)</div>
                   {consolidateResult.constants.map((c, i) => (
                     <div key={i} style={{ fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-                      {c.content} <span style={{ fontSize: 11, color: C.faint }}>(답변 {c.seqs?.join(", ")})</span>
+                      {c.content} <span style={{ fontSize: 11, color: C.faintText }}>(답변 {c.seqs?.join(", ")})</span>
                     </div>
                   ))}
                 </div>
@@ -5007,7 +5091,7 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 6 }}>시간에 따라 달라진 것</div>
                   {consolidateResult.changes.map((c, i) => (
                     <div key={i} style={{ fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-                      {c.content} <span style={{ fontSize: 11, color: C.faint }}>(답변 {c.from_seq} → {c.to_seq})</span>
+                      {c.content} <span style={{ fontSize: 11, color: C.faintText }}>(답변 {c.from_seq} → {c.to_seq})</span>
                     </div>
                   ))}
                 </div>
@@ -5015,22 +5099,22 @@ function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileIte
 
               {consolidateResult.contradictions?.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 6 }}>서로 모순되는 것</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.redText, marginBottom: 6 }}>서로 모순되는 것</div>
                   {consolidateResult.contradictions.map((c, i) => (
                     <div key={i} style={{ fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-                      {c.content} — {c.detail} <span style={{ fontSize: 11, color: C.faint }}>(답변 {c.seqs?.join(", ")})</span>
+                      {c.content} — {c.detail} <span style={{ fontSize: 11, color: C.faintText }}>(답변 {c.seqs?.join(", ")})</span>
                     </div>
                   ))}
                 </div>
               )}
 
               {consolidateResult.constants?.length === 0 && consolidateResult.changes?.length === 0 && consolidateResult.contradictions?.length === 0 && (
-                <div style={{ fontSize: 13, color: C.faint, marginBottom: 12 }}>아직 뚜렷한 패턴·변화·모순이 보이지 않습니다. 답변이 더 쌓이면 다시 시도해보세요.</div>
+                <div style={{ fontSize: 13, color: C.faintText, marginBottom: 12 }}>아직 뚜렷한 패턴·변화·모순이 보이지 않습니다. 답변이 더 쌓이면 다시 시도해보세요.</div>
               )}
 
               {consolidateResult.question_for_user && (
                 <div style={{ fontSize: 13, background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: "10px 12px", marginBottom: 12 }}>
-                  💬 {consolidateResult.question_for_user}
+                  <CIcon icon={cilSpeech} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{consolidateResult.question_for_user}
                 </div>
               )}
 
@@ -5069,31 +5153,31 @@ function BrandingProfile({ items, onChangeItem, onAddManual, onJumpToSource }) {
     <div>
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 16 }}>
         {["제안", "확정", "기각", "stale"].map(t => (
-          <div key={t} onClick={() => setTab(t)} style={{ padding: "8px 12px", fontSize: 13, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
+          <div key={t} {...clickableProps(() => setTab(t))} style={{ padding: "8px 12px", fontSize: 13, fontWeight: tab === t ? 700 : 500, cursor: "pointer",
             color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>
-            {t === "stale" ? "⚠ 재확인 필요" : t}
+            {t === "stale" ? <><CIcon icon={cilWarning} width={13} height={13} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-2px" }} />재확인 필요</> : t}
             {t !== "stale" && ` (${items.filter(i => i.status === t).length})`}
           </div>
         ))}
       </div>
 
-      {shown.length === 0 && <div style={{ fontSize: 13, color: C.faint, marginBottom: 16 }}>해당하는 항목이 없습니다.</div>}
+      {shown.length === 0 && <div style={{ fontSize: 13, color: C.faintText, marginBottom: 16 }}>해당하는 항목이 없습니다.</div>}
 
       <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
         {shown.map(item => (
           <Card key={item.id}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <Badge label={PROFILE_TYPE_LABEL[item.type] || item.type} color={C.blue} bg={C.blueBg} />
+                <Badge label={PROFILE_TYPE_LABEL[item.type] || item.type} color={C.blueText} bg={C.blueBg} />
                 {item.confidence && <Badge label={item.confidence} color={C.sub} bg={C.lineSoft} />}
                 {item.origin === "user" && <Badge label="직접 추가" color={C.sub} bg={C.lineSoft} />}
               </div>
-              {item.stale && item.status !== "기각" && <Badge label="⚠ 출처가 바뀜" color={C.red} bg={C.redBg} />}
+              {item.stale && item.status !== "기각" && <Badge label={<><CIcon icon={cilWarning} width={13} height={13} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-2px" }} />출처가 바뀜</>} color={C.redText} bg={C.redBg} />}
             </div>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>{item.content}</div>
             {item.evidence && <div style={{ fontSize: 12.5, color: C.sub, marginBottom: 6 }}>근거: "{item.evidence}"</div>}
             {item.source_entry_ids && item.source_entry_ids.length > 0 && (
-              <div style={{ fontSize: 11.5, color: C.faint, marginBottom: 8 }}>출처 답변 {item.source_entry_ids.length}건</div>
+              <div style={{ fontSize: 11.5, color: C.faintText, marginBottom: 8 }}>출처 답변 {item.source_entry_ids.length}건</div>
             )}
             <div style={{ display: "flex", gap: 6 }}>
               {item.status !== "확정" && <Btn small primary onClick={() => onChangeItem(item.id, { status: "확정", stale: false })}>확정</Btn>}
@@ -5168,7 +5252,7 @@ function BrandingResult({ supabase, userId, profileItems }) {
     }
   };
 
-  if (loadingCurrent) return <div style={{ fontSize: 13, color: C.faint }}>불러오는 중…</div>;
+  if (loadingCurrent) return <div style={{ fontSize: 13, color: C.faintText }}>불러오는 중…</div>;
 
   if (!canSynthesize && !output) {
     return (
@@ -5191,15 +5275,15 @@ function BrandingResult({ supabase, userId, profileItems }) {
 
       {error && (
         <div style={{ marginBottom: 16, padding: "10px 12px", background: C.accent, border: `1px solid ${C.line}`, borderRadius: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 4 }}>오류</div>
-          <div style={{ fontSize: 12, color: C.red, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.redText, marginBottom: 4 }}>오류</div>
+          <div style={{ fontSize: 12, color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
         </div>
       )}
 
       {output && (
         <>
           <Card style={{ marginBottom: 16, background: C.greenBg, textAlign: "center", padding: "28px 20px" }}>
-            <div style={{ fontSize: 11, color: C.green, fontWeight: 700, marginBottom: 8, letterSpacing: ".05em" }}>내 슬로건</div>
+            <div style={{ fontSize: 11, color: C.greenText, fontWeight: 700, marginBottom: 8, letterSpacing: ".05em" }}>내 슬로건</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: C.text }}>
               {(output.headline || [])[selectedHeadline]?.text || "헤드라인 없음"}
             </div>
@@ -5218,9 +5302,9 @@ function BrandingResult({ supabase, userId, profileItems }) {
           <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
             {(output.positioning || []).map((p, i) => (
               <Card key={i} onClick={() => setSelectedPositioning(i)} style={{ border: i === selectedPositioning ? `1px solid ${C.green}` : `1px solid ${C.line}`, background: i === selectedPositioning ? C.greenBg : C.panel }}>
-                <Badge label={p.axis} color={C.blue} bg={C.blueBg} />
+                <Badge label={p.axis} color={C.blueText} bg={C.blueBg} />
                 <div style={{ fontSize: 14, marginTop: 8, lineHeight: 1.6 }}>{p.text}</div>
-                {p.risk && <div style={{ fontSize: 11.5, color: C.faint, marginTop: 6 }}>주의: {p.risk}</div>}
+                {p.risk && <div style={{ fontSize: 11.5, color: C.faintText, marginTop: 6 }}>주의: {p.risk}</div>}
               </Card>
             ))}
           </div>
@@ -5246,7 +5330,7 @@ function BrandingResult({ supabase, userId, profileItems }) {
                   <Card key={i}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
                       <div style={{ fontSize: 14, fontWeight: 700 }}>{p.name}</div>
-                      <span style={{ fontSize: 12, color: C.faint }}>{p.weight}%</span>
+                      <span style={{ fontSize: 12, color: C.faintText }}>{p.weight}%</span>
                     </div>
                     {p.examples && p.examples.map((ex, ei) => <div key={ei} style={{ fontSize: 12.5, color: C.sub, padding: "2px 0" }}>· {ex}</div>)}
                   </Card>
@@ -5369,9 +5453,9 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
       <Card style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <Label>기본 정보</Label>
-          {resumeProfile._imported && <Badge label="가져온 항목 · 확인 필요" color={C.orange} bg={C.orangeBg} />}
+          {resumeProfile._imported && <Badge label="가져온 항목 · 확인 필요" color={C.orangeText} bg={C.orangeBg} />}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 6 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 6 }} className="stack-sm">
           <div><Label>이름</Label><Input placeholder="이름" value={resumeProfile.name || ""} onChange={e => patch("name", e.target.value)} /></div>
           <div><Label>희망 직무</Label><Input placeholder="예: MD / 이커머스" value={resumeProfile.targetRole || ""} onChange={e => patch("targetRole", e.target.value)} /></div>
           <div><Label>이메일</Label><Input placeholder="이메일" value={resumeProfile.email || ""} onChange={e => patch("email", e.target.value)} /></div>
@@ -5381,21 +5465,21 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
       </Card>
       <Card>
         <Label>경력</Label>
-        {Object.keys(groups).length === 0 && <div style={{ fontSize: 13, color: C.faint, padding: "8px 0" }}>승인된 경력 문장이 없습니다. 경험 상세의 「활용 문장」 탭에서 문장을 승인하면 여기에 표시됩니다.</div>}
+        {Object.keys(groups).length === 0 && <div style={{ fontSize: 13, color: C.faintText, padding: "8px 0" }}>승인된 경력 문장이 없습니다. 경험 상세의 「활용 문장」 탭에서 문장을 승인하면 여기에 표시됩니다.</div>}
         {Object.entries(groups).map(([label, items]) => (
           <div key={label} style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 12.5, fontWeight: 700, color: C.sub, marginBottom: 4 }}>{label}</div>
             {items.map(o => (
               <div key={o.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "10px 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-                <span style={{ color: C.faint }}>·</span>
+                <span style={{ color: C.faintText }}>·</span>
                 <span style={{ fontSize: 13.5, lineHeight: 1.6, flex: 1 }}><TokenText text={o.content} metrics={metrics} /></span>
-                <Badge label="승인됨" color={C.green} bg={C.greenBg} />
+                <Badge label="승인됨" color={C.greenText} bg={C.greenBg} />
               </div>
             ))}
           </div>
         ))}
         <div style={{ marginTop: 12 }}><Btn small disabled title="준비 중인 기능입니다">+ 경험 보관함에서 문장 불러오기</Btn></div>
-        <div style={{ fontSize: 12, color: C.faint, marginTop: 10 }}>미승인(AI 초안) 문장은 여기에 표시되지 않습니다.</div>
+        <div style={{ fontSize: 12, color: C.faintText, marginTop: 10 }}>미승인(AI 초안) 문장은 여기에 표시되지 않습니다.</div>
       </Card>
       <Card style={{ marginTop: 12 }}>
         <Label>역량</Label>
@@ -5404,7 +5488,7 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
           {linkedSkillBadges.length === 0
-            ? <div style={{ fontSize: 12.5, color: C.faint }}>근거가 연결된 역량이 아직 없습니다.</div>
+            ? <div style={{ fontSize: 12.5, color: C.faintText }}>근거가 연결된 역량이 아직 없습니다.</div>
             : linkedSkillBadges.map(t => <Badge key={t} label={t} color={C.sub} bg={C.lineSoft} />)}
         </div>
       </Card>
@@ -5412,15 +5496,15 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
       <Card style={{ marginTop: 12 }}>
         <Label>자격증 · 어학</Label>
         {certs.map(c => (
-          <div key={c.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 110px 1fr 20px", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
+          <div key={c.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 110px 1fr 20px", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }} className="tbl-row">
             <Input value={c.name} onChange={e => patchCert(c.id, "name", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0" }} />
             <Input value={c.issuer || ""} placeholder="발급 기관" onChange={e => patchCert(c.id, "issuer", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
             <Input value={c.date || ""} placeholder="취득일" onChange={e => patchCert(c.id, "date", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
-            <Input value={c.note || ""} placeholder="비고" onChange={e => patchCert(c.id, "note", e.target.value)} style={{ color: C.faint, fontSize: 12, border: "none", padding: "2px 0" }} />
-            <span onClick={() => removeCert(c.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+            <Input value={c.note || ""} placeholder="비고" onChange={e => patchCert(c.id, "note", e.target.value)} style={{ color: C.faintText, fontSize: 12, border: "none", padding: "2px 0" }} />
+            <span {...clickableProps(() => removeCert(c.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 12 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
           </div>
         ))}
-        {certs.length === 0 && <div style={{ fontSize: 12.5, color: C.faint, padding: "6px 0" }}>등록된 자격증·어학이 없습니다.</div>}
+        {certs.length === 0 && <div style={{ fontSize: 12.5, color: C.faintText, padding: "6px 0" }}>등록된 자격증·어학이 없습니다.</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <Input placeholder="자격증명" value={certDraft.name} onChange={e => setCertDraft(d => ({ ...d, name: e.target.value }))} style={{ flex: 1.3 }} />
           <Input placeholder="발급 기관" value={certDraft.issuer} onChange={e => setCertDraft(d => ({ ...d, issuer: e.target.value }))} style={{ flex: 1 }} />
@@ -5432,15 +5516,15 @@ function Resume({ experiences, outputs, metrics, resumeProfile, setResumeProfile
       <Card style={{ marginTop: 12 }}>
         <Label>수상기록</Label>
         {awards.map(a => (
-          <div key={a.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 110px 1fr 20px", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }}>
+          <div key={a.id} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 110px 1fr 20px", gap: 10, alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.lineSoft}`, fontSize: 13.5 }} className="tbl-row">
             <Input value={a.name} onChange={e => patchAward(a.id, "name", e.target.value)} style={{ fontWeight: 600, border: "none", padding: "2px 0" }} />
             <Input value={a.issuer || ""} placeholder="수여 기관" onChange={e => patchAward(a.id, "issuer", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
             <Input value={a.date || ""} placeholder="수상일" onChange={e => patchAward(a.id, "date", e.target.value)} style={{ color: C.sub, fontSize: 12.5, border: "none", padding: "2px 0" }} />
-            <Input value={a.note || ""} placeholder="비고 (예: 대상, 참가팀 30개 중 1위)" onChange={e => patchAward(a.id, "note", e.target.value)} style={{ color: C.faint, fontSize: 12, border: "none", padding: "2px 0" }} />
-            <span onClick={() => removeAward(a.id)} title="삭제" style={{ cursor: "pointer", color: C.faint, fontSize: 12 }}>✕</span>
+            <Input value={a.note || ""} placeholder="비고 (예: 대상, 참가팀 30개 중 1위)" onChange={e => patchAward(a.id, "note", e.target.value)} style={{ color: C.faintText, fontSize: 12, border: "none", padding: "2px 0" }} />
+            <span {...clickableProps(() => removeAward(a.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: 12 }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
           </div>
         ))}
-        {awards.length === 0 && <div style={{ fontSize: 12.5, color: C.faint, padding: "6px 0" }}>등록된 수상기록이 없습니다.</div>}
+        {awards.length === 0 && <div style={{ fontSize: 12.5, color: C.faintText, padding: "6px 0" }}>등록된 수상기록이 없습니다.</div>}
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <Input placeholder="수상명 (예: 전국 대학생 공모전 대상)" value={awardDraft.name} onChange={e => setAwardDraft(d => ({ ...d, name: e.target.value }))} style={{ flex: 1.3 }} />
           <Input placeholder="수여 기관" value={awardDraft.issuer} onChange={e => setAwardDraft(d => ({ ...d, issuer: e.target.value }))} style={{ flex: 1 }} />

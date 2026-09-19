@@ -1,0 +1,151 @@
+/* ============================================================
+   상태 · 반응형 전용 스타일 레이어
+
+   이 앱의 시각 스타일은 App.jsx의 인라인 style 객체가 담당한다.
+   인라인 style로는 :hover / :focus-visible / :active / @media 를
+   표현할 수 없으므로, 그 네 가지만 여기서 처리한다.
+
+   인라인 배경색과 충돌하지 않도록 hover는 배경색을 덮어쓰지 않고
+   filter로 처리한다. 덕분에 어떤 배경 위에서도 동작한다.
+   ============================================================ */
+
+:root {
+  --focus-ring: #321FDB;
+  --dur-fast: .14s;
+  --dur: .18s;
+}
+
+/* ---------- 앵커 이동 ---------- */
+html { scroll-behavior: smooth; }
+
+/* ---------- 한글 줄바꿈 품질 ---------- */
+/* 제목의 고아 단어 방지, 본문은 줄 길이 균형 */
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+
+/* ============================================================
+   1. 버튼 리셋
+   <div onClick> 을 <button> 으로 바꿀 때 쓴다.
+   브라우저 기본 버튼 스타일을 제거해 기존 인라인 style이
+   그대로 적용되도록 한다 — 레이아웃이 변하면 안 되므로
+   display 는 각 호출부의 인라인 style 을 따른다.
+   ============================================================ */
+.ui-btn {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  letter-spacing: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ============================================================
+   2. 인터랙션 상태
+   클릭 가능한 모든 요소에 .ui-click 을 붙인다.
+   ============================================================ */
+.ui-click {
+  cursor: pointer;
+  transition:
+    filter var(--dur) ease,
+    transform var(--dur-fast) ease,
+    box-shadow var(--dur) ease,
+    border-color var(--dur) ease;
+}
+
+/* 배경색을 덮지 않고 어둡게 — 어떤 인라인 배경에서도 동작 */
+.ui-click:hover { filter: brightness(0.955); }
+
+/* 눌림 피드백: 물리적인 클릭 감각 */
+.ui-click:active { transform: translateY(1px) scale(0.995); }
+
+.ui-click[disabled],
+.ui-click[aria-disabled="true"] {
+  cursor: default;
+  filter: none;
+  transform: none;
+}
+
+/* ---------- 포커스 링 ---------- */
+/* 키보드 사용자에게만 보이고, 마우스 클릭 시엔 뜨지 않는다 */
+.ui-click:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 입력 요소는 링이 안쪽으로 들어가야 잘림이 없다 */
+input:focus-visible,
+textarea:focus-visible {
+  outline-offset: -1px;
+}
+
+/* ---------- 건너뛰기 링크 ---------- */
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  z-index: 100;
+  padding: 10px 16px;
+  border-radius: 6px;
+  background: #321FDB;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: top var(--dur) ease;
+}
+.skip-link:focus { top: 8px; }
+
+/* ============================================================
+   3. 반응형
+   인라인 gridTemplateColumns 를 이기려면 !important 가 필요하다.
+   표 형태의 행만 해당하며, 나머지 그리드는 App.jsx 에서
+   repeat(auto-fit, minmax(...)) 로 바꿔 미디어쿼리 없이 접힌다.
+   ============================================================ */
+/* 표 형태의 행: 컬럼을 풀고 세로로 쌓는다.
+   고정 px 컬럼이 섞여 있어 좁은 폭에서 가장 먼저 깨지므로 기준을 넓게 잡는다. */
+@media (max-width: 820px) {
+  .tbl-row {
+    grid-template-columns: 1fr !important;
+    gap: 6px !important;
+    padding: 12px 0 !important;
+  }
+  /* 행 안에서 우측 정렬돼 있던 셀을 좌측으로 */
+  .tbl-row > * { text-align: left !important; }
+}
+
+/* 일반 다단 그리드: 한 칸이 좁아져 한글이 강제 줄바꿈되기 직전에 1단으로 */
+@media (max-width: 720px) {
+  .stack-sm {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+}
+
+/* 챗봇 FAB 가 본문 마지막 요소를 가리지 않도록 여백 확보 */
+.page-body { padding-bottom: 96px; }
+
+/* ============================================================
+   4. 모션 민감 사용자 존중 (WCAG 2.3.3)
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+  .ui-click:active { transform: none; }
+}
