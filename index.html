@@ -2,7 +2,10 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover 가 있어야 env(safe-area-inset-*) 가 0 이 아닌 값을 준다.
+         아이폰 노치·홈 인디케이터 영역을 피하는 데 쓴다.
+         user-scalable=no 는 넣지 않는다 — 확대 차단은 접근성 위반이다. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Career OS</title>
     <link
       rel="stylesheet"
