@@ -1431,7 +1431,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
     <div>
       <H2>타임라인</H2>
       <div style={{ fontSize: "var(--fs-base)", color: C.sub, marginBottom: 16, lineHeight: 1.6 }}>
-        연도·월을 쭉 훑어보면서, 아직 경험 보관함에 정리하지 않은 활동을 빠르게 기록하고 골라서 정리하세요.
+        아직 경험 보관함에 정리하지 않은 활동을 빠르게 기록하고 골라서 정리하세요.
       </div>
 
       <Card style={{ marginBottom: 16 }}>
@@ -1450,7 +1450,7 @@ function Timeline({ experiences, setExperiences, activities, setActivities, addT
           </div>
           <Btn primary disabled={!title.trim() || !date} onClick={addActivity}>추가</Btn>
         </div>
-        <div style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginTop: 6 }}>종료 년월은 선택 사항입니다 — 비워두면 하루·한 달짜리 활동(점)으로, 채우면 기간이 있는 활동(막대)으로 표시됩니다.</div>
+        <div style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginTop: 6 }}>종료 년월은 선택 사항입니다 — 비워두면 점으로, 채우면 막대로 표시됩니다.</div>
       </Card>
 
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
@@ -1846,7 +1846,7 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
   return (
     <div>
       <h1 style={{ fontSize: "var(--fs-3xl)", fontWeight: 800, margin: "0 0 4px" }}>오늘 할 일부터 시작하세요</h1>
-      <div style={{ fontSize: "var(--fs-base)", color: C.sub, marginBottom: 22 }}>차트보다 행동. 다음에 해야 할 일을 바로 보여드립니다.</div>
+      <div style={{ fontSize: "var(--fs-base)", color: C.sub, marginBottom: 22 }}>다음에 해야 할 일을 바로 보여드립니다.</div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }} className="stack-sm">
         {/* 다음 행동 */}
@@ -3437,9 +3437,6 @@ function Skills({ skills, setSkills, experiences, onOpenExp, addTrash }) {
       <div style={{ fontSize: "var(--fs-base)", color: C.sub, marginBottom: 6, lineHeight: 1.6 }}>
         "상·중·하" 자기 평가 대신 <b>실제로 할 수 있는 작업</b>을 적고, 경험 근거를 연결합니다.
       </div>
-      <div style={{ fontSize: "var(--fs-sm)", color: C.faintText, marginBottom: 16 }}>
-        근거가 연결된 항목만 이력서·자소서에서 자신 있게 쓸 수 있습니다. 근거 없는 항목은 면접 검증 리스크가 있습니다.
-      </div>
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
         {["도구", "직무 역량"].map(t => (
@@ -4124,7 +4121,7 @@ function ApplicationDetail({ app, setApplications, experiences, outputs, metrics
                   </select>
                 </div>
                 <div style={{ marginTop: 10 }}>
-                  <Textarea value={q.draft || ""} placeholder="여기에 직접 작성해도 되고, 아래 'AI와 함께 작성'으로 도움받아도 됩니다."
+                  <Textarea value={q.draft || ""} placeholder="아래 'AI와 함께 작성'으로 도움받아도 됩니다."
                     onChange={e => patchQ("draft", e.target.value)}
                     onBlur={() => { if (q.draft?.trim() && q.status === "not_started") patchQ("status", "drafting"); }}
                     disabled={q.isLocked} rows={5} style={{ fontSize: "var(--fs-base)", lineHeight: 1.6 }} />
@@ -4267,7 +4264,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
     <div style={{ maxWidth: 820 }}>
       <H2>자소서·면접 준비 (공통)</H2>
       <div style={{ fontSize: "var(--fs-base)", color: C.sub, marginBottom: 16, lineHeight: 1.6 }}>
-        특정 회사에 매지 않고, 자주 나오는 공통 문항을 미리 준비해두는 곳입니다. 여기서 만든 답변은 지원 관리의 각 회사별 문항을 쓸 때 참고용으로 활용하세요.
+        자주 나오는 공통 문항을 미리 준비해두는 곳입니다. 여기서 만든 답변은 지원 관리의 각 회사별 문항을 쓸 때 참고용으로 활용하세요.
       </div>
 
       <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
@@ -4306,7 +4303,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
                   <span {...clickableProps(() => removeQ(q.id), { label: "닫기" })} title="삭제" style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-base)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
                 </div>
               </div>
-              <Textarea value={q.draft || ""} placeholder="여기에 직접 작성해도 되고, 아래 'AI와 함께 작성'으로 도움받아도 됩니다."
+              <Textarea value={q.draft || ""} placeholder="아래 'AI와 함께 작성'으로 도움받아도 됩니다."
                 onChange={e => patchQ(q.id, "draft", e.target.value)}
                 onBlur={() => { if (q.draft?.trim() && q.status === "not_started") patchQ(q.id, "status", "drafting"); }}
                 rows={5} style={{ fontSize: "var(--fs-base)", lineHeight: 1.6 }} />
