@@ -15,11 +15,13 @@ career-os-app/
 │   └── styles.css         # 디자인 토큰 + 상태/반응형 레이어
 ├── public/                # 로고·파비콘·OG 이미지
 ├── supabase/
-│   └── core-state-schema.sql   # 경험/스킬/지원현황 등 전체 데이터 저장용
+│   ├── config.toml             # Supabase CLI 설정
+│   └── migrations/             # DB 스키마 변경 이력 (파일명 타임스탬프 순으로 적용됨)
 └── api/
     ├── extract.js            # 파일 가져오기(경험 추출)
     ├── chat.js                # 자소서·면접·경험 진단 챗봇
     ├── extract-jd.js          # 채용공고 요구 역량 추출
+    ├── consistency-check.js   # 경험 단계별 일관성 검토
     └── health.js              # AI 키 등록 여부 확인 (진단용)
 ```
 
@@ -82,8 +84,26 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 ### 1단계 — Supabase 프로젝트 & 스키마
 
 1. [supabase.com](https://supabase.com) 계정 생성 → **New Project**
-2. **SQL Editor → New query** → 이 저장소의 `supabase/core-state-schema.sql` 전체를 붙여넣고 **Run**
-   (`create table if not exists` 로 작성되어 있어 여러 번 실행해도 안전합니다)
+2. 스키마를 적용합니다. 아래 두 방법 중 하나면 됩니다.
+
+   **방법 A — Supabase CLI (권장)**. 스키마 변경이 `supabase/migrations/` 에 파일로 남아 git으로 추적됩니다.
+
+   ```bash
+   # 1) Access Token 발급 → https://supabase.com/dashboard/account/tokens
+   export SUPABASE_ACCESS_TOKEN=sbp_...   # 또는 npx supabase login
+   # 2) 프로젝트 연결 (Project Settings → General 의 Reference ID)
+   npx supabase link --project-ref <project-ref>
+   # 3) 마이그레이션 적용
+   npx supabase db push
+   ```
+
+   이후 스키마를 바꿀 때는 `npx supabase migration new <이름>` 으로 파일을 만들고 `db push` 하세요.
+   SQL을 손으로 실행하면 변경 이력이 남지 않습니다.
+
+   **방법 B — 대시보드 SQL Editor (CLI 없이)**. **SQL Editor → New query** 에
+   `supabase/migrations/` 안의 `.sql` 파일을 **파일명 순서대로** 붙여넣고 **Run** 합니다 (현재는 한 개).
+
+   어느 쪽이든 DDL이 전부 멱등(`create table if not exists` 등)이라 여러 번 실행해도 안전합니다.
 3. **Table Editor** 에 `career_os_state` 가 보이면 성공 (PK `(user_id, key)`, RLS 활성)
 4. **Project Settings → API** 에서 두 값을 복사:
    - `Project URL`
@@ -128,6 +148,10 @@ VITE_SUPABASE_ANON_KEY=<anon public key>
 ```
 
 비워두면 로그인 버튼이 동작하지 않고 로컬 전용 모드로 돌아갑니다 (오류 아님).
+
+`.env.example` 의 `SUPABASE_ACCESS_TOKEN` 은 **로컬에서 supabase CLI 로 마이그레이션을 적용할 때만** 쓰입니다.
+앱 코드가 읽지 않으므로 Vercel 환경변수에 넣을 필요가 없습니다. 또한 CLI 는 `.env` 를 자동으로 읽지 않으니,
+셸에 `export` 하거나 `npx supabase login` 으로 대신 인증하세요.
 
 **Vercel**: Settings → Environment Variables 에 `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` 를 추가하고 **Production / Preview / Development 를 모두 체크**합니다.
 
