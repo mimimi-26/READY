@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useId } from "react";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import "@coreui/coreui/dist/css/coreui.min.css";
@@ -1011,9 +1011,11 @@ function App() {
       <CHeader position="sticky" className="mb-0" style={{ zIndex: 20 }}>
         <CContainer fluid className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
           <div className="d-flex align-items-center flex-wrap" style={{ gap: 10 }}>
+            {/* 마크는 22px 까지 헤더 높이를 늘리지 않는다 — 브랜드 줄 상자가 이미 30px 라
+                그 안에 들어간다. 32px 부터 헤더가 커진다. */}
             <CHeaderBrand className="d-flex align-items-center" style={{ gap: 8, fontWeight: 800 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "var(--r-xs)", background: C.primary, display: "inline-block" }} />
-              Career OS
+              <BrandMark size={22} />
+              <BrandWordmark size="inherit" />
             </CHeaderBrand>
             <span className="text-body-secondary">/</span>
             <span className="text-body-secondary fw-semibold">{activeTop.label}</span>
@@ -1243,7 +1245,10 @@ function Landing({ onStart, onGoogle }) {
     <div className="min-h-screen" style={{ fontFamily: font, background: C.bg, color: C.text }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "60px var(--sp-7) 80px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: "var(--fs-md)", fontWeight: 800, letterSpacing: "-.01em", marginBottom: 18, color: C.primary }}>Career OS</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <BrandMark size={44} />
+            <BrandWordmark size="var(--fs-xl)" />
+          </div>
           <h1 style={{ fontSize: "var(--fs-5xl)", fontWeight: 800, margin: "0 0 14px", lineHeight: 1.35 }}>
             흩어진 경험을, 이력서·자소서로 바로 쓸 수 있게
           </h1>
@@ -1316,6 +1321,56 @@ export default function Root() {
 }
 
 /* ============================================================ 홈 */
+/* ============================================================ 브랜드 마크 · 워드마크 */
+/* 아래 Icon 세트(선 스타일)와 성격이 달라 분리했다. 로고는 채움(fill) 기하다.
+   원본 PNG(660x660)에서 각 레이어의 바운딩박스를 재서 좌표를 역산했고,
+   렌더 결과를 원본과 대조해 1~2px 이내로 맞췄다.
+
+   기하: 가로:세로 = 1:0.546 인 둥근 마름모 하나를 세로로 균일하게 3단 배치.
+   45도 회전한 정사각형에 rx 를 주면 모서리가 둥근 마름모가 되는데, 둥근
+   모서리가 회전 후 꼭짓점을 안쪽으로 당기므로 정사각형 크기를 보정했다
+   (유효반지름 = (H - rx)*sqrt(2) + rx).
+
+   레이어 사이 간격은 흰 사각형이 아니라 mask 로 파낸다. 흰색으로 두면
+   다크 배경에서 흰 줄이 드러난다. mask 를 쓰면 간격이 투명해진다. */
+const BrandMark = ({ size = 20, title }) => {
+  // 같은 화면에 마크가 둘 이상 있어도 mask id 가 겹치지 않게 한다
+  const uid = useId().replace(/:/g, "");
+  const cell = (cy) => (
+    <g transform={`translate(24.22 ${cy}) scale(1 0.546) rotate(45)`}>
+      <rect x="-15.03" y="-15.03" width="30.05" height="30.05" rx="4.51" />
+    </g>
+  );
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none"
+      role={title ? "img" : undefined} aria-hidden={title ? undefined : true}
+      style={{ display: "block", flexShrink: 0 }}>
+      {title && <title>{title}</title>}
+      <defs>
+        <mask id={`bm-a-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+          <rect width="48" height="48" fill="#fff" /><g fill="#000">{cell(18.18)}</g>
+        </mask>
+        <mask id={`bm-b-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+          <rect width="48" height="48" fill="#fff" /><g fill="#000">{cell(27.76)}</g>
+        </mask>
+      </defs>
+      <g fill="var(--brand-navy)"  mask={`url(#bm-b-${uid})`}>{cell(34.73)}</g>
+      <g fill="var(--brand-blue)"  mask={`url(#bm-a-${uid})`}>{cell(25.15)}</g>
+      <g fill="var(--brand-green)">{cell(15.56)}</g>
+    </svg>
+  );
+};
+
+/* 워드마크를 이미지가 아니라 실제 텍스트로 재현한다.
+   확대·검색·스크린리더에 그대로 대응되고, 24px 높이에 수백 KB PNG 를
+   넣지 않아도 된다. 색은 로고 원본에서 추출한 값. */
+const BrandWordmark = ({ size = "var(--fs-lg)" }) => (
+  <span style={{ fontSize: size, fontWeight: 800, letterSpacing: "-.02em", whiteSpace: "nowrap" }}>
+    <span style={{ color: "var(--brand-ink)" }}>Career</span>
+    <span style={{ color: "var(--brand-leaf)" }}> OS</span>
+  </span>
+);
+
 /* ============================================================ 아이콘 (선 스타일, 와이어프레임 톤) */
 const Icon = ({ name, size = 22, color = "currentColor" }) => {
   const s = { stroke: color, strokeWidth: 1.6, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" };
@@ -1855,8 +1910,8 @@ function HomeOnboarding({ onGoAnalyze, onGoImport, onLoadDemo, onGoGuide }) {
   return (
     <div style={{ maxWidth: 560, margin: "40px auto 0" }}>
       <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, color: C.primary }}>
-          <Icon name="sparkle" size={34} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+          <BrandMark size={40} />
         </div>
         <h1 style={{ fontSize: "var(--fs-3xl)", fontWeight: 800, margin: "0 0 8px" }}>Career OS에 오신 걸 환영합니다</h1>
         <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.6 }}>
@@ -1943,7 +1998,10 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
         <Card>
           <Label>경험 준비 현황</Label>
           <div style={{ display: "flex", gap: 22, marginTop: 8 }}>
-            {[["전체", total, C.text], ["분석 완료", done, C.green], ["보완 필요", needs, C.orange], ["초기 메모", draft, C.sub]].map(([l, v, c]) => (
+            {/* 이 숫자들은 24px/800 로 렌더되는 "텍스트"다. 채움용 C.green / C.orange 를
+                 그대로 쓰면 각각 2.32:1 / 1.85:1 로 큰 텍스트 기준 3:1 에도 못 미친다.
+                 텍스트용 변형을 쓴다. */}
+            {[["전체", total, C.text], ["분석 완료", done, C.greenText], ["보완 필요", needs, C.orangeText], ["초기 메모", draft, C.sub]].map(([l, v, c]) => (
               <div key={l}>
                 <div style={{ fontSize: "var(--fs-4xl)", fontWeight: 800, color: c }}>{v}</div>
                 <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>{l}</div>

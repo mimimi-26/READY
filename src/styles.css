@@ -24,23 +24,39 @@
   --c-text: #3C4B64;
   --c-sub: #5C6873;
   --c-faint: #9DA5B1;
+  /* ---------- 브랜드 원색 ----------
+     로고 마크 전용. WCAG 1.4.3 은 로고·브랜드명을 대비 요건에서 제외하므로
+     이 값들은 대비를 맞추지 않고 원본 그대로 쓴다.
+     UI 요소에는 절대 쓰지 말 것 — 아래 --c-primary / --c-green 계열을 쓴다. */
+  --brand-green: #19C280;   /* 아이콘 상단  흰 배경 대비 2.32:1 */
+  --brand-blue:  #2072FA;   /* 아이콘 중단  흰 배경 대비 4.33:1 */
+  --brand-navy:  #434C72;   /* 아이콘 하단  흰 배경 대비 8.35:1 */
+  --brand-ink:   #0F192E;   /* 워드마크 "Career"  17.52:1 */
+  --brand-leaf:  #08B56C;   /* 워드마크 "OS"      2.68:1 */
+
   /* 의미색 — 채움용 */
   --c-blue: #3399FF;
   --c-blue-bg: #E8F3FF;
-  --c-primary: #321FDB;
-  --c-primary-bg: #EBE8FC;
-  --c-green: #2EB85C;
-  --c-green-bg: #E4F7EA;
+  /* 브랜드 파랑(#2072FA)은 흰 글자 기준 4.33:1 로 AA 미달이라 그대로 쓸 수 없다.
+     색상은 유지하고 명도만 낮춘 값. 흰 글자 5.30:1, 회색 배경 위 텍스트 4.52:1 로
+     채움과 텍스트 양쪽을 만족해 토큰 하나로 충분하다. */
+  --c-primary: #055FF5;
+  --c-primary-bg: #E8F0FE;
+  /* 로고 초록(#19C280)을 그대로 쓰면 흰 배경 위 2.32:1 로 비텍스트 기준 3:1 에 못 미친다.
+     (교체 전 #2EB85C 도 2.58:1 로 이미 미달이었다.) 색조는 유지하고 밝기만 13% 낮춰
+     상태 점·프로그레스 바가 흰 카드 위에서 식별되게 한다. */
+  --c-green: #16A970;
+  --c-green-bg: #E4FCF2;
   --c-orange: #F9B115;
   --c-orange-bg: #FEF6E7;
-  --c-ai: #321FDB;
-  --c-ai-bg: #EBE8FC;
+  --c-ai: #055FF5;
+  --c-ai-bg: #E8F0FE;
   --c-red: #E55353;
   --c-red-bg: #FDECEC;
   /* 의미색 — 텍스트용 (WCAG AA) */
   --c-faint-text: #626C7B;
   --c-blue-text: #0069D3;
-  --c-green-text: #1F7B3E;
+  --c-green-text: #107B51;
   --c-orange-text: #8F6304;
   --c-red-text: #D22020;
   /* 사이드바 (다크) */
@@ -49,6 +65,11 @@
   --c-sidebar-text-active: #FFFFFF;
   --c-sidebar-hover: #2A2C3F;
   --c-sidebar-line: #2E3046;
+
+  /* CoreUI 기본 링크색이 보라(#5856d6)라 리브랜드 후에도 혼자 남는다.
+     외부 링크가 팔레트에서 튀지 않게 덮어쓴다. */
+  --cui-link-color: var(--c-primary);
+  --cui-link-hover-color: var(--c-primary);
 
   --focus-ring: var(--c-primary);
   --dur-fast: .14s;
