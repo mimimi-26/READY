@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from "react";
+import React, { useState, useMemo, useEffect, useRef, useId } from "react";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import "@coreui/coreui/dist/css/coreui.min.css";
@@ -229,13 +229,6 @@ const emptyQuestionBlocks = [
   { id: "qb_5", label: "어려움을 극복한 경험", expIds: [] },
   { id: "qb_6", label: "문제 해결 경험", expIds: [] },
 ];
-
-/* ============================================================ 퍼스널 브랜딩 워크북 데이터 ============================================================ */
-const BRANDING_STEPS = [{"id": 1, "name": "발굴", "desc": "재료를 전부 꺼낸다", "categories": ["experience", "flow", "taste"]}, {"id": 2, "name": "검증", "desc": "진짜 강점만 남긴다", "categories": ["strength", "external"]}, {"id": 3, "name": "정의", "desc": "정체성과 기준을 잡는다", "categories": ["identity", "motivation", "values"]}, {"id": 4, "name": "압축", "desc": "한 문장으로 만든다", "categories": ["output"]}];
-const BRANDING_CATEGORIES = [{"id": "experience", "label": "경험 인벤토리", "icon": "archive"}, {"id": "flow", "label": "몰입·즐거움", "icon": "zap"}, {"id": "taste", "label": "취향·기질", "icon": "palette"}, {"id": "strength", "label": "강점·약점", "icon": "target"}, {"id": "external", "label": "타인이 본 나", "icon": "users"}, {"id": "identity", "label": "아이덴티티", "icon": "fingerprint"}, {"id": "motivation", "label": "왜 일하는가", "icon": "compass"}, {"id": "values", "label": "가치관·판단기준", "icon": "scale"}, {"id": "output", "label": "산출물", "icon": "sparkles"}];
-const BRANDING_QUESTIONS = [{"id": "exp_01", "category": "experience", "step": 1, "order": 1, "text": "최근 3년간 시간을 많이 쓴 활동을 10개 이상 적어줘. 업무·사이드·취미 구분 없이.", "hint": "재료가 많을수록 뒤 단계가 정확해져. 사소해 보여도 다 적어.", "input_type": "list", "probe": "나열만 있고 맥락이 없으면, 그 중 가장 오래 지속된 것과 가장 빨리 그만둔 것의 차이를 묻는다."}, {"id": "exp_02", "category": "experience", "step": 1, "order": 2, "text": "그중 아무도 시키지 않았는데 스스로 시작한 건 뭐야?", "hint": "자발성은 재능의 가장 강한 신호야.", "input_type": "text", "probe": "왜 하필 그걸 시작했는지, 시작 직전에 무슨 일이 있었는지 파고든다."}, {"id": "exp_03", "category": "experience", "step": 1, "order": 3, "text": "남들은 어려워하는데 나는 자연스럽게 했던 일 2~3개는?", "hint": "재능 = 반복적으로 나타나는 사고·행동 패턴. 나에게 쉬운 건 잘 안 보여.", "input_type": "list", "probe": "'남들이 어려워했다'는 근거를 요구한다. 실제로 남이 못 하는 걸 본 장면이 있는지."}, {"id": "exp_04", "category": "experience", "step": 1, "order": 4, "text": "최근 1년간 남이 나에게 먼저 부탁하거나 물어본 건 주로 어떤 주제였어?", "hint": "시장이 이미 인식한 내 강점이야. 가장 신뢰도 높은 데이터.", "input_type": "text", "probe": "요청한 사람들의 공통점(직군·관계·상황)을 묻는다. 그게 타겟 오디언스 후보다."}, {"id": "exp_05", "category": "experience", "step": 1, "order": 5, "text": "돈을 받지 않았는데도 시간을 쏟은 일이 있어?", "hint": "경제적 보상 없이 지속된 활동은 내적 동기의 위치를 알려줘.", "input_type": "text", "probe": "그 일을 돈 받고 하게 되면 재미가 사라질지 물어본다."}, {"id": "exp_06", "category": "experience", "step": 1, "order": 6, "text": "끝까지 못 끝낸 일 중 지금도 아쉬운 게 있어? 왜 못 끝냈어?", "hint": "중단 패턴은 약점보다 '환경 조건'을 알려주는 경우가 많아.", "input_type": "text", "probe": "다른 중단 사례와 비교해서 같은 이유인지 확인한다. 반복되면 그게 패턴."}, {"id": "flow_01", "category": "flow", "step": 1, "order": 1, "text": "시간 가는 줄 몰랐던 최근 순간 하나를 구체적으로 적어줘. 언제, 어디서, 뭘 하고 있었어?", "hint": "감상 말고 장면으로. 몰입의 조건은 디테일에 숨어 있어.", "input_type": "text", "probe": "그 상황의 조건(혼자/함께, 마감 유무, 난이도)을 하나씩 확인한다."}, {"id": "flow_02", "category": "flow", "step": 1, "order": 2, "text": "그 일에서 정확히 어느 부분이 재밌었어? 과정 자체? 결과물? 남의 반응?", "hint": "같은 일을 해도 사람마다 즐거운 지점이 달라. 여기서 방향이 갈려.", "input_type": "choice_text", "options": ["과정 자체", "완성된 결과물", "남의 반응·인정", "문제가 풀리는 순간", "기타"], "probe": "고른 항목이 다른 경험에서도 동일했는지 교차 검증한다."}, {"id": "flow_03", "category": "flow", "step": 1, "order": 3, "text": "반대로, 결과는 좋았는데 하는 내내 괴로웠던 일은?", "hint": "잘하는 것과 즐거운 것을 분리하는 질문이야. 이 갭이 번아웃 지점.", "input_type": "text", "probe": "괴로움의 원인이 일 자체인지, 사람·환경인지 분리하게 만든다."}, {"id": "flow_04", "category": "flow", "step": 1, "order": 4, "text": "혼자 할 때와 같이 할 때, 어느 쪽에서 에너지가 더 나? 예를 들어봐.", "hint": "협업 성향은 나중에 채널·콘텐츠 형식을 결정해.", "input_type": "text", "probe": "예외 상황을 묻는다. '혼자가 좋다'면 그럼에도 같이 해서 좋았던 경우는?"}, {"id": "flow_05", "category": "flow", "step": 1, "order": 5, "text": "완벽했다고 느낀 하루의 시간표를 아침부터 밤까지 적어봐.", "hint": "이상적 일상의 구조가 곧 내가 설계해야 할 커리어 형태야.", "input_type": "text", "probe": "지금 실제 하루와 겹치는 시간이 몇 %인지 계산하게 한다."}, {"id": "taste_01", "category": "taste", "step": 1, "order": 1, "text": "좋아하는 색 하나. 그리고 최근에 그 색을 실제로 고른 순간(옷·물건·화면 등)을 같이 적어줘.", "hint": "색 자체는 재료가 아니야. '왜'와 '실제 선택'이 재료야.", "input_type": "text", "probe": "말한 색과 실제 고른 색이 다르면 그 갭을 지적한다. 자기이미지 vs 실제 취향."}, {"id": "taste_02", "category": "taste", "step": 1, "order": 2, "text": "그 색이 나에게 주는 느낌을 3단어로. 그리고 왜 그 느낌이 좋아?", "hint": "여기서 나온 단어가 브랜드 톤앤매너의 씨앗이 돼.", "input_type": "text", "probe": "그 3단어가 실제 내 성격과 일치하는지, 아니면 되고 싶은 모습인지 묻는다."}, {"id": "taste_03", "category": "taste", "step": 1, "order": 3, "text": "내 공간(방·책상)에서 절대 못 버리는 물건 3개와 이유는?", "hint": "물건은 가치관의 물리적 증거야.", "input_type": "list", "probe": "세 물건의 공통점을 스스로 찾게 한다."}, {"id": "taste_04", "category": "taste", "step": 1, "order": 4, "text": "돈이 하나도 안 아까운 소비 카테고리와, 쓰기 아까운 카테고리는?", "hint": "지출 패턴은 말보다 정직한 우선순위 지표야.", "input_type": "text", "probe": "아까운 쪽에 돈을 쓴 최근 사례가 있는지, 있다면 왜였는지 묻는다."}, {"id": "taste_05", "category": "taste", "step": 1, "order": 5, "text": "좋아하는 브랜드·가게·공간 하나. 그게 나에게 주는 느낌을 3단어로.", "hint": "내가 끌리는 브랜드는 내가 되고 싶은 브랜드와 겹쳐.", "input_type": "text", "probe": "그 브랜드의 어떤 요소(비주얼·가격·태도·스토리)에 끌리는지 분해시킨다."}, {"id": "taste_06", "category": "taste", "step": 1, "order": 6, "text": "절대 못 견디는 스타일이나 분위기는? 왜?", "hint": "싫어하는 것의 경계가 브랜드 정체성을 더 선명하게 만들어.", "input_type": "text", "probe": "그 반감이 취향인지 가치관 충돌인지 구분하게 한다."}, {"id": "str_01", "category": "strength", "step": 2, "order": 1, "text": "남들보다 잘한다고 확신하는 것 3개. 각각 증거를 한 줄씩 붙여줘.", "hint": "증거 없는 강점은 브랜드에 쓸 수 없어.", "input_type": "list", "probe": "증거가 감상이면 숫자·상황·제3자 반응 중 하나를 요구한다."}, {"id": "str_02", "category": "strength", "step": 2, "order": 2, "text": "그중 하나를 골라볼게. 그때 남들은 왜 그걸 못 했다고 생각해?", "hint": "상대적 우위의 원인을 알아야 재현 가능한 강점이 돼.", "input_type": "text", "probe": "'운이 좋았다'류 답이면, 그 운을 만든 사전 준비가 뭐였는지 되묻는다."}, {"id": "str_03", "category": "strength", "step": 2, "order": 3, "text": "칭찬받았는데 '이게 뭐 대단한가' 싶었던 건 뭐야?", "hint": "★ 가장 중요한 질문. 나에게 쉬워서 안 보이는 강점이 여기 숨어 있어.", "input_type": "text", "probe": "누가, 어떤 상황에서 칭찬했는지 구체화하고 반복 사례를 찾는다."}, {"id": "str_04", "category": "strength", "step": 2, "order": 4, "text": "스스로 자랑스러운데 아무도 알아주지 않은 건?", "hint": "인식 갭. 브랜딩으로 해결 가능한 영역인지 판단하는 재료야.", "input_type": "text", "probe": "안 알려진 이유가 '결과가 안 보여서'인지 '말을 안 해서'인지 나눈다."}, {"id": "str_05", "category": "strength", "step": 2, "order": 5, "text": "내 약점 3개. 각각 '고칠 것'과 '그냥 안고 갈 것'으로 나눠줘.", "hint": "약점 보완보다 강점 극대화가 훨씬 효율적이야. 다 고치려 하지 마.", "input_type": "list", "probe": "'안고 갈 것'이 강점의 뒷면은 아닌지 검토시킨다."}, {"id": "str_06", "category": "strength", "step": 2, "order": 6, "text": "지적받은 말 중 가장 여러 번 반복해서 들은 건?", "hint": "반복된 피드백은 실제 패턴일 확률이 높아.", "input_type": "text", "probe": "그 지적이 성과를 실제로 망친 적이 있는지, 아니면 스타일 차이인지 구분한다."}, {"id": "ext_01", "category": "external", "step": 2, "order": 1, "text": "주변 5명(동료 2·친구 2·가족 1)에게 물어봐. \"나한테 뭘 물어보고 싶어질 때가 있어? 어떤 주제로?\" 받은 답을 그대로 옮겨줘.", "hint": "자기인식과 타인인식의 갭이 브랜딩의 출발점이야. 이 단계는 혼자 못 해.", "input_type": "matrix", "matrix_fields": ["관계", "받은 답"], "probe": "답변자 간 공통 키워드를 뽑아 보여주고, 예상했던 답인지 묻는다."}, {"id": "ext_02", "category": "external", "step": 2, "order": 2, "text": "같은 사람들에게: \"내가 남들보다 잘한다고 느낀 순간이 있었어? 구체적으로 언제?\"", "hint": "타인이 기억하는 장면은 내가 기억 못 하는 경우가 많아.", "input_type": "matrix", "matrix_fields": ["관계", "받은 답"], "probe": "내가 str_01에서 쓴 강점과 겹치는지 대조해서 보여준다."}, {"id": "ext_03", "category": "external", "step": 2, "order": 3, "text": "같은 사람들에게: \"나를 세 단어로 표현하면?\"", "hint": "빈도수가 높은 단어가 이미 형성된 내 브랜드야.", "input_type": "matrix", "matrix_fields": ["관계", "세 단어"], "probe": "가장 많이 나온 단어와 가장 뜻밖이었던 단어를 짚는다."}, {"id": "ext_04", "category": "external", "step": 2, "order": 4, "text": "받은 답 중 전혀 예상 못 했던 건 뭐야? 어떤 기분이었어?", "hint": "불편한 답일수록 정보량이 커.", "input_type": "text", "probe": "그 인식이 틀렸다고 생각하면, 왜 그렇게 보였을지 원인을 찾게 한다."}, {"id": "id_01", "category": "identity", "step": 3, "order": 1, "text": "직업·소속·학교를 다 빼고 나를 소개해봐.", "hint": "명함이 사라져도 남는 게 진짜 정체성이야.", "input_type": "text", "probe": "추상적 형용사만 있으면 그걸 증명하는 행동 하나씩을 요구한다."}, {"id": "id_02", "category": "identity", "step": 3, "order": 2, "text": "나를 설명하는 문장 3개를 써줘.", "hint": "다음 질문에서 이 문장들을 반박할 거야.", "input_type": "list", "probe": "각 문장의 반례를 사용자가 직접 찾게 한다. 반례가 없으면 너무 두루뭉술한 것."}, {"id": "id_03", "category": "identity", "step": 3, "order": 3, "text": "10년 전의 나와 지금의 나, 가장 크게 바뀐 판단 기준은 뭐야?", "hint": "변화의 방향에 성장 서사가 들어 있어.", "input_type": "text", "probe": "그 변화를 만든 결정적 사건을 특정하게 한다."}, {"id": "id_04", "category": "identity", "step": 3, "order": 4, "text": "사람들이 나를 오해하는 지점이 있어? 어떤 식으로?", "hint": "오해는 브랜딩으로 교정 가능한 영역이야.", "input_type": "text", "probe": "그 오해가 내 어떤 행동에서 비롯됐는지 역추적시킨다."}, {"id": "id_05", "category": "identity", "step": 3, "order": 5, "text": "나에 대해 절대 안 바뀔 것 같은 성질 하나는?", "hint": "브랜드의 축. 여기가 흔들리면 전부 흔들려.", "input_type": "text", "probe": "그게 강점으로도, 약점으로도 작동한 사례를 각각 요구한다."}, {"id": "mot_01", "category": "motivation", "step": 3, "order": 1, "text": "돈이 충분하다면 일을 할까? 한다면 어떤 일?", "hint": "생계를 걷어냈을 때 남는 동기가 진짜 동기야.", "input_type": "text", "probe": "'안 한다'면 대신 뭘 하며 시간을 보낼지 묻고, 그것도 일의 일종인지 따진다."}, {"id": "mot_02", "category": "motivation", "step": 3, "order": 2, "text": "일에서 절대 포기 못 하는 조건 1개, 포기할 수 있는 것 1개.", "hint": "협상 불가 조건이 커리어 필터가 돼.", "input_type": "text", "probe": "포기 못 하는 조건 때문에 실제로 뭔가를 거절한 적이 있는지 묻는다."}, {"id": "mot_03", "category": "motivation", "step": 3, "order": 3, "text": "최근에 일을 그만두거나 옮기고 싶었던 순간과 그 이유는?", "hint": "이탈 충동의 원인이 곧 결핍된 가치야.", "input_type": "text", "probe": "그때 무엇이 채워졌다면 남았을지 구체적으로 특정하게 한다."}, {"id": "mot_04", "category": "motivation", "step": 3, "order": 4, "text": "어떤 칭찬을 들었을 때 가장 기뻤어? 결과? 과정? 태도? 사람됨?", "hint": "기쁨의 종류가 내가 인정받고 싶은 정체성이야.", "input_type": "choice_text", "options": ["결과·성과", "과정·방법", "태도·성실함", "사람됨·인간미", "기타"], "probe": "반대로 별로 안 기뻤던 칭찬도 물어서 대비시킨다."}, {"id": "mot_05", "category": "motivation", "step": 3, "order": 5, "text": "일을 그만두는 날, 사람들이 나를 뭐라고 기억했으면 좋겠어?", "hint": "이 답이 포지셔닝 문장의 방향을 결정해.", "input_type": "text", "probe": "그렇게 기억되려면 지금 뭘 하고 있어야 하는지 역산시킨다."}, {"id": "val_01", "category": "values", "step": 3, "order": 1, "text": "인생 방향이 바뀐 사건 3개와, 그때 무엇을 기준으로 선택했는지 적어줘.", "hint": "반복되는 판단 기준 = 핵심 가치. '성장' 같은 사전적 단어 말고 실제 선택으로.", "input_type": "matrix", "matrix_fields": ["사건", "판단 기준"], "probe": "세 사건의 판단 기준에서 공통 축을 찾아 제시하고 동의 여부를 묻는다."}, {"id": "val_02", "category": "values", "step": 3, "order": 2, "text": "최근 큰 결정 하나. 무엇을 포기하고 무엇을 택했어?", "hint": "가치는 선언이 아니라 트레이드오프에서 드러나.", "input_type": "text", "probe": "포기한 것을 다시 택할 상황이 오면 같은 선택을 할지 묻는다."}, {"id": "val_03", "category": "values", "step": 3, "order": 3, "text": "도저히 못 참는 사람 유형은? 왜 그게 나를 건드려?", "hint": "혐오의 대상은 내 가치의 반대편이야.", "input_type": "text", "probe": "내가 그 유형처럼 행동한 적은 없는지 되묻는다."}, {"id": "val_04", "category": "values", "step": 3, "order": 4, "text": "손해를 보면서도 지킨 원칙이 있어? 어떤 상황이었어?", "hint": "비용을 치른 원칙만 진짜 원칙이야.", "input_type": "text", "probe": "그 손해의 크기를 구체화하고, 후회했는지 묻는다."}, {"id": "val_05", "category": "values", "step": 3, "order": 5, "text": "다들 당연하다는데 나는 동의 안 되는 게 있어?", "hint": "관점의 차이가 콘텐츠의 차별점이 돼.", "input_type": "text", "probe": "그 반대 의견을 실제로 말해본 적이 있는지, 반응은 어땠는지 묻는다."}];
-
-const BRANDING_ARCHETYPES = ["돌보는자","통치자","순수한자","탐험가","현자","반항아","영웅","마법사","창조자","광대","평범한사람","연인"];
 
 const seedApplications = [
   { id: "ap_1", company: "A 리테일 기업", position: "MD (상품기획)", deadline: "2026-08-03", status: "writing", priority: "high",
@@ -526,7 +519,7 @@ function useIsMobile(breakpoint = 820) {
   return isMobile;
 }
 
-/* ============================================================ 퍼스널 브랜딩 — Supabase 연결 ============================================================ */
+/* ============================================================ 클라우드 동기화 (Supabase) ============================================================ */
 // 동적 import: Claude.ai 아티팩트 미리보기 등 @supabase/supabase-js가 없는 환경에서도
 // 나머지 Career OS 기능이 깨지지 않도록 방어. 배포된 사이트(Vercel + 환경변수)에서만 실제로 연결된다.
 let _cloudSupabasePromise = null;
@@ -633,131 +626,6 @@ async function reconcileOnLogin(supabase, user) {
   return { diffs };
 }
 
-/* ---------- 브랜딩 데이터 CRUD (Supabase) ---------- */
-async function baGetOrCreateAnswer(supabase, userId, question) {
-  const { data: existing, error: selErr } = await supabase.from("branding_answers")
-    .select("*").eq("user_id", userId).eq("question_id", question.id).maybeSingle();
-  if (selErr) throw selErr;
-  if (existing) return existing;
-  const { data, error } = await supabase.from("branding_answers")
-    .insert({ user_id: userId, question_id: question.id, category: question.category, step: question.step })
-    .select().single();
-  if (error) throw error;
-  return data;
-}
-async function baSetAnswerStatus(supabase, answerId, status) {
-  const { error } = await supabase.from("branding_answers").update({ status }).eq("id", answerId);
-  if (error) throw error;
-}
-async function baListEntries(supabase, answerId) {
-  const { data, error } = await supabase.from("branding_answer_entries")
-    .select("*, branding_followups(*)").eq("answer_id", answerId).order("seq");
-  if (error) throw error;
-  return (data || []).map(e => ({ ...e, branding_followups: (e.branding_followups || []).sort((a, b) => a.depth - b.depth) }));
-}
-async function baNextSeq(supabase, answerId) {
-  const { data, error } = await supabase.from("branding_answer_entries")
-    .select("seq").eq("answer_id", answerId).order("seq", { ascending: false }).limit(1);
-  if (error) throw error;
-  return (data?.[0]?.seq || 0) + 1;
-}
-async function baAddEntry(supabase, userId, answerId, { label, content }) {
-  const seq = await baNextSeq(supabase, answerId);
-  const { data, error } = await supabase.from("branding_answer_entries")
-    .insert({ user_id: userId, answer_id: answerId, seq, label: label || null, content, state: "active" })
-    .select().single();
-  if (error) throw error;
-  return data;
-}
-async function baUpdateEntry(supabase, entryId, patch) {
-  const { data, error } = await supabase.from("branding_answer_entries").update(patch).eq("id", entryId).select().single();
-  if (error) throw error;
-  return data; // stale 처리는 DB 트리거(mark_items_stale)가 자동 수행
-}
-async function baAddFollowup(supabase, userId, entryId, { depth, origin, probeType, question }) {
-  const { data, error } = await supabase.from("branding_followups")
-    .insert({ user_id: userId, entry_id: entryId, depth, origin: origin || "ai", probe_type: probeType || null, question })
-    .select().single();
-  if (error) throw error;
-  return data;
-}
-async function baPatchFollowup(supabase, followupId, patch) {
-  const { data, error } = await supabase.from("branding_followups").update(patch).eq("id", followupId).select().single();
-  if (error) throw error;
-  return data;
-}
-async function baInsertProfileItems(supabase, userId, items, sourceEntryId) {
-  const rows = (items || []).filter(it => !it.merge_into).map(it => ({
-    user_id: userId, type: it.type, content: it.content, confidence: it.confidence || "medium",
-    evidence: it.evidence || null, source_entry_ids: [sourceEntryId], status: "제안", origin: "ai",
-  }));
-  if (rows.length === 0) return [];
-  const { data, error } = await supabase.from("branding_profile_items").insert(rows).select();
-  if (error) throw error;
-  return data;
-}
-async function baInsertConsolidatedItems(supabase, userId, constants, entries) {
-  const seqToId = Object.fromEntries(entries.map(e => [e.seq, e.id]));
-  const rows = (constants || []).map(c => ({
-    user_id: userId, type: "pattern", content: c.content, confidence: "high",
-    evidence: null, source_entry_ids: (c.seqs || []).map(s => seqToId[s]).filter(Boolean),
-    status: "제안", origin: "consolidate",
-  }));
-  if (rows.length === 0) return [];
-  const { data, error } = await supabase.from("branding_profile_items").insert(rows).select();
-  if (error) throw error;
-  return data;
-}
-async function baListProfileItems(supabase, userId) {
-  const { data, error } = await supabase.from("branding_profile_items")
-    .select("*").eq("user_id", userId).order("created_at", { ascending: false });
-  if (error) throw error;
-  return data;
-}
-async function baUpdateProfileItem(supabase, itemId, patch) {
-  const { data, error } = await supabase.from("branding_profile_items").update(patch).eq("id", itemId).select().single();
-  if (error) throw error;
-  return data;
-}
-async function baAddManualProfileItem(supabase, userId, { type, content }) {
-  const { data, error } = await supabase.from("branding_profile_items")
-    .insert({ user_id: userId, type, content, status: "제안", origin: "user", confidence: "medium" })
-    .select().single();
-  if (error) throw error;
-  return data;
-}
-async function baListAnswersWithEntries(supabase, userId) {
-  const { data, error } = await supabase.from("branding_answers")
-    .select("*, branding_answer_entries(id, state)").eq("user_id", userId);
-  if (error) throw error;
-  return data || [];
-}
-async function baSaveOutput(supabase, userId, output) {
-  await supabase.from("branding_outputs").update({ is_current: false }).eq("user_id", userId).eq("is_current", true);
-  const { data: last } = await supabase.from("branding_outputs")
-    .select("version").eq("user_id", userId).order("version", { ascending: false }).limit(1);
-  const version = (last?.[0]?.version || 0) + 1;
-  const { data, error } = await supabase.from("branding_outputs")
-    .insert({ user_id: userId, version, is_current: true, ...output }).select().single();
-  if (error) throw error;
-  return data;
-}
-async function baGetCurrentOutput(supabase, userId) {
-  const { data } = await supabase.from("branding_outputs").select("*").eq("user_id", userId).eq("is_current", true).maybeSingle();
-  return data;
-}
-async function baCallAI(endpoint, body) {
-  const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  let data;
-  try { data = await res.json(); }
-  catch { throw new Error(`서버 응답을 읽지 못했습니다 (HTTP ${res.status})`); }
-  if (!res.ok) {
-    throw new Error(data?.error?.message || (typeof data?.error === "string" ? data.error : null) || `API 오류 (HTTP ${res.status})`);
-  }
-  const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-  if (!text) throw new Error("응답에 내용이 없습니다.");
-  return JSON.parse(text.replace(/```json|```/g, "").trim());
-}
 
 function usePersisted(key, initialValue) {
   const [state, setState] = useState(() => {
@@ -990,7 +858,7 @@ function App() {
   const TOP_NAV = [
     { key: "home", label: "홈", nav: "home" },
     { key: "myexp", label: "내 경험", subTabs: [["archive", "경험 보관함"], ["timeline", "타임라인"], ["skills", "역량·스킬"]] },
-    { key: "prep", label: "지원 준비", subTabs: [["apply", "지원 관리"], ["master", "자소서·면접 준비"], ["resume", "기본 이력서"], ["branding", "퍼스널 브랜딩"]] },
+    { key: "prep", label: "지원 준비", subTabs: [["apply", "지원 관리"], ["master", "자소서·면접 준비"], ["resume", "기본 이력서"]] },
   ];
   const activeTop = TOP_NAV.find(t => t.key === nav || (t.subTabs && t.subTabs.some(([k]) => k === nav))) || TOP_NAV[0];
   const isMobile = useIsMobile();
@@ -1011,9 +879,11 @@ function App() {
       <CHeader position="sticky" className="mb-0" style={{ zIndex: 20 }}>
         <CContainer fluid className="d-flex justify-content-between align-items-center flex-wrap" style={{ gap: 10 }}>
           <div className="d-flex align-items-center flex-wrap" style={{ gap: 10 }}>
+            {/* 마크는 22px 까지 헤더 높이를 늘리지 않는다 — 브랜드 줄 상자가 이미 30px 라
+                그 안에 들어간다. 32px 부터 헤더가 커진다. */}
             <CHeaderBrand className="d-flex align-items-center" style={{ gap: 8, fontWeight: 800 }}>
-              <span style={{ width: 8, height: 8, borderRadius: "var(--r-xs)", background: C.primary, display: "inline-block" }} />
-              Career OS
+              <BrandMark size={22} />
+              <BrandWordmark size="inherit" />
             </CHeaderBrand>
             <span className="text-body-secondary">/</span>
             <span className="text-body-secondary fw-semibold">{activeTop.label}</span>
@@ -1095,7 +965,6 @@ function App() {
         {nav === "timeline" && <Timeline experiences={experiences} setExperiences={setExperiences} activities={timelineActivities} setActivities={setTimelineActivities} addTrash={addTrash} onOpenExp={openDetail} onAnalyze={openAnalyze} onGoArchive={() => go("archive")} />}
         {nav === "import" && <ImportFlow setExperiences={setExperiences} setSkills={setSkills} setCerts={setCerts} setResumeProfile={setResumeProfile} onDone={openDetail} experiences={experiences} />}
         {nav === "skills" && <Skills skills={skills} setSkills={setSkills} experiences={experiences} onOpenExp={openDetail} addTrash={addTrash} />}
-        {nav === "branding" && <BrandingHub />}
         {nav === "apply" && !appDetailId && <Applications applications={applications} setApplications={setApplications} onOpen={setAppDetailId} addTrash={addTrash} />}
         {nav === "apply" && appDetailId && <ApplicationDetail app={applications.find(a => a.id === appDetailId)} setApplications={setApplications} experiences={experiences} outputs={outputs} metrics={metrics} onBack={() => setAppDetailId(null)} onOpenExp={openDetail} addTrash={addTrash} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
         {nav === "master" && <MasterPrep essays={masterEssays} setEssays={setMasterEssays} interviews={masterInterviews} setInterviews={setMasterInterviews} experiences={experiences} metrics={metrics} resumeProfile={resumeProfile} interviewCategories={interviewCategories} addInterviewCategory={addInterviewCategory} />}
@@ -1243,7 +1112,10 @@ function Landing({ onStart, onGoogle }) {
     <div className="min-h-screen" style={{ fontFamily: font, background: C.bg, color: C.text }}>
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "60px var(--sp-7) 80px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: "var(--fs-md)", fontWeight: 800, letterSpacing: "-.01em", marginBottom: 18, color: C.primary }}>Career OS</div>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 18 }}>
+            <BrandMark size={44} />
+            <BrandWordmark size="var(--fs-xl)" />
+          </div>
           <h1 style={{ fontSize: "var(--fs-5xl)", fontWeight: 800, margin: "0 0 14px", lineHeight: 1.35 }}>
             흩어진 경험을, 이력서·자소서로 바로 쓸 수 있게
           </h1>
@@ -1316,6 +1188,56 @@ export default function Root() {
 }
 
 /* ============================================================ 홈 */
+/* ============================================================ 브랜드 마크 · 워드마크 */
+/* 아래 Icon 세트(선 스타일)와 성격이 달라 분리했다. 로고는 채움(fill) 기하다.
+   원본 PNG(660x660)에서 각 레이어의 바운딩박스를 재서 좌표를 역산했고,
+   렌더 결과를 원본과 대조해 1~2px 이내로 맞췄다.
+
+   기하: 가로:세로 = 1:0.546 인 둥근 마름모 하나를 세로로 균일하게 3단 배치.
+   45도 회전한 정사각형에 rx 를 주면 모서리가 둥근 마름모가 되는데, 둥근
+   모서리가 회전 후 꼭짓점을 안쪽으로 당기므로 정사각형 크기를 보정했다
+   (유효반지름 = (H - rx)*sqrt(2) + rx).
+
+   레이어 사이 간격은 흰 사각형이 아니라 mask 로 파낸다. 흰색으로 두면
+   다크 배경에서 흰 줄이 드러난다. mask 를 쓰면 간격이 투명해진다. */
+const BrandMark = ({ size = 20, title }) => {
+  // 같은 화면에 마크가 둘 이상 있어도 mask id 가 겹치지 않게 한다
+  const uid = useId().replace(/:/g, "");
+  const cell = (cy) => (
+    <g transform={`translate(24.22 ${cy}) scale(1 0.546) rotate(45)`}>
+      <rect x="-15.03" y="-15.03" width="30.05" height="30.05" rx="4.51" />
+    </g>
+  );
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none"
+      role={title ? "img" : undefined} aria-hidden={title ? undefined : true}
+      style={{ display: "block", flexShrink: 0 }}>
+      {title && <title>{title}</title>}
+      <defs>
+        <mask id={`bm-a-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+          <rect width="48" height="48" fill="#fff" /><g fill="#000">{cell(18.18)}</g>
+        </mask>
+        <mask id={`bm-b-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+          <rect width="48" height="48" fill="#fff" /><g fill="#000">{cell(27.76)}</g>
+        </mask>
+      </defs>
+      <g fill="var(--brand-navy)"  mask={`url(#bm-b-${uid})`}>{cell(34.73)}</g>
+      <g fill="var(--brand-blue)"  mask={`url(#bm-a-${uid})`}>{cell(25.15)}</g>
+      <g fill="var(--brand-green)">{cell(15.56)}</g>
+    </svg>
+  );
+};
+
+/* 워드마크를 이미지가 아니라 실제 텍스트로 재현한다.
+   확대·검색·스크린리더에 그대로 대응되고, 24px 높이에 수백 KB PNG 를
+   넣지 않아도 된다. 색은 로고 원본에서 추출한 값. */
+const BrandWordmark = ({ size = "var(--fs-lg)" }) => (
+  <span style={{ fontSize: size, fontWeight: 800, letterSpacing: "-.02em", whiteSpace: "nowrap" }}>
+    <span style={{ color: "var(--brand-ink)" }}>Career</span>
+    <span style={{ color: "var(--brand-leaf)" }}> OS</span>
+  </span>
+);
+
 /* ============================================================ 아이콘 (선 스타일, 와이어프레임 톤) */
 const Icon = ({ name, size = 22, color = "currentColor" }) => {
   const s = { stroke: color, strokeWidth: 1.6, fill: "none", strokeLinecap: "round", strokeLinejoin: "round" };
@@ -1855,8 +1777,8 @@ function HomeOnboarding({ onGoAnalyze, onGoImport, onLoadDemo, onGoGuide }) {
   return (
     <div style={{ maxWidth: 560, margin: "40px auto 0" }}>
       <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14, color: C.primary }}>
-          <Icon name="sparkle" size={34} />
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+          <BrandMark size={40} />
         </div>
         <h1 style={{ fontSize: "var(--fs-3xl)", fontWeight: 800, margin: "0 0 8px" }}>Career OS에 오신 걸 환영합니다</h1>
         <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.6 }}>
@@ -1943,7 +1865,10 @@ function Home({ experiences, applications, onGoAnalyze, onGoImport, onOpenDetail
         <Card>
           <Label>경험 준비 현황</Label>
           <div style={{ display: "flex", gap: 22, marginTop: 8 }}>
-            {[["전체", total, C.text], ["분석 완료", done, C.green], ["보완 필요", needs, C.orange], ["초기 메모", draft, C.sub]].map(([l, v, c]) => (
+            {/* 이 숫자들은 24px/800 로 렌더되는 "텍스트"다. 채움용 C.green / C.orange 를
+                 그대로 쓰면 각각 2.32:1 / 1.85:1 로 큰 텍스트 기준 3:1 에도 못 미친다.
+                 텍스트용 변형을 쓴다. */}
+            {[["전체", total, C.text], ["분석 완료", done, C.greenText], ["보완 필요", needs, C.orangeText], ["초기 메모", draft, C.sub]].map(([l, v, c]) => (
               <div key={l}>
                 <div style={{ fontSize: "var(--fs-4xl)", fontWeight: 800, color: c }}>{v}</div>
                 <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>{l}</div>
@@ -4448,950 +4373,6 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
           })}
           <Btn small onClick={addIq}>+ 질문 추가</Btn>
         </div>
-      )}
-    </div>
-  );
-}
-
-/* ============================================================ 퍼스널 브랜딩 — UI ============================================================ */
-/* ---------- 브랜딩 오프라인 모드 (클라우드 연결 안 될 때 로컬에만 답변 저장) ---------- */
-function loadOfflineAnswers() {
-  try { return JSON.parse(window.localStorage.getItem(STORAGE_PREFIX + "branding_offline") || "{}"); }
-  catch { return {}; }
-}
-function saveOfflineAnswers(data) {
-  try { window.localStorage.setItem(STORAGE_PREFIX + "branding_offline", JSON.stringify(data)); } catch (e) { /* ignore */ }
-}
-function clearOfflineAnswers() {
-  try { window.localStorage.removeItem(STORAGE_PREFIX + "branding_offline"); } catch (e) { /* ignore */ }
-}
-
-function CloudDiagnostics() {
-  const [checks, setChecks] = useState(null);
-  const [running, setRunning] = useState(false);
-
-  const run = async () => {
-    setRunning(true);
-    const results = [];
-
-    let url, anonKey;
-    try {
-      url = typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_URL : undefined;
-      anonKey = typeof import.meta !== "undefined" ? import.meta.env?.VITE_SUPABASE_ANON_KEY : undefined;
-    } catch { /* ignore */ }
-    results.push({
-      label: "Supabase 환경변수",
-      ok: !!(url && anonKey),
-      detail: url && anonKey ? `${url}` : "VITE_SUPABASE_URL 또는 VITE_SUPABASE_ANON_KEY가 비어있습니다.",
-      hint: !(url && anonKey) ? "Vercel 프로젝트 → Settings → Environment Variables 확인 후 Redeploy 하세요." : null,
-    });
-
-    const supabase = await getCloudClient();
-    results.push({ label: "Supabase 클라이언트 생성", ok: !!supabase, detail: supabase ? "정상" : "클라이언트를 만들지 못했습니다 (환경변수 또는 라이브러리 문제)." });
-
-    if (supabase) {
-      resetCloudAuth();
-      const { user, error } = await ensureCloudAuth(supabase);
-      results.push({
-        label: "로그인 상태",
-        ok: !error,
-        detail: user ? `로그인됨 (${user.email || user.id.slice(0, 8) + "…"})` : (error || "로그인되어 있지 않습니다 (정상 — Google 로그인을 하면 클라우드에 저장됩니다)"),
-        hint: (!user && error) ? 'Supabase 대시보드 → Authentication → Sign In / Providers → "Google"이 꺼져있거나 Client ID/Secret이 잘못 설정됐을 수 있습니다.' : null,
-      });
-
-      if (user) {
-        try {
-          const { error: qErr } = await supabase.from("career_os_state").select("key").eq("user_id", user.id).limit(1);
-          results.push({
-            label: "데이터베이스 접근 (core_os_state)", ok: !qErr, detail: qErr ? qErr.message : "정상",
-            hint: qErr ? "supabase/core-state-schema.sql을 SQL Editor에서 실행했는지 확인하세요." : null,
-          });
-        } catch (e) {
-          results.push({ label: "데이터베이스 접근", ok: false, detail: e.message, hint: "SQL 스키마가 적용되지 않았을 수 있습니다." });
-        }
-      }
-    }
-
-    try {
-      const res = await fetch("/api/health");
-      const data = await res.json();
-      results.push({
-        label: "서버 AI 키 등록 상태", ok: data.anthropic || data.openai || data.gemini,
-        detail: `Anthropic ${data.anthropic ? "✓" : "✗"} · OpenAI ${data.openai ? "✓" : "✗"} · Gemini ${data.gemini ? "✓" : "✗"}`,
-        hint: (!data.anthropic && !data.openai && !data.gemini) ? "Vercel 환경변수에 ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY 중 최소 하나를 등록하세요." : null,
-      });
-    } catch (e) {
-      results.push({ label: "서버 연결 (/api/health)", ok: false, detail: "응답 없음 — 로컬 미리보기 등 서버리스 함수가 없는 환경일 수 있습니다.", hint: null });
-    }
-
-    setChecks(results); setRunning(false);
-  };
-
-  useEffect(() => { run(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, []);
-
-  return (
-    <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <Label>연결 상태 진단</Label>
-        <Btn small onClick={run} disabled={running}>{running ? "확인 중…" : "다시 확인"}</Btn>
-      </div>
-      {!checks ? <div style={{ fontSize: "var(--fs-base)", color: C.faintText }}>확인 중…</div> : (
-        <div style={{ display: "grid", gap: 10 }}>
-          {checks.map((c, i) => (
-            <div key={i} style={{ fontSize: "var(--fs-sm)" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "var(--r-full)", background: c.ok ? C.green : C.red, flexShrink: 0 }} />
-                <span style={{ fontWeight: 700 }}>{c.label}</span>
-              </div>
-              <div style={{ color: C.sub, marginLeft: 14, wordBreak: "break-all" }}>{c.detail}</div>
-              {c.hint && <div style={{ color: C.redText, marginLeft: 14, marginTop: 2 }}><CIcon icon={cilLightbulb} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{c.hint}</div>}
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
-
-function BrandingOfflineWorkbook({ onRetryConnect, authError }) {
-  const [idx, setIdx] = useState(0);
-  const question = BRANDING_FLAT_QUESTIONS[idx];
-  const [store, setStore] = useState(loadOfflineAnswers);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [label, setLabel] = useState("");
-  const [content, setContent] = useState("");
-
-  const entries = store[question.id] || [];
-  const totalOffline = Object.values(store).reduce((s, arr) => s + arr.length, 0);
-
-  const addEntry = () => {
-    if (!content.trim()) return;
-    const next = { ...store, [question.id]: [...entries, { id: "off_" + Date.now(), label, content, createdAt: new Date().toISOString() }] };
-    setStore(next); saveOfflineAnswers(next);
-    setContent(""); setLabel(""); setComposerOpen(false);
-  };
-  const removeEntry = (id) => {
-    const next = { ...store, [question.id]: entries.filter(e => e.id !== id) };
-    setStore(next); saveOfflineAnswers(next);
-  };
-
-  return (
-    <div style={{ maxWidth: 820 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-        <H2>퍼스널 브랜딩 (오프라인 모드)</H2>
-        <Btn small onClick={onRetryConnect}>연결 다시 시도</Btn>
-      </div>
-      <Card style={{ marginBottom: 16, background: C.accent }}>
-        <div style={{ fontSize: "var(--fs-sm)", color: C.sub, lineHeight: 1.6 }}>
-          클라우드에 연결되지 않아 AI 꼬리질문·프로필 추출 없이 <b>답변만</b> 저장됩니다. 답변은 이 브라우저에 안전하게 남고, 연결되면 자동으로 업로드를 제안합니다.
-          {authError && <div style={{ marginTop: 6, fontFamily: "monospace", color: C.redText, fontSize: "var(--fs-xs)" }}>마지막 오류: {authError}</div>}
-        </div>
-        {totalOffline > 0 && <div style={{ marginTop: 8, fontSize: "var(--fs-sm)", fontWeight: 700 }}>오프라인 저장된 답변 {totalOffline}개</div>}
-      </Card>
-
-      <div style={{ fontSize: "var(--fs-sm)", color: C.faintText, marginBottom: 6 }}>{idx + 1}/{BRANDING_FLAT_QUESTIONS.length}</div>
-      <div style={{ fontSize: "var(--fs-lg)", fontWeight: 700, marginBottom: 8, lineHeight: 1.5 }}>{question.text}</div>
-      {question.hint && <div style={{ fontSize: "var(--fs-sm)", color: C.sub, background: C.accent, padding: "var(--sp-3) var(--sp-5)", borderRadius: "var(--r-md)", marginBottom: 16 }}><CIcon icon={cilLightbulb} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{question.hint}</div>}
-
-      {entries.map(e => (
-        <Card key={e.id} style={{ marginBottom: 10 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>{(e.createdAt || "").slice(0, 10)}{e.label ? ` · "${e.label}"` : ""}</div>
-            <span {...clickableProps(() => removeEntry(e.id))} style={{ fontSize: "var(--fs-xs)", color: C.faintText, cursor: "pointer", textDecoration: "underline" }}>삭제</span>
-          </div>
-          <div style={{ fontSize: "var(--fs-base)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{e.content}</div>
-        </Card>
-      ))}
-
-      {composerOpen ? (
-        <Card style={{ marginBottom: 12 }}>
-          <Input placeholder="라벨 (선택)" value={label} onChange={e => setLabel(e.target.value)} style={{ marginBottom: 8 }} />
-          <Textarea placeholder="답변을 적어주세요" value={content} onChange={e => setContent(e.target.value)} rows={5} />
-          <div style={{ display: "flex", gap: 8, marginTop: 8 }} className="wrap-sm">
-            <Btn small primary disabled={!content.trim()} onClick={addEntry}>저장</Btn>
-            <Btn small onClick={() => setComposerOpen(false)}>취소</Btn>
-          </div>
-        </Card>
-      ) : (
-        <Btn small onClick={() => setComposerOpen(true)}>+ 답변 추가</Btn>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }} className="wrap-sm">
-        <Btn onClick={() => setIdx(i => Math.max(i - 1, 0))} disabled={idx === 0}>← 이전</Btn>
-        <Btn primary onClick={() => setIdx(i => Math.min(i + 1, BRANDING_FLAT_QUESTIONS.length - 1))} disabled={idx >= BRANDING_FLAT_QUESTIONS.length - 1}>다음 →</Btn>
-      </div>
-    </div>
-  );
-}
-
-function BrandingSetupNotice() {
-  return (
-    <div style={{ maxWidth: 640 }}>
-      <H2>퍼스널 브랜딩</H2>
-      <Card>
-        <Label>설정이 필요합니다</Label>
-        <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.7 }}>
-          이 탭은 Supabase(별도 데이터베이스)를 사용합니다. 나머지 Career OS 기능과 달리, 답변이 쌓일수록 AI가 참고할 자료가 많아지기 때문에 브라우저 저장소보다 정식 DB가 필요해서입니다.
-          <br /><br />
-          <b>설정 방법 (5분)</b>
-          <ol style={{ margin: "8px 0 0", paddingLeft: 18 }}>
-            <li><a href="https://supabase.com" target="_blank" rel="noreferrer">supabase.com</a>에서 무료 계정 생성 → New Project</li>
-            <li>프로젝트 생성 후 SQL Editor에서 <code>supabase/branding-schema.sql</code> 파일 내용을 통째로 붙여넣고 실행</li>
-            <li>Project Settings → API 에서 Project URL, anon public key 확인</li>
-            <li>배포 환경(Vercel 등)에 환경변수 등록: <code>VITE_SUPABASE_URL</code>, <code>VITE_SUPABASE_ANON_KEY</code></li>
-            <li>재배포 후 이 탭 다시 열기</li>
-          </ol>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function BrandingHub() {
-  const [supabase, setSupabase] = useState(undefined); // undefined=로딩중, null=미설정
-  const [user, setUser] = useState(null);
-  const [authError, setAuthError] = useState(null);
-  const [connecting, setConnecting] = useState(true);
-  const [offlineMode, setOfflineMode] = useState(false);
-  const [tab, setTab] = useState("home");
-  const [profileItems, setProfileItems] = useState([]);
-  const [answersProgress, setAnswersProgress] = useState([]);
-  const [jumpTo, setJumpTo] = useState(null); // 프로필에서 워크북으로 점프할 질문 id
-  const [showDiag, setShowDiag] = useState(false);
-
-  const connect = async () => {
-    setConnecting(true); setAuthError(null);
-    resetCloudAuth();
-    const sb = await getCloudClient();
-    setSupabase(sb);
-    if (sb) {
-      const { user: u, error } = await ensureCloudAuth(sb);
-      setUser(u);
-      if (error) setAuthError(error);
-    }
-    setConnecting(false);
-  };
-
-  useEffect(() => { connect(); /* eslint-disable-line react-hooks/exhaustive-deps */ }, []);
-
-  const refreshProfile = async () => {
-    if (!supabase || !user) return;
-    try { setProfileItems(await baListProfileItems(supabase, user.id)); } catch (e) { console.error(e); }
-  };
-  const refreshProgress = async () => {
-    if (!supabase || !user) return;
-    try { setAnswersProgress(await baListAnswersWithEntries(supabase, user.id)); } catch (e) { console.error(e); }
-  };
-  useEffect(() => { if (supabase && user) { refreshProfile(); refreshProgress(); } }, [supabase, user]);
-
-  const [offlineCount, setOfflineCount] = useState(0);
-  const [syncingOffline, setSyncingOffline] = useState(false);
-  useEffect(() => {
-    if (supabase && user) {
-      const store = loadOfflineAnswers();
-      setOfflineCount(Object.values(store).reduce((s, arr) => s + arr.length, 0));
-    }
-  }, [supabase, user]);
-
-  const syncOfflineToCloud = async () => {
-    setSyncingOffline(true);
-    try {
-      const store = loadOfflineAnswers();
-      for (const [questionId, entries] of Object.entries(store)) {
-        const question = BRANDING_FLAT_QUESTIONS.find(q => q.id === questionId);
-        if (!question || entries.length === 0) continue;
-        const answer = await baGetOrCreateAnswer(supabase, user.id, question);
-        for (const e of entries) {
-          await baAddEntry(supabase, user.id, answer.id, { label: e.label, content: e.content });
-        }
-      }
-      clearOfflineAnswers();
-      setOfflineCount(0);
-      refreshProgress();
-      toast("오프라인 답변을 클라우드에 업로드했습니다. 워크북에서 열면 AI 꼬리질문과 프로필 추출이 다시 진행됩니다.");
-    } catch (e) {
-      toast("동기화에 실패했습니다. " + (e.message || String(e)), "error");
-    } finally {
-      setSyncingOffline(false);
-    }
-  };
-
-  if (supabase === undefined || connecting) return <div style={{ fontSize: "var(--fs-base)", color: C.sub }}>불러오는 중…</div>;
-  if (supabase === null) return <BrandingSetupNotice />;
-
-  if (!user && !offlineMode) {
-    return (
-      <div style={{ maxWidth: 640 }}>
-        <H2>퍼스널 브랜딩</H2>
-        <Card style={{ marginBottom: 12 }}>
-          <Label>Google 로그인이 필요합니다</Label>
-          <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.7, marginBottom: 12 }}>
-            브랜딩 탭은 클라우드 DB에 저장돼서, 답변이 쌓이면 Google 계정으로 로그인해야 이어서 쓸 수 있습니다.
-          </div>
-          {authError && (
-            <div style={{ fontSize: "var(--fs-sm)", color: C.redText, background: C.redBg, padding: "var(--sp-4) var(--sp-5)", borderRadius: "var(--r-md)", marginBottom: 12, fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
-              {authError}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
-            <Btn small primary onClick={() => signInWithGoogle(supabase)}>Google로 로그인</Btn>
-            <Btn small onClick={() => setOfflineMode(true)}>로그인 없이 계속하기</Btn>
-          </div>
-        </Card>
-        <CloudDiagnostics />
-      </div>
-    );
-  }
-
-  if (offlineMode && !user) {
-    return <BrandingOfflineWorkbook onGoOnline={() => setOfflineMode(false)} onRetryConnect={connect} authError={authError} />;
-  }
-
-  const tabs = [["home", "홈"], ["workbook", "워크북"], ["profile", "프로필"], ["result", "결과"]];
-
-  return (
-    <div style={{ maxWidth: 820 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-        <H2>퍼스널 브랜딩</H2>
-        <span {...clickableProps(() => setShowDiag(p => !p))} style={{ fontSize: "var(--fs-xs)", color: C.faintText, cursor: "pointer", textDecoration: "underline" }}>
-          {showDiag ? "연결 상태 닫기" : "연결 상태 확인"}
-        </span>
-      </div>
-      {showDiag && <div style={{ marginBottom: 16 }}><CloudDiagnostics /></div>}
-      {offlineCount > 0 && (
-        <Card style={{ marginBottom: 16, background: C.accent, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ fontSize: "var(--fs-sm)" }}>오프라인 상태에서 저장한 답변 {offlineCount}개가 있습니다.</span>
-          <Btn small primary disabled={syncingOffline} onClick={syncOfflineToCloud}>{syncingOffline ? "업로드 중…" : "클라우드로 업로드"}</Btn>
-        </Card>
-      )}
-      <div style={{ fontSize: "var(--fs-base)", color: C.sub, marginBottom: 16 }}>
-        질문에 답하면 AI가 꼬리질문으로 더 캐묻고, 답변에서 프로필 항목을 뽑아 누적합니다. 충분히 쌓이면 나만의 포지셔닝·슬로건을 만듭니다.
-      </div>
-      <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 18 }}>
-        {tabs.map(([k, l]) => (
-          <div key={k} {...clickableProps(() => setTab(k))} style={{ padding: "var(--sp-3) var(--sp-5)", fontSize: "var(--fs-base)", fontWeight: tab === k ? 700 : 500, cursor: "pointer",
-            color: tab === k ? C.text : C.sub, borderBottom: tab === k ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>{l}</div>
-        ))}
-      </div>
-
-      {tab === "home" && (
-        <BrandingHome progress={answersProgress} profileItems={profileItems}
-          onGoWorkbook={(qid) => { setJumpTo(qid || null); setTab("workbook"); }} onGoResult={() => setTab("result")} />
-      )}
-      {tab === "workbook" && (
-        <BrandingWorkbook supabase={supabase} userId={user.id} jumpTo={jumpTo} onConsumedJump={() => setJumpTo(null)} profileItems={profileItems}
-          onProfileChange={refreshProfile} onProgressChange={refreshProgress} />
-      )}
-      {tab === "profile" && (
-        <BrandingProfile items={profileItems} onChangeItem={async (id, patch) => { await baUpdateProfileItem(supabase, id, patch); refreshProfile(); }}
-          onAddManual={async (type, content) => { await baAddManualProfileItem(supabase, user.id, { type, content }); refreshProfile(); }}
-          onJumpToSource={(qid) => { setJumpTo(qid); setTab("workbook"); }} />
-      )}
-      {tab === "result" && (
-        <BrandingResult supabase={supabase} userId={user.id} profileItems={profileItems} />
-      )}
-    </div>
-  );
-}
-
-function BrandingHome({ progress, profileItems, onGoWorkbook, onGoResult }) {
-  const totalQuestions = BRANDING_QUESTIONS.length;
-  const answeredIds = new Set(progress.filter(a => (a.branding_answer_entries || []).some(e => e.state === "active")).map(a => a.question_id));
-  const answeredCount = answeredIds.size;
-  const staleItems = profileItems.filter(i => i.stale && i.status !== "기각");
-  const confirmed = profileItems.filter(i => i.status === "확정" && !i.stale);
-  const proposed = profileItems.filter(i => i.status === "제안");
-
-  const byStep = BRANDING_STEPS.map(step => {
-    const qs = BRANDING_QUESTIONS.filter(q => q.step === step.id);
-    const done = qs.filter(q => answeredIds.has(q.id)).length;
-    return { ...step, total: qs.length, done };
-  });
-
-  const nextQuestion = BRANDING_QUESTIONS.find(q => !answeredIds.has(q.id));
-
-  return (
-    <div>
-      {staleItems.length > 0 && (
-        <Card style={{ marginBottom: 14, background: C.accent }}>
-          <div style={{ fontSize: "var(--fs-base)", fontWeight: 700, marginBottom: 4 }}><CIcon icon={cilWarning} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />출처가 바뀐 항목 {staleItems.length}개</div>
-          <div style={{ fontSize: "var(--fs-sm)", color: C.sub }}>답변을 수정하거나 보관 처리해서, 이 항목들의 근거가 예전과 달라졌습니다. 프로필 탭에서 다시 확인해주세요.</div>
-        </Card>
-      )}
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }} className="stack-sm">
-        <Card>
-          <Label>진행도</Label>
-          <div style={{ fontSize: "var(--fs-3xl)", fontWeight: 800 }}>{answeredCount} / {totalQuestions}</div>
-          <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>답변한 질문</div>
-        </Card>
-        <Card>
-          <Label>프로필 항목</Label>
-          <div style={{ fontSize: "var(--fs-3xl)", fontWeight: 800 }}>{confirmed.length}<span style={{ fontSize: "var(--fs-base)", color: C.faintText, fontWeight: 500 }}> 확정 · {proposed.length} 제안</span></div>
-          <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>확정 12개 이상 & 강점 3개+ & 가치관 2개+ 부터 산출물 생성 가능</div>
-        </Card>
-      </div>
-
-      <Label>단계별 진행</Label>
-      <div style={{ display: "grid", gap: 8, marginBottom: 16 }}>
-        {byStep.map(s => (
-          <Card key={s.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div>
-              <div style={{ fontSize: "var(--fs-base)", fontWeight: 700 }}>Step {s.id} · {s.name}</div>
-              <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>{s.desc}</div>
-            </div>
-            <div style={{ fontSize: "var(--fs-base)", color: C.sub }}>{s.done}/{s.total}</div>
-          </Card>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
-        {nextQuestion ? <Btn primary onClick={() => onGoWorkbook(nextQuestion.id)}>이어서 하기 →</Btn> : <Btn primary onClick={onGoResult}>결과 보기 →</Btn>}
-      </div>
-    </div>
-  );
-}
-
-function FollowupAnswerBox({ onSubmit, onSkip }) {
-  const [text, setText] = useState("");
-  return (
-    <div style={{ marginTop: 4 }}>
-      <Textarea rows={2} placeholder="답변…" value={text} onChange={e => setText(e.target.value)} style={{ fontSize: "var(--fs-base)" }} />
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }} className="wrap-sm">
-        <Btn small primary disabled={!text.trim()} onClick={() => onSubmit(text)}>답변</Btn>
-        <Btn small onClick={onSkip}>건너뛰기</Btn>
-      </div>
-    </div>
-  );
-}
-
-const BRANDING_FLAT_QUESTIONS = [...BRANDING_QUESTIONS].sort((a, b) => a.step - b.step || a.order - b.order);
-
-function BrandingWorkbook({ supabase, userId, jumpTo, onConsumedJump, profileItems, onProfileChange, onProgressChange }) {
-  const [idx, setIdx] = useState(0);
-  const question = BRANDING_FLAT_QUESTIONS[idx];
-  const [answer, setAnswer] = useState(null);
-  const [entries, setEntries] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [composerLabel, setComposerLabel] = useState("");
-  const [composerContent, setComposerContent] = useState("");
-  const [editingId, setEditingId] = useState(null);
-  const [editContent, setEditContent] = useState("");
-  const [chainLoading, setChainLoading] = useState({});
-  const [toast, setToast] = useState("");
-  const [consolidateResult, setConsolidateResult] = useState(null);
-  const [consolidating, setConsolidating] = useState(false);
-  const [consolidateError, setConsolidateError] = useState("");
-
-  useEffect(() => { if (toast) { const t = setTimeout(() => setToast(""), 4000); return () => clearTimeout(t); } }, [toast]);
-
-  useEffect(() => {
-    if (jumpTo) {
-      const i = BRANDING_FLAT_QUESTIONS.findIndex(q => q.id === jumpTo);
-      if (i >= 0) setIdx(i);
-      onConsumedJump();
-    }
-    // eslint-disable-next-line
-  }, [jumpTo]);
-
-  const refreshEntries = async (answerId) => {
-    setEntries(await baListEntries(supabase, answerId || answer.id));
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      try {
-        const a = await baGetOrCreateAnswer(supabase, userId, question);
-        if (cancelled) return;
-        setAnswer(a);
-        setEntries(await baListEntries(supabase, a.id));
-      } catch (e) { console.error(e); }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line
-  }, [question.id]);
-
-  const confirmedSummaryText = profileItems.filter(i => i.status === "확정" && !i.stale).map(i => `${i.type}:${i.content}`).join(", ") || "(없음)";
-
-  const runExtract = async (entry, freshEntries) => {
-    try {
-      const list = freshEntries || await baListEntries(supabase, answer.id);
-      const thisEntry = list.find(e => e.id === entry.id) || entry;
-      const result = await baCallAI("/api/branding-extract", {
-        question: { text: question.text },
-        entry: { content: thisEntry.content },
-        followups: (thisEntry.branding_followups || []).map(f => ({ question: f.question, answer: f.answer })),
-        siblingEntries: list.filter(e => e.id !== entry.id).map(e => ({ content: e.content, label: e.label })),
-        existingItems: profileItems.map(i => ({ id: i.id, type: i.type, content: i.content })),
-      });
-      const inserted = await baInsertProfileItems(supabase, userId, result.items, entry.id);
-      if (inserted.length > 0) {
-        setToast(`프로필에 ${inserted.length}개 항목이 제안됐어`);
-        onProfileChange();
-      }
-    } catch (e) {
-      console.error("[EXTRACT 실패 — 조용히 무시]", e); // 스펙: 사용자에게 에러 노출하지 않음
-    }
-  };
-
-  const runFollowupChain = async (entry, siblings, depth, origin) => {
-    setChainLoading(p => ({ ...p, [entry.id]: true }));
-    try {
-      const result = await baCallAI("/api/branding-followup", {
-        question: { text: question.text, hint: question.hint, probe: question.probe },
-        entry: { content: entry.content, label: entry.label },
-        siblingEntries: siblings.map(s => ({ seq: s.seq, label: s.label, content: s.content, created_at: s.created_at })),
-        depth,
-        confirmedProfileSummary: confirmedSummaryText,
-      });
-      if (result.needs_followup && depth <= 3) {
-        await baAddFollowup(supabase, userId, entry.id, { depth, origin, probeType: result.probe_type, question: result.question });
-        await refreshEntries();
-      } else {
-        await runExtract(entry);
-      }
-    } catch (e) {
-      console.error("[FOLLOWUP 실패 — 꼬리질문 생략, 엔트리는 정상 저장됨]", e); // 스펙: 사용자를 막지 않음
-    } finally {
-      setChainLoading(p => ({ ...p, [entry.id]: false }));
-    }
-  };
-
-  const addEntry = async () => {
-    if (!composerContent.trim()) return;
-    const priorSiblings = entries;
-    const entry = await baAddEntry(supabase, userId, answer.id, { label: composerLabel, content: composerContent });
-    setComposerContent(""); setComposerLabel(""); setComposerOpen(false);
-    await refreshEntries();
-    onProgressChange();
-    runFollowupChain(entry, priorSiblings, 1, "ai");
-  };
-
-  const answerFollowup = async (followup, text) => {
-    await baPatchFollowup(supabase, followup.id, { answer: text });
-    await refreshEntries();
-    const entry = entries.find(e => e.id === followup.entry_id);
-    if (followup.depth < 2) {
-      runFollowupChain(entry, entries.filter(e => e.id !== entry.id), followup.depth + 1, "ai");
-    } else {
-      runExtract(entry);
-    }
-  };
-  const skipFollowup = async (followup) => {
-    await baPatchFollowup(supabase, followup.id, { skipped: true });
-    await refreshEntries();
-    const entry = entries.find(e => e.id === followup.entry_id);
-    runExtract(entry);
-  };
-  const probeMore = (entry) => runFollowupChain(entry, entries.filter(e => e.id !== entry.id), 3, "user");
-
-  const startEdit = (entry) => { setEditingId(entry.id); setEditContent(entry.content); };
-  const saveEdit = async (entry) => {
-    await baUpdateEntry(supabase, entry.id, { content: editContent });
-    setEditingId(null);
-    await refreshEntries();
-    onProfileChange(); // stale 처리가 DB 트리거로 일어났을 수 있음
-  };
-  const archiveEntry = async (entry) => {
-    if (!window.confirm('이 답변을 보관할까요? 이 답변이 근거였던 프로필 항목은 "출처 바뀜" 상태가 됩니다.')) return;
-    await baUpdateEntry(supabase, entry.id, { state: "archived" });
-    await refreshEntries();
-    onProfileChange(); onProgressChange();
-  };
-
-  const skipQuestion = async () => { await baSetAnswerStatus(supabase, answer.id, "skipped"); goNext(); };
-  const goNext = () => { setConsolidateResult(null); if (idx < BRANDING_FLAT_QUESTIONS.length - 1) setIdx(idx + 1); };
-  const goPrev = () => { setConsolidateResult(null); if (idx > 0) setIdx(idx - 1); };
-
-  const activeEntries = entries.filter(e => e.state === "active");
-  const stepInfo = BRANDING_STEPS.find(s => s.id === question.step);
-
-  const runConsolidate = async () => {
-    setConsolidating(true); setConsolidateError(""); setConsolidateResult(null);
-    try {
-      const payload = activeEntries.map(e => ({
-        seq: e.seq, label: e.label, content: e.content, created_at: e.created_at,
-        followups: (e.branding_followups || []).map(f => ({ question: f.question, answer: f.answer })),
-      }));
-      const result = await baCallAI("/api/branding-consolidate", { question: { text: question.text }, entries: payload });
-      setConsolidateResult(result);
-    } catch (e) {
-      setConsolidateError(e.message || String(e));
-    } finally {
-      setConsolidating(false);
-    }
-  };
-
-  const saveConsolidatePatterns = async () => {
-    if (!consolidateResult?.constants?.length) return;
-    const inserted = await baInsertConsolidatedItems(supabase, userId, consolidateResult.constants, activeEntries);
-    if (inserted.length > 0) {
-      setToast(`프로필에 패턴 ${inserted.length}개가 제안됐어`);
-      onProfileChange();
-    }
-    setConsolidateResult(null);
-  };
-
-  return (
-    <div>
-      {toast && (
-        <div style={{ position: "fixed", bottom: 20, right: 20, background: C.text, color: "#fff", padding: "var(--sp-4) var(--sp-6)", borderRadius: "var(--r-lg)", fontSize: "var(--fs-base)", zIndex: 50 }}>
-          {toast}
-        </div>
-      )}
-      <div style={{ fontSize: "var(--fs-sm)", color: C.faintText, marginBottom: 6 }}>Step {question.step} · {stepInfo?.name} — {idx + 1}/{BRANDING_FLAT_QUESTIONS.length}</div>
-      <div style={{ fontSize: "var(--fs-lg)", fontWeight: 700, marginBottom: 8, lineHeight: 1.5 }}>{question.text}</div>
-      {question.hint && <div style={{ fontSize: "var(--fs-sm)", color: C.sub, background: C.accent, padding: "var(--sp-3) var(--sp-5)", borderRadius: "var(--r-md)", marginBottom: 16 }}><CIcon icon={cilLightbulb} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{question.hint}</div>}
-
-      {loading ? <div style={{ fontSize: "var(--fs-base)", color: C.faintText }}>불러오는 중…</div> : (
-        <>
-          {activeEntries.map(entry => (
-            <Card key={entry.id} style={{ marginBottom: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>답변 {entry.seq} · {(entry.created_at || "").slice(0, 10)}{entry.label ? ` · "${entry.label}"` : ""}</div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <span {...clickableProps(() => startEdit(entry))} style={{ fontSize: "var(--fs-xs)", color: C.sub, cursor: "pointer", textDecoration: "underline" }}>수정</span>
-                  <span {...clickableProps(() => archiveEntry(entry))} style={{ fontSize: "var(--fs-xs)", color: C.faintText, cursor: "pointer", textDecoration: "underline" }}>보관</span>
-                </div>
-              </div>
-              {editingId === entry.id ? (
-                <div>
-                  <Textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={4} />
-                  <div style={{ display: "flex", gap: 8, marginTop: 6 }} className="wrap-sm">
-                    <Btn small primary onClick={() => saveEdit(entry)}>저장</Btn>
-                    <Btn small onClick={() => setEditingId(null)}>취소</Btn>
-                  </div>
-                </div>
-              ) : (
-                <div style={{ fontSize: "var(--fs-base)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{entry.content}</div>
-              )}
-
-              {(entry.branding_followups || []).map(f => (
-                <div key={f.id} style={{ marginTop: 10, paddingLeft: 14, borderLeft: `2px solid ${C.line}` }}>
-                  <div style={{ fontSize: "var(--fs-base)", color: C.text, marginBottom: 4 }}>↳ {f.question}</div>
-                  {f.answer ? (
-                    <div style={{ fontSize: "var(--fs-base)", color: C.sub }}>{f.answer}</div>
-                  ) : f.skipped ? (
-                    <div style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>(건너뜀)</div>
-                  ) : (
-                    <FollowupAnswerBox onSubmit={(text) => answerFollowup(f, text)} onSkip={() => skipFollowup(f)} />
-                  )}
-                </div>
-              ))}
-              {chainLoading[entry.id] && <div style={{ fontSize: "var(--fs-sm)", color: C.faintText, marginTop: 8 }}>꼬리질문 생각하는 중…</div>}
-              {(entry.branding_followups || []).length > 0 && (entry.branding_followups || []).every(f => f.answer || f.skipped)
-                && (entry.branding_followups || []).length < 3 && !chainLoading[entry.id] && (
-                <div style={{ marginTop: 8 }}><Btn small onClick={() => probeMore(entry)}>+ 더 파고들기</Btn></div>
-              )}
-            </Card>
-          ))}
-
-          {composerOpen ? (
-            <Card style={{ marginBottom: 12 }}>
-              <Input placeholder='라벨 (선택, 예: "2024년 프로젝트 때")' value={composerLabel} onChange={e => setComposerLabel(e.target.value)} style={{ marginBottom: 8 }} />
-              <Textarea placeholder={question.input_type === "list" ? "쉼표나 줄바꿈으로 구분해서 적어주세요" : "답변을 적어주세요"}
-                value={composerContent} onChange={e => setComposerContent(e.target.value)} rows={5} />
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }} className="wrap-sm">
-                <Btn small primary disabled={!composerContent.trim()} onClick={addEntry}>저장</Btn>
-                <Btn small onClick={() => setComposerOpen(false)}>취소</Btn>
-              </div>
-            </Card>
-          ) : (
-            <div style={{ display: "flex", gap: 8, marginBottom: 8 }} className="wrap-sm">
-              <Btn small onClick={() => setComposerOpen(true)}>+ 답변 추가</Btn>
-              {activeEntries.length >= 3 && <Btn small onClick={runConsolidate} disabled={consolidating}>{consolidating ? "종합하는 중…" : "답변들 종합하기"}</Btn>}
-            </div>
-          )}
-
-          {consolidateError && (
-            <div style={{ marginTop: 10, padding: "var(--sp-4) var(--sp-5)", background: C.accent, border: `1px solid ${C.line}`, borderRadius: "var(--r-lg)" }}>
-              <div style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: C.redText, marginBottom: 4 }}>오류</div>
-              <div style={{ fontSize: "var(--fs-sm)", color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{consolidateError}</div>
-            </div>
-          )}
-
-          {consolidateResult && (
-            <Card style={{ marginTop: 10, background: C.accent }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                <Label>{activeEntries.length}개 답변 종합 결과</Label>
-                <span {...clickableProps(() => setConsolidateResult(null), { label: "닫기" })} style={{ cursor: "pointer", color: C.faintText, fontSize: "var(--fs-base)" }}><CIcon icon={cilX} width={14} height={14} aria-hidden="true" /></span>
-              </div>
-
-              {consolidateResult.constants?.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: C.greenText, marginBottom: 6 }}>반복되는 패턴 (신뢰도 높음)</div>
-                  {consolidateResult.constants.map((c, i) => (
-                    <div key={i} style={{ fontSize: "var(--fs-base)", padding: "var(--sp-2) 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-                      {c.content} <span style={{ fontSize: "var(--fs-xs)", color: C.faintText }}>(답변 {c.seqs?.join(", ")})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {consolidateResult.changes?.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: C.text, marginBottom: 6 }}>시간에 따라 달라진 것</div>
-                  {consolidateResult.changes.map((c, i) => (
-                    <div key={i} style={{ fontSize: "var(--fs-base)", padding: "var(--sp-2) 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-                      {c.content} <span style={{ fontSize: "var(--fs-xs)", color: C.faintText }}>(답변 {c.from_seq} → {c.to_seq})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {consolidateResult.contradictions?.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: C.redText, marginBottom: 6 }}>서로 모순되는 것</div>
-                  {consolidateResult.contradictions.map((c, i) => (
-                    <div key={i} style={{ fontSize: "var(--fs-base)", padding: "var(--sp-2) 0", borderBottom: `1px solid ${C.lineSoft}` }}>
-                      {c.content} — {c.detail} <span style={{ fontSize: "var(--fs-xs)", color: C.faintText }}>(답변 {c.seqs?.join(", ")})</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {consolidateResult.constants?.length === 0 && consolidateResult.changes?.length === 0 && consolidateResult.contradictions?.length === 0 && (
-                <div style={{ fontSize: "var(--fs-base)", color: C.faintText, marginBottom: 12 }}>아직 뚜렷한 패턴·변화·모순이 보이지 않습니다. 답변이 더 쌓이면 다시 시도해보세요.</div>
-              )}
-
-              {consolidateResult.question_for_user && (
-                <div style={{ fontSize: "var(--fs-base)", background: C.panel, border: `1px solid ${C.line}`, borderRadius: "var(--r-md)", padding: "var(--sp-4) var(--sp-5)", marginBottom: 12 }}>
-                  <CIcon icon={cilSpeech} width={14} height={14} aria-hidden="true" style={{ marginRight: 5, verticalAlign: "-2px" }} />{consolidateResult.question_for_user}
-                </div>
-              )}
-
-              {consolidateResult.constants?.length > 0 && (
-                <Btn small primary onClick={saveConsolidatePatterns}>반복되는 패턴을 프로필에 제안하기</Btn>
-              )}
-            </Card>
-          )}
-        </>
-      )}
-
-      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 20 }} className="wrap-sm">
-        <Btn onClick={goPrev} disabled={idx === 0}>← 이전</Btn>
-        <div style={{ display: "flex", gap: 8 }} className="wrap-sm">
-          <Btn onClick={skipQuestion}>건너뛰기</Btn>
-          <Btn primary onClick={goNext} disabled={idx >= BRANDING_FLAT_QUESTIONS.length - 1}>다음 →</Btn>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-const PROFILE_TYPE_LABEL = { strength: "강점", weakness: "약점", value: "가치관", pattern: "패턴", evidence: "근거", taste: "취향", motivation: "동기" };
-
-function BrandingProfile({ items, onChangeItem, onAddManual, onJumpToSource }) {
-  const [tab, setTab] = useState("제안");
-  const [manualType, setManualType] = useState("strength");
-  const [manualContent, setManualContent] = useState("");
-
-  const shown = items.filter(i => {
-    if (tab === "stale") return i.stale && i.status !== "기각";
-    return i.status === tab;
-  });
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: 2, borderBottom: `1px solid ${C.line}`, marginBottom: 16 }}>
-        {["제안", "확정", "기각", "stale"].map(t => (
-          <div key={t} {...clickableProps(() => setTab(t))} style={{ padding: "var(--sp-3) var(--sp-5)", fontSize: "var(--fs-base)", fontWeight: tab === t ? 700 : 500, cursor: "pointer",
-            color: tab === t ? C.text : C.sub, borderBottom: tab === t ? `2px solid ${C.text}` : "2px solid transparent", marginBottom: -1 }}>
-            {t === "stale" ? <><CIcon icon={cilWarning} width={13} height={13} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-2px" }} />재확인 필요</> : t}
-            {t !== "stale" && ` (${items.filter(i => i.status === t).length})`}
-          </div>
-        ))}
-      </div>
-
-      {shown.length === 0 && <div style={{ fontSize: "var(--fs-base)", color: C.faintText, marginBottom: 16 }}>해당하는 항목이 없습니다.</div>}
-
-      <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
-        {shown.map(item => (
-          <Card key={item.id}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                <Badge label={PROFILE_TYPE_LABEL[item.type] || item.type} color={C.blueText} bg={C.blueBg} />
-                {item.confidence && <Badge label={item.confidence} color={C.sub} bg={C.lineSoft} />}
-                {item.origin === "user" && <Badge label="직접 추가" color={C.sub} bg={C.lineSoft} />}
-              </div>
-              {item.stale && item.status !== "기각" && <Badge label={<><CIcon icon={cilWarning} width={13} height={13} aria-hidden="true" style={{ marginRight: 4, verticalAlign: "-2px" }} />출처가 바뀜</>} color={C.redText} bg={C.redBg} />}
-            </div>
-            <div style={{ fontSize: "var(--fs-md)", fontWeight: 600, marginBottom: 6 }}>{item.content}</div>
-            {item.evidence && <div style={{ fontSize: "var(--fs-sm)", color: C.sub, marginBottom: 6 }}>근거: "{item.evidence}"</div>}
-            {item.source_entry_ids && item.source_entry_ids.length > 0 && (
-              <div style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginBottom: 8 }}>출처 답변 {item.source_entry_ids.length}건</div>
-            )}
-            <div style={{ display: "flex", gap: 6 }} className="wrap-sm">
-              {item.status !== "확정" && <Btn small primary onClick={() => onChangeItem(item.id, { status: "확정", stale: false })}>확정</Btn>}
-              {item.status !== "기각" && <Btn small onClick={() => onChangeItem(item.id, { status: "기각" })}>기각</Btn>}
-              {item.stale && <Btn small onClick={() => onChangeItem(item.id, { stale: false })}>재확인 완료</Btn>}
-              {item.status !== "제안" && <Btn small onClick={() => onChangeItem(item.id, { status: "제안" })}>제안으로 되돌리기</Btn>}
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      <Card>
-        <Label>AI가 놓친 게 있다면 직접 추가</Label>
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }} className="wrap-sm">
-          <select value={manualType} onChange={e => setManualType(e.target.value)}
-            style={{ fontFamily: font, fontSize: "var(--fs-base)", padding: "var(--sp-3) var(--sp-4)", borderRadius: "var(--r-md)", border: `1px solid ${C.line}`, background: C.panel }}>
-            {Object.entries(PROFILE_TYPE_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <Input placeholder="예: 복잡한 개념을 비유로 쉽게 설명" value={manualContent} onChange={e => setManualContent(e.target.value)} style={{ flex: 1 }} />
-          <Btn small onClick={() => { if (manualContent.trim()) { onAddManual(manualType, manualContent.trim()); setManualContent(""); } }}>추가</Btn>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-function BrandingResult({ supabase, userId, profileItems }) {
-  const [output, setOutput] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [loadingCurrent, setLoadingCurrent] = useState(true);
-  const [selectedPositioning, setSelectedPositioning] = useState(0);
-  const [selectedHeadline, setSelectedHeadline] = useState(0);
-
-  useEffect(() => {
-    (async () => {
-      const current = await baGetCurrentOutput(supabase, userId);
-      if (current) {
-        setOutput(current);
-        setSelectedPositioning(current.selected_positioning_idx || 0);
-      }
-      setLoadingCurrent(false);
-    })();
-    // eslint-disable-next-line
-  }, []);
-
-  const confirmed = profileItems.filter(i => i.status === "확정" && !i.stale);
-  const rejected = profileItems.filter(i => i.status === "기각");
-  const staleCount = profileItems.filter(i => i.stale && i.status !== "기각").length;
-  const strengthCnt = confirmed.filter(i => i.type === "strength").length;
-  const valueCnt = confirmed.filter(i => i.type === "value").length;
-  const canSynthesize = confirmed.length >= 12 && strengthCnt >= 3 && valueCnt >= 2;
-
-  const coverage = {};
-  BRANDING_CATEGORIES.forEach(c => { coverage[c.label] = confirmed.length; }); // 간단화 — 카테고리별 세분 매핑은 다음 단계에서
-
-  const generate = async () => {
-    setLoading(true); setError("");
-    try {
-      const result = await baCallAI("/api/branding-synthesize", {
-        confirmedItems: confirmed.map(i => ({ id: i.id, type: i.type, content: i.content, evidence: i.evidence, confidence: i.confidence })),
-        rejectedItems: rejected.map(i => ({ type: i.type, content: i.content })),
-        staleCount,
-        coverage,
-      });
-      const saved = await baSaveOutput(supabase, userId, result);
-      setOutput(saved); setSelectedPositioning(0); setSelectedHeadline(0);
-    } catch (e) {
-      setError(e.message || String(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loadingCurrent) return <div style={{ fontSize: "var(--fs-base)", color: C.faintText }}>불러오는 중…</div>;
-
-  if (!canSynthesize && !output) {
-    return (
-      <Card>
-        <Label>아직 산출물을 만들 수 없습니다</Label>
-        <div style={{ fontSize: "var(--fs-base)", color: C.sub, lineHeight: 1.7 }}>
-          확정된 프로필 항목이 <b>{confirmed.length}/12개</b>, 강점 <b>{strengthCnt}/3개</b>, 가치관 <b>{valueCnt}/2개</b> 필요합니다.
-          워크북에서 질문에 답하고, 프로필 탭에서 항목을 확정해주세요.
-        </div>
-      </Card>
-    );
-  }
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <div style={{ fontSize: "var(--fs-base)", color: C.sub }}>{output ? `v${output.version} · ${(output.created_at || "").slice(0, 10)} 생성` : "아직 생성된 산출물이 없습니다"}</div>
-        <Btn primary disabled={loading} onClick={generate}>{loading ? "생성 중…" : output ? "다시 생성하기" : "산출물 생성하기"}</Btn>
-      </div>
-
-      {error && (
-        <div style={{ marginBottom: 16, padding: "var(--sp-4) var(--sp-5)", background: C.accent, border: `1px solid ${C.line}`, borderRadius: "var(--r-lg)" }}>
-          <div style={{ fontSize: "var(--fs-sm)", fontWeight: 700, color: C.redText, marginBottom: 4 }}>오류</div>
-          <div style={{ fontSize: "var(--fs-sm)", color: C.redText, whiteSpace: "pre-wrap", fontFamily: "monospace" }}>{error}</div>
-        </div>
-      )}
-
-      {output && (
-        <>
-          <Card style={{ marginBottom: 16, background: C.greenBg, textAlign: "center", padding: "var(--sp-8) var(--sp-7)" }}>
-            <div style={{ fontSize: "var(--fs-xs)", color: C.greenText, fontWeight: 700, marginBottom: 8, letterSpacing: ".05em" }}>내 슬로건</div>
-            <div style={{ fontSize: "var(--fs-3xl)", fontWeight: 800, color: C.text }}>
-              {(output.headline || [])[selectedHeadline]?.text || "헤드라인 없음"}
-            </div>
-          </Card>
-
-          <Label>헤드라인 후보 — 마음에 드는 것을 고르세요</Label>
-          <div style={{ display: "grid", gap: 8, marginBottom: 20 }}>
-            {(output.headline || []).map((h, i) => (
-              <Card key={i} onClick={() => setSelectedHeadline(i)} style={{ border: i === selectedHeadline ? `1px solid ${C.green}` : `1px solid ${C.line}`, background: i === selectedHeadline ? C.greenBg : C.panel }}>
-                <div style={{ fontSize: "var(--fs-md)", fontWeight: 700 }}>{h.text}</div>
-              </Card>
-            ))}
-          </div>
-
-          <Label>포지셔닝 3안</Label>
-          <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
-            {(output.positioning || []).map((p, i) => (
-              <Card key={i} onClick={() => setSelectedPositioning(i)} style={{ border: i === selectedPositioning ? `1px solid ${C.green}` : `1px solid ${C.line}`, background: i === selectedPositioning ? C.greenBg : C.panel }}>
-                <Badge label={p.axis} color={C.blueText} bg={C.blueBg} />
-                <div style={{ fontSize: "var(--fs-md)", marginTop: 8, lineHeight: 1.6 }}>{p.text}</div>
-                {p.risk && <div style={{ fontSize: "var(--fs-xs)", color: C.faintText, marginTop: 6 }}>주의: {p.risk}</div>}
-              </Card>
-            ))}
-          </div>
-
-          {output.archetype && (
-            <Card style={{ marginBottom: 20 }}>
-              <Label>아키타입</Label>
-              <div style={{ fontSize: "var(--fs-md)", fontWeight: 700 }}>{output.archetype.primary} <span style={{ fontWeight: 400, color: C.sub, fontSize: "var(--fs-base)" }}>(보조: {output.archetype.secondary})</span></div>
-              <div style={{ fontSize: "var(--fs-sm)", color: C.sub, marginTop: 6 }}>{output.archetype.reason}</div>
-              {output.archetype.tone && (
-                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
-                  {output.archetype.tone.map((t, i) => <Badge key={i} label={t} color={C.sub} bg={C.lineSoft} />)}
-                </div>
-              )}
-            </Card>
-          )}
-
-          {output.pillars && (
-            <>
-              <Label>콘텐츠 기둥</Label>
-              <div style={{ display: "grid", gap: 10, marginBottom: 20 }}>
-                {output.pillars.map((p, i) => (
-                  <Card key={i}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                      <div style={{ fontSize: "var(--fs-md)", fontWeight: 700 }}>{p.name}</div>
-                      <span style={{ fontSize: "var(--fs-sm)", color: C.faintText }}>{p.weight}%</span>
-                    </div>
-                    {p.examples && p.examples.map((ex, ei) => <div key={ei} style={{ fontSize: "var(--fs-sm)", color: C.sub, padding: "var(--sp-1) 0" }}>· {ex}</div>)}
-                  </Card>
-                ))}
-              </div>
-            </>
-          )}
-
-          {output.gaps && output.gaps.length > 0 && (
-            <Card style={{ background: C.accent }}>
-              <Label>보완할 점</Label>
-              {output.gaps.map((g, i) => <div key={i} style={{ fontSize: "var(--fs-sm)", color: C.sub, padding: "var(--sp-1) 0" }}>· {g}</div>)}
-            </Card>
-          )}
-        </>
       )}
     </div>
   );

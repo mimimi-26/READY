@@ -1,6 +1,6 @@
 -- Career OS 전체 데이터 저장 스키마
--- 브랜딩 탭 전용이었던 Supabase 연결을, 경험/스킬/지원현황 등 나머지 전체 기능까지 확장한다.
--- branding-schema.sql을 먼저 실행한 뒤(같은 프로젝트, 같은 익명 인증을 재사용), 이 파일도 SQL Editor에서 실행하세요.
+-- 경험/스킬/지원현황 등 앱 전체 데이터를 Supabase 에 저장한다.
+-- Supabase SQL Editor 에 이 파일 전체를 붙여넣고 실행하세요.
 
 create extension if not exists pgcrypto;
 

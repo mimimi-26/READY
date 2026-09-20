@@ -1,0 +1,16 @@
+<!-- Career OS 브랜드 마크 — 모든 래스터 아이콘의 원본.
+     src/App.jsx 의 BrandMark 컴포넌트와 좌표가 동일하다. 한쪽을 고치면 다른 쪽도 고칠 것.
+     원본 PNG(660x660) 레이어 바운딩박스를 재서 역산했고 렌더 결과를 1~2px 이내로 맞췄다. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <mask id="bm-a" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+      <rect width="48" height="48" fill="#fff"/><g fill="#000"><g transform="translate(24.22 18.18) scale(1 0.546) rotate(45)"><rect x="-15.03" y="-15.03" width="30.05" height="30.05" rx="4.51"/></g></g>
+    </mask>
+    <mask id="bm-b" maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+      <rect width="48" height="48" fill="#fff"/><g fill="#000"><g transform="translate(24.22 27.76) scale(1 0.546) rotate(45)"><rect x="-15.03" y="-15.03" width="30.05" height="30.05" rx="4.51"/></g></g>
+    </mask>
+  </defs>
+  <g fill="#434C72" mask="url(#bm-b)"><g transform="translate(24.22 34.73) scale(1 0.546) rotate(45)"><rect x="-15.03" y="-15.03" width="30.05" height="30.05" rx="4.51"/></g></g>
+  <g fill="#2072FA" mask="url(#bm-a)"><g transform="translate(24.22 25.15) scale(1 0.546) rotate(45)"><rect x="-15.03" y="-15.03" width="30.05" height="30.05" rx="4.51"/></g></g>
+  <g fill="#19C280"><g transform="translate(24.22 15.56) scale(1 0.546) rotate(45)"><rect x="-15.03" y="-15.03" width="30.05" height="30.05" rx="4.51"/></g></g>
+</svg>
