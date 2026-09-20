@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useId } from "react";
+import React, { useState, useMemo, useEffect, useRef, useId, createContext, useContext } from "react";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import "@coreui/coreui/dist/css/coreui.min.css";
@@ -580,6 +580,56 @@ async function signOutCloud(supabase) {
   window.location.reload();
 }
 
+/* ---------- 전역 로그인 상태 (AuthContext) ----------
+   인증 상태를 읽는 곳을 여기 하나로 모은다. onAuthStateChange 를 구독하므로
+   다른 탭에서의 로그인/로그아웃, 세션 만료, OAuth 리다이렉트 복귀가 모두 반영된다.
+   (이전에는 App 마운트 시 getSession() 을 1회만 읽어서 상태가 그대로 굳었다) */
+const AuthContext = createContext({ supabase: null, user: undefined, signingIn: false });
+
+function AuthProvider({ children }) {
+  const [supabase, setSupabase] = useState(null);
+  const [user, setUser] = useState(undefined); // undefined=확인 중, null=로그아웃, object=로그인됨
+  const [signingIn, setSigningIn] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let subscription = null;
+    (async () => {
+      const sb = await getCloudClient();
+      if (cancelled) return;
+      setSupabase(sb);
+      // Supabase 미설정은 오류가 아니라 정상적인 "로컬 전용" 상태다.
+      if (!sb) { setUser(null); return; }
+      const { user: initial } = await ensureCloudAuth(sb);
+      if (cancelled) return;
+      setUser(initial);
+      subscription = sb.auth.onAuthStateChange((_event, session) => {
+        setUser(session?.user || null);
+      }).data.subscription;
+    })();
+    return () => { cancelled = true; subscription?.unsubscribe(); };
+  }, []);
+
+  const value = useMemo(() => ({
+    supabase, user, signingIn,
+    signIn: async () => {
+      setSigningIn(true);
+      // 아직 provider 가 클라이언트를 못 받았을 수 있으므로 한 번 더 확인한다.
+      const sb = supabase || await getCloudClient();
+      if (!sb) { setSigningIn(false); return { error: "Supabase 클라이언트가 없습니다.", unavailable: true }; }
+      const { error } = await signInWithGoogle(sb);
+      // 성공하면 구글로 리다이렉트되어 페이지를 떠나므로 로딩을 끄지 않는다.
+      if (error) setSigningIn(false);
+      return { error, unavailable: false };
+    },
+    signOut: async () => { if (supabase) await signOutCloud(supabase); },
+  }), [supabase, user, signingIn]);
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+function useAuth() { return useContext(AuthContext); }
+
 /* ---------- 로그인 시점 로컬/클라우드 데이터 충돌 조정 ---------- */
 let _reconcileResolve = null;
 let _reconcileGate = new Promise(res => { _reconcileResolve = res; });
@@ -657,7 +707,9 @@ function usePersisted(key, initialValue) {
       const mode = await _reconcileGate; // "local" | "cloud" | "none" — 로그인 시점에 1회 결정됨
       if (cancelled) return;
       try {
-        if (mode === "local") {
+        // 로컬이 비어 있는 키까지 올리면, 충돌 모달에 표시되지도 않은 클라우드 데이터가 지워진다.
+        // 빈 키는 아래 else 로 흘려보내 클라우드를 내려받게 한다.
+        if (mode === "local" && isMeaningfulValue(key, state)) {
           await supabase.from("career_os_state").upsert({ user_id: user.id, key, value: state });
           lastSyncedRef.current = JSON.stringify(state);
         } else {
@@ -737,21 +789,20 @@ function App() {
   const addInterviewCategory = (c) => setInterviewCategories(prev => prev.includes(c) ? prev : [...prev, c]);
   const addExpCategory = (c) => setExpCategories(prev => prev.includes(c) ? prev : [...prev, c]);
 
-  const [authUser, setAuthUser] = useState(undefined); // undefined=확인 중, null=로그아웃, object=로그인됨
-  const [authSupabase, setAuthSupabase] = useState(null);
+  const { supabase: authSupabase, user: authUser, signingIn, signIn, signOut } = useAuth();
   const [conflict, setConflict] = useState(null); // { diffs } — 로컬/클라우드 둘 다 의미 있는 데이터가 있어 다를 때만 표시
-  const [authLoading, setAuthLoading] = useState(false);
+  const reconcileStartedRef = useRef(false);
 
+  // 인증 상태 자체는 AuthContext 가 들고 있다. 여기서는 세션이 확인된 뒤
+  // 로컬/클라우드 충돌 조정만 1회 돌린다.
   useEffect(() => {
+    if (authUser === undefined) return;      // 아직 세션 확인 중
+    if (reconcileStartedRef.current) return; // 조정은 로그인 시점 1회뿐
+    reconcileStartedRef.current = true;
     (async () => {
-      const supabase = await getCloudClient();
-      setAuthSupabase(supabase);
-      if (!supabase) { resolveReconcile("none"); setAuthUser(null); return; }
-      const { user } = await ensureCloudAuth(supabase);
-      setAuthUser(user);
-      if (!user) { resolveReconcile("none"); return; }
+      if (!authSupabase || !authUser) { resolveReconcile("none"); return; }
       try {
-        const result = await reconcileOnLogin(supabase, user);
+        const result = await reconcileOnLogin(authSupabase, authUser);
         if (result.diffs.length > 0) setConflict(result);
         else resolveReconcile("none");
       } catch {
@@ -761,16 +812,13 @@ function App() {
         window.history.replaceState(null, "", window.location.pathname);
       }
     })();
-  }, []);
+  }, [authUser, authSupabase]);
 
   const handleGoogleLogin = async () => {
-    setAuthLoading(true);
-    const sb = authSupabase || await getCloudClient();
-    if (!sb) { setAuthLoading(false); toast("Supabase가 설정되어 있지 않습니다.", "error"); return; }
-    const { error } = await signInWithGoogle(sb);
-    if (error) { setAuthLoading(false); toast("로그인에 실패했습니다. " + error, "error"); }
+    const { error, unavailable } = await signIn();
+    if (error) toast(unavailable ? "Supabase가 설정되어 있지 않습니다." : "로그인에 실패했습니다. " + error, "error");
   };
-  const handleLogout = async () => { if (authSupabase) await signOutCloud(authSupabase); };
+  const handleLogout = signOut;
 
   const resolveConflict = (mode) => { resolveReconcile(mode); setConflict(null); };
 
@@ -907,7 +955,7 @@ function App() {
                 {authUser.email || "로그인됨"} · <span style={{ textDecoration: "underline" }}>로그아웃</span>
               </span>
             ) : (
-              <Btn small onClick={handleGoogleLogin} disabled={authLoading}>{authLoading ? "이동 중…" : "Google로 로그인"}</Btn>
+              <Btn small onClick={handleGoogleLogin} disabled={signingIn}>{signingIn ? "이동 중…" : "Google로 로그인"}</Btn>
             )}
             <span {...clickableProps(() => setShowGuide(true))} title="사용 가이드" style={{ cursor: "pointer", fontSize: "var(--fs-md)", color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}>?</span>
             <span {...clickableProps(() => setShowSettings(true))} title="설정" style={{ cursor: "pointer", fontSize: "var(--fs-md)", color: C.sub, width: 26, height: 26, borderRadius: "50%", border: `1px solid ${C.line}`, display: "flex", alignItems: "center", justifyContent: "center" }}><CIcon icon={cilCog} width={14} height={14} aria-hidden="true" /></span>
@@ -1048,10 +1096,8 @@ function App() {
                   if (!window.confirm("저장된 모든 데이터를 지우고 초기 상태로 되돌릴까요? (클라우드에 저장된 데이터도 함께 지워집니다) 되돌릴 수 없습니다.")) return;
                   Object.keys(window.localStorage).filter(k => k.startsWith(STORAGE_PREFIX)).forEach(k => window.localStorage.removeItem(k));
                   try {
-                    const supabase = await getCloudClient();
-                    if (supabase) {
-                      const { user } = await ensureCloudAuth(supabase);
-                      if (user) await supabase.from("career_os_state").delete().eq("user_id", user.id);
+                    if (authSupabase && authUser) {
+                      await authSupabase.from("career_os_state").delete().eq("user_id", authUser.id);
                     }
                   } catch (e) { console.error("[클라우드 초기화 실패]", e); }
                   window.location.reload();
@@ -1093,23 +1139,23 @@ function App() {
 
 /* ============================================================ 랜딩(히어로) */
 function Landing({ onStart, onGoogle }) {
-  const [googleLoading, setGoogleLoading] = useState(false);
+  const { signingIn, signIn } = useAuth();
   const steps = [
     { n: 1, title: "경험을 넣으세요", desc: "자소서·이력서 파일을 첨부하거나, 그냥 아무거나 적어보세요. AI가 구조화해드립니다." },
     { n: 2, title: "AI가 정리·검토합니다", desc: "성과 수치, 역량, 빠진 정보를 짚어주고, 자소서·면접 문장을 함께 다듬습니다." },
     { n: 3, title: "지원 준비를 관리하세요", desc: "회사·직무별로 요구 역량 매칭부터 최종 이력서까지 한곳에서." },
   ];
   const handleGoogle = async () => {
-    setGoogleLoading(true);
-    try {
-      const sb = await getCloudClient();
-      if (sb) { await signInWithGoogle(sb); return; } // 로그인 후 redirect로 돌아옴
-    } catch { /* ignore */ }
-    setGoogleLoading(false);
-    onGoogle();
+    const { error, unavailable } = await signIn();
+    if (!error) return; // 로그인 후 redirect로 돌아옴
+    // Supabase 자체가 없는 환경(아티팩트 미리보기 등)이면 그냥 로컬 전용으로 들여보낸다.
+    if (unavailable) { onGoogle(); return; }
+    // 실패했는데 앱으로 넘겨버리면 원인이 묻힌다. 랜딩에 남아 다시 시도할 수 있게 한다.
+    toast("로그인에 실패했습니다. " + error, "error");
   };
   return (
     <div className="min-h-screen" style={{ fontFamily: font, background: C.bg, color: C.text }}>
+      <Toaster />
       <div style={{ maxWidth: 880, margin: "0 auto", padding: "60px var(--sp-7) 80px" }}>
         <div style={{ textAlign: "center", marginBottom: 40 }}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 18 }}>
@@ -1124,8 +1170,8 @@ function Landing({ onStart, onGoogle }) {
           </div>
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }} className="wrap-sm">
             <Btn primary onClick={onStart} style={{ padding: "var(--sp-5) var(--sp-8)", fontSize: "var(--fs-md)" }}>바로 시작하기</Btn>
-            <Btn onClick={handleGoogle} disabled={googleLoading} style={{ padding: "var(--sp-5) var(--sp-8)", fontSize: "var(--fs-md)" }}>
-              {googleLoading ? "이동 중…" : "구글로 계속하기"}
+            <Btn onClick={handleGoogle} disabled={signingIn} style={{ padding: "var(--sp-5) var(--sp-8)", fontSize: "var(--fs-md)" }}>
+              {signingIn ? "이동 중…" : "구글로 계속하기"}
             </Btn>
           </div>
         </div>
@@ -1166,6 +1212,10 @@ export default function Root() {
   const [screen, setScreen] = useState(() => {
     try {
       if (window.location.pathname.startsWith("/app")) return "app";
+      // OAuth 콜백(#access_token=… / #error=… / ?code=)으로 돌아온 경우.
+      // 세션을 읽는 쪽은 App 이므로 랜딩에 머물면 로그인이 그대로 묻힌다.
+      if (window.location.hash.includes("access_token") || window.location.hash.includes("error=")
+        || window.location.search.includes("code=")) return "app";
       const hasData = RECONCILE_KEYS.some(k => {
         try { return !!window.localStorage.getItem(STORAGE_PREFIX + k); } catch { return false; }
       });
@@ -1176,15 +1226,21 @@ export default function Root() {
 
   useEffect(() => {
     try {
-      if (screen === "app" && window.location.pathname !== "/app") window.history.replaceState(null, "", "/app");
-      if (screen === "landing" && window.location.pathname !== "/") window.history.replaceState(null, "", "/");
+      // 쿼리·프래그먼트는 반드시 유지한다. Supabase 클라이언트는 dynamic import 라 늦게 뜨는데,
+      // 여기서 #access_token=… 을 지워버리면 클라이언트가 뜰 때쯤 토큰이 없어 로그인이 무효가 된다.
+      const q = window.location.search + window.location.hash;
+      if (screen === "app" && window.location.pathname !== "/app") window.history.replaceState(null, "", "/app" + q);
+      if (screen === "landing" && window.location.pathname !== "/") window.history.replaceState(null, "", "/" + q);
     } catch { /* 샌드박스 미리보기 등에서는 무시 */ }
   }, [screen]);
 
-  if (screen === "landing") {
-    return <Landing onStart={() => setScreen("app")} onGoogle={() => setScreen("app")} />;
-  }
-  return <App />;
+  return (
+    <AuthProvider>
+      {screen === "landing"
+        ? <Landing onStart={() => setScreen("app")} onGoogle={() => setScreen("app")} />
+        : <App />}
+    </AuthProvider>
+  );
 }
 
 /* ============================================================ 홈 */
