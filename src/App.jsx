@@ -4364,7 +4364,7 @@ function MasterPrep({ essays, setEssays, interviews, setInterviews, experiences,
                     {iq.draft}
                   </div>
                 )}
-                <Btn small onClick={() => setIqChatId(iq.id)}>{iq.draft ? "답변 이어서 작성하기 →" : "답변 작성 도우미 열기 →"}</Btn>
+                <Btn small onClick={() => setIqChatId(iq.id)}>{iq.draft ? "답변 이어서 작성하기 →" : "AI와 함께 답변하기 →"}</Btn>
               </Card>
             );
           })}
