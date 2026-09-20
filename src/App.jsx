@@ -781,7 +781,7 @@ function App() {
   const [masterEssays, setMasterEssays] = usePersisted("masterEssays", seedMasterEssays);
   const [masterInterviews, setMasterInterviews] = usePersisted("masterInterviews", seedMasterInterviews);
   const [interviewCategories, setInterviewCategories] = usePersisted("interviewCategories", ["성과", "실패", "협업", "갈등", "인성"]);
-  const [expCategories, setExpCategories] = usePersisted("expCategories", ["온라인 쇼핑몰 인턴", "동아리 활동"]);
+  const [expCategories, setExpCategories] = usePersisted("expCategories", []);
   const [questionBlocks, setQuestionBlocks] = usePersisted("questionBlocks", emptyQuestionBlocks);
   const [timelineActivities, setTimelineActivities] = usePersisted("timelineActivities", []);
   const [reviewChatHistory, setReviewChatHistory] = usePersisted("reviewChatHistory", []);
@@ -831,6 +831,7 @@ function App() {
     setSkills(seedSkills);
     setCerts(seedCerts);
     setQuestionBlocks(seedQuestionBlocks);
+    setExpCategories(["온라인 쇼핑몰 인턴", "동아리 활동"]);
   };
 
   const exportBackup = () => {
