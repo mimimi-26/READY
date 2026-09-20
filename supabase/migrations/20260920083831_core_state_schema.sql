@@ -1,6 +1,8 @@
 -- Career OS 전체 데이터 저장 스키마
 -- 경험/스킬/지원현황 등 앱 전체 데이터를 Supabase 에 저장한다.
--- Supabase SQL Editor 에 이 파일 전체를 붙여넣고 실행하세요.
+-- 베이스라인 마이그레이션. `npx supabase db push` 로 적용한다.
+-- 모든 구문이 멱등(if not exists / or replace / drop if exists)이므로
+-- 이미 적용된 DB 에 다시 실행해도 안전하다.
 
 create extension if not exists pgcrypto;
 
@@ -9,7 +11,7 @@ create extension if not exists pgcrypto;
 -- 기존 localStorage 구조("careeros:experiences" 등 key별 JSON 하나)를 그대로 옮긴 것.
 -- key 예시: experiences / metrics / outputs / applications / skills / certs / awards /
 --          resumeProfile / masterEssays / masterInterviews / interviewCategories /
---          expCategories / questionBlocks / trash
+--          expCategories / questionBlocks / timelineActivities / trash
 -- ─────────────────────────────────────────────
 create table if not exists career_os_state (
   user_id     uuid not null references auth.users(id) on delete cascade,
