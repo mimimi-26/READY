@@ -11,18 +11,16 @@ career-os-app/
 ├── .gitignore
 ├── src/
 │   ├── main.jsx           # React 렌더링 진입점
-│   └── App.jsx            # 앱 전체 (localStorage 기반 기능 + 브랜딩 탭)
+│   ├── App.jsx            # 앱 전체 (화면·상태·저장)
+│   └── styles.css         # 디자인 토큰 + 상태/반응형 레이어
+├── public/                # 로고·파비콘·OG 이미지
 ├── supabase/
-│   ├── branding-schema.sql     # "퍼스널 브랜딩" 탭 전용 DB 스키마
-│   └── core-state-schema.sql   # 경험/스킬/지원현황 등 나머지 전체 데이터 저장용
+│   └── core-state-schema.sql   # 경험/스킬/지원현황 등 전체 데이터 저장용
 └── api/
     ├── extract.js            # 파일 가져오기(경험 추출)
     ├── chat.js                # 자소서·면접·경험 진단 챗봇
     ├── extract-jd.js          # 채용공고 요구 역량 추출
-    ├── branding-followup.js   # 브랜딩 — 꼬리질문 생성
-    ├── branding-extract.js    # 브랜딩 — 프로필 항목 추출
-    ├── branding-synthesize.js # 브랜딩 — 포지셔닝·헤드라인·아키타입 생성
-    └── health.js               # AI 키 등록 여부 확인 (연결 진단용)
+    └── health.js              # AI 키 등록 여부 확인 (진단용)
 ```
 
 서버리스 함수들은 전부 Anthropic/OpenAI/Gemini API 키를 서버에서만 사용하며, 브라우저는 `/api/*` 경로만 호출합니다.
@@ -73,16 +71,14 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 3. `src/App.jsx`의 `fetch("/api/extract")`를 `fetch("/.netlify/functions/extract")`로 수정
 4. Netlify 대시보드 **Site settings → Environment variables**에 `ANTHROPIC_API_KEY` 등록
 
-## 퍼스널 브랜딩 탭 설정 (Supabase) — 이제 전체 데이터가 여기 저장됩니다
+## 클라우드 저장 설정 (Supabase)
 
-**모든 Career OS 데이터(경험/스킬/자격증/수상기록/지원 현황/마스터 자소서·면접/휴지통 + 브랜딩 탭)가 Supabase에 저장됩니다.** 브라우저 localStorage는 이제 "즉시 반응 + 오프라인 캐시" 용도로만 함께 쓰이고, Supabase가 설정되어 있으면 그게 진짜 저장소입니다.
+**모든 Career OS 데이터(경험/스킬/자격증/수상기록/지원 현황/마스터 자소서·면접/휴지통)가 Supabase에 저장됩니다.** 브라우저 localStorage는 이제 "즉시 반응 + 오프라인 캐시" 용도로만 함께 쓰이고, Supabase가 설정되어 있으면 그게 진짜 저장소입니다.
 
 **설정 순서**
 1. [supabase.com](https://supabase.com) 무료 계정 생성 → **New Project**
 2. 프로젝트가 만들어지면 좌측 메뉴 **SQL Editor** → New query
-3. 이 저장소의 SQL 파일 **2개**를 순서대로 통째로 붙여넣고 각각 **Run**:
-   - `supabase/branding-schema.sql` (브랜딩 탭용 테이블 6개)
-   - `supabase/core-state-schema.sql` (경험/스킬/지원현황 등 나머지 전체용 테이블 1개)
+3. 이 저장소의 `supabase/core-state-schema.sql`을 통째로 붙여넣고 **Run**
 4. 좌측 메뉴 **Project Settings → API**에서 두 값을 확인:
    - `Project URL`
    - `anon` `public` key (⚠ `service_role` key 아님 — 그건 절대 클라이언트에 노출하면 안 됩니다)
@@ -99,23 +95,17 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 
 **주의**: 익명 계정은 브라우저(정확히는 브라우저의 로컬 인증 토큰)에 묶여 있습니다. 브라우저 데이터를 완전히 지우면 그 계정에 다시 로그인할 방법이 없어 Supabase에 저장된 데이터에 접근할 수 없게 됩니다. 이 한계를 없애려면 나중에 "이메일 연결"(계정 업그레이드) 기능을 추가할 수 있습니다 — 필요하시면 요청해주세요.
 
-**Supabase를 설정하지 않으면**: 예전처럼 localStorage만 사용하는 개인 브라우저 저장 방식으로 그대로 동작합니다 (브랜딩 탭만 설정 안내 화면이 뜨고, 나머지 기능은 정상 작동).
+**Supabase를 설정하지 않으면**: localStorage만 사용하는 개인 브라우저 저장 방식으로 그대로 동작합니다. 모든 기능이 정상 작동하고, 데이터가 이 브라우저에만 남습니다.
 
-**AI 서버리스 함수 3개 추가됨(브랜딩용)**: `api/branding-followup.js`, `api/branding-extract.js`, `api/branding-synthesize.js` — 기존 AI 제공사 폴백(Anthropic→OpenAI→Gemini) 구조를 그대로 따릅니다. 별도 설정 불필요.
 
 ## 연결이 안 되거나 자주 끊길 때
 
-브랜딩 탭 우측 상단의 **"연결 상태 확인"**을 누르면 자동으로 5가지를 점검하고, 문제가 있으면 구체적인 해결 방법까지 보여줍니다:
-1. Supabase 환경변수 존재 여부
-2. Supabase 클라이언트 생성 여부
-3. 익명 로그인 성공 여부
-4. 데이터베이스(테이블) 접근 가능 여부
-5. 서버에 AI 키가 등록되어 있는지 (`/api/health`)
+연결이 실패하면 화면에 오류 메시지가 표시되고, 데이터는 localStorage에 계속 저장됩니다.
+서버에 AI 키가 등록돼 있는지는 `/api/health`로 직접 확인할 수 있습니다.
 
 **"연결하는 중…"에서 안 넘어갈 때 가장 흔한 원인**: Supabase 대시보드에서 **Anonymous Sign-Ins**가 꺼져 있는 경우입니다.
 → Supabase 대시보드 → **Authentication → Sign In / Providers → Anonymous Sign-Ins** 켜기
 
-**클라우드 연결이 안 될 때도 작업이 끊기지 않도록**: 브랜딩 워크북에서 연결에 실패하면 "오프라인으로 계속하기"를 선택할 수 있습니다. AI 꼬리질문·프로필 추출 없이 답변 작성만 가능하고, 이 브라우저에 안전하게 저장됩니다. 나중에 연결되면 화면 상단에 업로드 배너가 뜹니다.
 
 ## AI 제공사 폴백 (선택 기능)
 
@@ -138,7 +128,7 @@ Netlify는 서버리스 함수 위치가 다릅니다 (`netlify/functions/`). �
 1. **API 키 노출 금지**: `src/App.jsx`에서 절대로 `https://api.anthropic.com`을 직접 호출하지 마세요. 반드시 `api/extract.js`(서버)를 거쳐야 키가 안전합니다. 이미 이 구조로 되어 있습니다.
 2. **`.env`는 커밋하지 않기**: `.gitignore`에 포함되어 있지만, 실수로 키를 코드에 하드코딩하지 않았는지 배포 전 한 번 더 확인하세요.
 3. **데이터 저장 방식**:
-   - `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`를 설정하면, **경험/스킬/자격증/수상기록/지원 현황/마스터 자소서·면접/휴지통/브랜딩 데이터 전부** Supabase(클라우드)에 저장됩니다. 이 브라우저의 localStorage는 즉시 반응을 위한 캐시로 함께 쓰이지만, 진짜 저장소는 Supabase입니다. 자세한 설정은 위 "퍼스널 브랜딩 탭 설정" 섹션 참고.
+   - `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY`를 설정하면, **경험/스킬/자격증/수상기록/지원 현황/마스터 자소서·면접/휴지통 데이터 전부** Supabase(클라우드)에 저장됩니다. 이 브라우저의 localStorage는 즉시 반응을 위한 캐시로 함께 쓰이지만, 진짜 저장소는 Supabase입니다. 자세한 설정은 위 "클라우드 저장 설정" 섹션 참고.
    - Supabase를 설정하지 않으면 예전처럼 이 브라우저의 localStorage에만 저장됩니다 (기기·브라우저 간 동기화 안 됨). 사이드바 하단의 "데이터 백업(다운로드)"으로 주기적으로 JSON 백업을 받아두는 걸 권장합니다.
 4. **`.docx`/`.xlsx`/`.xls`/`.csv` 파싱**은 각각 `mammoth`, `xlsx`(SheetJS) 패키지로 처리됩니다. `npm install` 시 자동 설치되므로 별도 조치 불필요합니다. 엑셀 파일에 시트가 여러 개면 화면에서 시트를 선택하는 UI가 뜹니다.
 5. **자소서 챗봇**은 대화 기록 전체를 매 요청마다 `/api/chat`으로 다시 보내는 방식입니다 (서버가 상태를 기억하지 않음). 대화가 길어질수록 요청 토큰이 늘어나 비용이 증가하니 참고하세요.
