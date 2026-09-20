@@ -1,3 +1,5 @@
 {
+  "installCommand": "npm install",
+  "devCommand": "npm run dev",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
